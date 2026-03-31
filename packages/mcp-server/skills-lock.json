@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "skills": {
+    "gemini-candles": {
+      "source": "/Users/steven.osborn/dev/gemini-agents",
+      "sourceType": "local",
+      "computedHash": "8e21547cb5b64ce987f37088b23c9941ae0ead3013c861c98286aa2a360f50ba"
+    }
+  }
+}
