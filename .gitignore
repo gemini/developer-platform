@@ -1,0 +1,56 @@
+# Dependencies
+node_modules/
+vendor/
+
+# Build output
+dist/
+build/
+out/
+*.js.map
+
+# TypeScript
+*.tsbuildinfo
+
+# Environment & secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Go
+*.exe
+*.test
+*.out
+
+# Temp
+tmp/
+.tmp/
+
+# SDK generation
+scripts/rest.yaml
+packages/sdk-go/
+packages/sdk-python/
+packages/sdk-typescript/

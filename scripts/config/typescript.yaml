@@ -1,0 +1,9 @@
+npmName: "@gemini/sdk"
+npmVersion: "1.0.0"
+supportsES6: true
+withSeparateModelsAndApi: true
+modelPackage: models
+apiPackage: api
+typescriptThreePlus: true
+# TODO: When AsyncAPI spec for WebSocket is complete, extend this client
+# with WS support for: order book, trades, order events, candles
