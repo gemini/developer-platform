@@ -1,0 +1,17 @@
+import type { GeminiHttpClient } from '../client/http.js';
+import type { TickerV2, Trade, OrderBook, PriceFeed, FundingAmount } from '../types/market.js';
+import { CandleTimeFrame } from '../types/market.js';
+export declare function getSymbols(client: GeminiHttpClient): Promise<string[]>;
+export declare function getSymbolDetails(client: GeminiHttpClient, symbol: string): Promise<Record<string, unknown>>;
+export declare function getNetworkCodes(client: GeminiHttpClient, token: string): Promise<Record<string, unknown>>;
+export declare function getTicker(client: GeminiHttpClient, symbol: string): Promise<TickerV2>;
+export declare function getTickerV1(client: GeminiHttpClient, symbol: string): Promise<Record<string, unknown>>;
+export declare function getCandles(client: GeminiHttpClient, symbol: string, timeFrame: CandleTimeFrame): Promise<number[][]>;
+export declare function getDerivativeCandles(client: GeminiHttpClient, symbol: string, timeFrame: CandleTimeFrame): Promise<number[][]>;
+export declare function getFeePromos(client: GeminiHttpClient): Promise<Record<string, unknown>>;
+export declare function getRecentTrades(client: GeminiHttpClient, symbol: string, limitTrades?: number, since?: number): Promise<Trade[]>;
+export declare function getOrderBook(client: GeminiHttpClient, symbol: string, limitBids?: number, limitAsks?: number): Promise<OrderBook>;
+export declare function getAuctionHistory(client: GeminiHttpClient, symbol: string, limitAuctions?: number): Promise<Record<string, unknown>>;
+export declare function getPriceFeed(client: GeminiHttpClient): Promise<PriceFeed[]>;
+export declare function getFundingAmounts(client: GeminiHttpClient): Promise<FundingAmount[]>;
+export declare function getCurrentFundingRate(client: GeminiHttpClient, symbol: string): Promise<Record<string, unknown>>;

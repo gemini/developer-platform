@@ -1,0 +1,13 @@
+import type { GeminiHttpClient } from '../client/http.js';
+import type { Balance, Transfer, DepositAddress, WithdrawalResult, InternalTransferResult, GasFeeEstimate } from '../types/funds.js';
+export declare function getBalances(client: GeminiHttpClient): Promise<Balance[]>;
+export declare function getNotionalBalances(client: GeminiHttpClient, currency: string): Promise<Record<string, unknown>[]>;
+export declare function getTransfers(client: GeminiHttpClient, limitTransfers?: number, currency?: string): Promise<Transfer[]>;
+export declare function getDepositAddresses(client: GeminiHttpClient, network: string): Promise<DepositAddress[]>;
+export declare function getNewDepositAddress(client: GeminiHttpClient, network: string, label?: string): Promise<DepositAddress>;
+export declare function internalTransfer(client: GeminiHttpClient, currency: string, sourceAccount: string, targetAccount: string, amount: string): Promise<InternalTransferResult>;
+export declare function addBank(client: GeminiHttpClient, body: Record<string, unknown>): Promise<Record<string, unknown>>;
+export declare function getBankPaymentMethods(client: GeminiHttpClient): Promise<Record<string, unknown>[]>;
+export declare function cryptoWithdrawal(client: GeminiHttpClient, currency: string, address: string, amount: string, memo?: string): Promise<WithdrawalResult>;
+export declare function getGasFeeEstimate(client: GeminiHttpClient, currency: string, address: string, amount: string): Promise<GasFeeEstimate>;
+export declare function fiatWithdrawal(client: GeminiHttpClient, accountId: string, amount: string, currency: string): Promise<Record<string, unknown>>;

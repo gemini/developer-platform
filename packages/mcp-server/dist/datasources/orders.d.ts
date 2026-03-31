@@ -1,0 +1,11 @@
+import type { GeminiHttpClient } from '../client/http.js';
+import type { Order, MyTrade, TradeVolume, NotionalVolume } from '../types/orders.js';
+export declare function newOrder(client: GeminiHttpClient, symbol: string, amount: string, price: string, side: string, type: string, options?: string[], clientOrderId?: string): Promise<Order>;
+export declare function cancelOrder(client: GeminiHttpClient, orderId: string): Promise<Order>;
+export declare function cancelAllSessionOrders(client: GeminiHttpClient): Promise<Record<string, unknown>>;
+export declare function cancelAllActiveOrders(client: GeminiHttpClient): Promise<Record<string, unknown>>;
+export declare function getOrderStatus(client: GeminiHttpClient, orderId: string): Promise<Order>;
+export declare function getActiveOrders(client: GeminiHttpClient): Promise<Order[]>;
+export declare function getMyTrades(client: GeminiHttpClient, symbol: string, limitTrades?: number, timestamp?: number): Promise<MyTrade[]>;
+export declare function getTradeVolume(client: GeminiHttpClient): Promise<TradeVolume[][]>;
+export declare function getNotionalVolume(client: GeminiHttpClient): Promise<NotionalVolume>;
