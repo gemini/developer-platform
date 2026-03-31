@@ -1,0 +1,25 @@
+[
+  {
+    "type": "exchange",
+    "currency": "BTC",
+    "amount": "5.0",
+    "available": "4.5",
+    "availableForWithdrawal": "4.5",
+    "pendingWithdrawal": "0.25",
+    "pendingDeposit": "0.25"
+  },
+  {
+    "type": "exchange",
+    "currency": "USD",
+    "amount": "15000.00",
+    "available": "5000.00",
+    "availableForWithdrawal": "5000.00"
+  },
+  {
+    "type": "exchange",
+    "currency": "ETH",
+    "amount": "10.0",
+    "available": "10.0",
+    "availableForWithdrawal": "10.0"
+  }
+]

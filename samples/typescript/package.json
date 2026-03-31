@@ -1,0 +1,33 @@
+{
+  "name": "api-examples-typescript",
+  "version": "1.0.0",
+  "description": "TypeScript examples for API usage",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "get-ticker": "ts-node src/getTicker.ts",
+    "balances": "ts-node src/balances.ts",
+    "place-order": "ts-node src/placeOrder.ts",
+    "ws-trades": "ts-node src/wsTrades.ts",
+    "trade-history": "ts-node src/tradeHistory.ts",
+    "price-feed": "ts-node src/priceFeed.ts",
+    "order-book": "ts-node src/orderBook.ts",
+    "ws-book-ticker": "ts-node src/wsBookTicker.ts",
+    "pm-prices": "ts-node src/pmPrices.ts",
+    "pm-order": "ts-node src/pmOrder.ts"
+  },
+  "keywords": ["api", "examples"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "dotenv": "^16.0.3",
+    "axios": "^1.4.0",
+    "ws": "^8.16.0"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.5.10",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0",
+    "ts-node": "^10.9.0"
+  }
+}
