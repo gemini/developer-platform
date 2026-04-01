@@ -1,0 +1,7 @@
+packageName: gemini_sdk
+projectName: gemini-sdk
+packageVersion: 1.0.0
+pythonAttrNoneIfUnset: true
+library: urllib3
+# TODO: When AsyncAPI spec for WebSocket is complete, extend this client
+# with WS support for: order book, trades, order events, candles

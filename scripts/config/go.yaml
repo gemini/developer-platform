@@ -1,0 +1,7 @@
+packageName: gemini
+moduleName: github.com/gemini/sdk-go
+generateInterfaces: true
+structPrefix: true
+enumClassPrefix: true
+# TODO: When AsyncAPI spec for WebSocket is complete, extend this client
+# with WS support for: order book, trades, order events, candles
