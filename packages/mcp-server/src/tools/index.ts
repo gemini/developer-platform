@@ -33,3 +33,4 @@ export { createFundTools } from './funds.js';
 export { createAccountTools } from './account.js';
 export { createMarginTools } from './margin.js';
 export { createStakingTools } from './staking.js';
+export { createPredictionTools } from './predictions.js';
