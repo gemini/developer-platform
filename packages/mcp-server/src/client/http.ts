@@ -14,11 +14,15 @@ export class GeminiHttpClient {
     this.apiSecret = config.apiSecret;
   }
 
-  async publicGet<T>(endpoint: string, params?: Record<string, string>): Promise<T> {
+  async publicGet<T>(endpoint: string, params?: Record<string, string | string[]>): Promise<T> {
     const url = new URL(`${this.baseUrl}${endpoint}`);
     if (params) {
       for (const [k, v] of Object.entries(params)) {
-        url.searchParams.set(k, v);
+        if (Array.isArray(v)) {
+          for (const item of v) url.searchParams.append(k, item);
+        } else {
+          url.searchParams.set(k, v);
+        }
       }
     }
     const res = await fetch(url.toString(), {
