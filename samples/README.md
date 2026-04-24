@@ -14,6 +14,7 @@ Multi-language examples demonstrating how to use the Gemini cryptocurrency excha
 │   │   ├── tradeHistory.ts   # Get recent trades (public, REST)
 │   │   ├── wsBookTicker.ts   # Stream best bid/ask updates (public, WebSocket)
 │   │   ├── wsTrades.ts       # Stream real-time trades (public, WebSocket)
+│   │   ├── wsContractStatus.ts # Stream prediction-market contract status changes (public, WebSocket)
 │   │   ├── placeOrder.ts     # Place an order (private, REST)
 │   │   ├── balances.ts       # Get account balances (private, REST)
 │   │   ├── pmPrices.ts       # Stream prediction market prices (private, WebSocket)
@@ -26,6 +27,7 @@ Multi-language examples demonstrating how to use the Gemini cryptocurrency excha
 │   ├── trade_history.py      # Get recent trades (public, REST)
 │   ├── ws_book_ticker.py     # Stream best bid/ask updates (public, WebSocket)
 │   ├── ws_trades.py          # Stream real-time trades (public, WebSocket)
+│   ├── ws_contract_status.py # Stream prediction-market contract status changes (public, WebSocket)
 │   ├── place_order.py        # Place an order (private, REST)
 │   ├── balances.py           # Get account balances (private, REST)
 │   ├── pm_prices.py          # Stream prediction market prices (private, WebSocket)
@@ -38,6 +40,7 @@ Multi-language examples demonstrating how to use the Gemini cryptocurrency excha
     ├── trade_history.go      # Get recent trades (public, REST)
     ├── ws_book_ticker.go     # Stream best bid/ask updates (public, WebSocket)
     ├── ws_trades.go          # Stream real-time trades (public, WebSocket)
+    ├── ws_contract_status.go # Stream prediction-market contract status changes (public, WebSocket)
     ├── place_order.go        # Place an order (private, REST)
     ├── balances.go           # Get account balances (private, REST)
     ├── pm_prices.go          # Stream prediction market prices (private, WebSocket)
@@ -81,6 +84,11 @@ go run go/ws_trades.go btcusd
 python3 python/ws_book_ticker.py btcusd
 npx ts-node typescript/src/wsBookTicker.ts btcusd
 go run go/ws_book_ticker.go btcusd
+
+# Stream prediction-market contract status changes
+python3 python/ws_contract_status.py
+npx ts-node typescript/src/wsContractStatus.ts
+go run go/ws_contract_status.go
 ```
 
 ### Private Endpoints (API Key Required)
@@ -159,6 +167,7 @@ go run go/get_ticker.go ethusd
 |---------|-------------|--------|
 | `wsTrades` / `ws_trades` | Real-time trade stream | `@trade` |
 | `wsBookTicker` / `ws_book_ticker` | Best bid/ask updates | `@bookTicker` |
+| `wsContractStatus` / `ws_contract_status` | Prediction-market contract status changes (incl. strike price `p`) | `contractStatus` |
 
 ```bash
 # Stream real-time trades (Ctrl+C to stop)
