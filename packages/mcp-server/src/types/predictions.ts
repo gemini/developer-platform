@@ -53,7 +53,13 @@ export interface ContractMetadata {
 }
 
 export interface PredictionOrder {
-  orderId: number;
+  // String, not number: prediction-market order IDs are 17–18 digits in
+  // prod (e.g. `145828833218573125`) — past JavaScript's
+  // `Number.MAX_SAFE_INTEGER` (2^53 − 1, ≈ 16 digits). The HTTP client
+  // parses responses with json-bigint storeAsString:true so this field
+  // arrives as a precision-preserved string. Use it verbatim when calling
+  // back into MCP tools that accept an `orderId` input.
+  orderId: string;
   status: OrderStatus;
   symbol: string;
   side: 'buy' | 'sell';

@@ -111,7 +111,7 @@ export async function placeOrder(
 
 export async function cancelOrder(
   client: GeminiHttpClient,
-  orderId: number
+  orderId: string
 ): Promise<CancelOrderResponse> {
   return client.authenticatedPost<CancelOrderResponse>('/v1/prediction-markets/order/cancel', {
     orderId,
