@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { GeminiHttpClient } from '../client/http.js';
 import type { ToolDefinition } from './index.js';
-import { wrapHandler } from './index.js';
+import { wrapHandler, confirmField } from './index.js';
 import * as funds from '../datasources/funds.js';
 
 export function createFundTools(client: GeminiHttpClient): ToolDefinition[] {
@@ -54,10 +54,12 @@ export function createFundTools(client: GeminiHttpClient): ToolDefinition[] {
         address: z.string().describe('Destination address'),
         amount: z.string().describe('Amount to withdraw'),
         memo: z.string().optional().describe('Memo for the transaction'),
+        confirm: confirmField,
       }),
       handler: wrapHandler(({ currency, address, amount, memo }: {
         currency: string; address: string; amount: string; memo?: string;
       }) => funds.cryptoWithdrawal(client, currency, address, amount, memo)),
+      destructive: true,
     },
     {
       name: 'gemini_internal_transfer',
@@ -67,10 +69,12 @@ export function createFundTools(client: GeminiHttpClient): ToolDefinition[] {
         sourceAccount: z.string().describe('Source account name'),
         targetAccount: z.string().describe('Target account name'),
         amount: z.string().describe('Amount to transfer'),
+        confirm: confirmField,
       }),
       handler: wrapHandler(({ currency, sourceAccount, targetAccount, amount }: {
         currency: string; sourceAccount: string; targetAccount: string; amount: string;
       }) => funds.internalTransfer(client, currency, sourceAccount, targetAccount, amount)),
+      destructive: true,
     },
     {
       name: 'gemini_add_bank',
@@ -108,10 +112,12 @@ export function createFundTools(client: GeminiHttpClient): ToolDefinition[] {
         accountId: z.string().describe('Bank account ID'),
         amount: z.string().describe('Amount to withdraw'),
         currency: z.string().describe('Currency e.g. USD'),
+        confirm: confirmField,
       }),
       handler: wrapHandler(({ accountId, amount, currency }: { accountId: string; amount: string; currency: string }) =>
         funds.fiatWithdrawal(client, accountId, amount, currency)
       ),
+      destructive: true,
     },
   ];
 }

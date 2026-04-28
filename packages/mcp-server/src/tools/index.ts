@@ -6,7 +6,12 @@ export interface ToolDefinition<S extends z.ZodTypeAny = z.ZodTypeAny> {
   description: string;
   inputSchema: S;
   handler: (args: z.infer<S>) => Promise<CallToolResult>;
+  destructive?: boolean;
 }
+
+export const confirmField = z.literal(true).describe(
+  'REQUIRED for this destructive, irreversible action. Set to true ONLY after presenting the user with a plain-language summary of the call (symbol, amount, side, dollar-quantified impact where applicable) and obtaining their explicit approval.'
+);
 
 export function wrapHandler<S extends z.ZodTypeAny>(
   handler: (args: z.infer<S>) => Promise<unknown>

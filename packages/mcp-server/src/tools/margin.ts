@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { GeminiHttpClient } from '../client/http.js';
 import type { ToolDefinition } from './index.js';
-import { wrapHandler } from './index.js';
+import { wrapHandler, confirmField } from './index.js';
 import * as margin from '../datasources/margin.js';
 
 export function createMarginTools(client: GeminiHttpClient): ToolDefinition[] {
@@ -52,8 +52,10 @@ export function createMarginTools(client: GeminiHttpClient): ToolDefinition[] {
         side: z.enum(['buy', 'sell']).describe('Side'),
         type: z.string().describe('Order type'),
         clearingId: z.string().optional().describe('Clearing ID'),
+        confirm: confirmField,
       }),
       handler: wrapHandler((body: Record<string, unknown>) => margin.clearingNewOrder(client, body)),
+      destructive: true,
     },
     {
       name: 'gemini_clearing_broker_new_order',
@@ -64,8 +66,10 @@ export function createMarginTools(client: GeminiHttpClient): ToolDefinition[] {
         price: z.string().describe('Price'),
         side: z.enum(['buy', 'sell']).describe('Side'),
         type: z.string().describe('Order type'),
+        confirm: confirmField,
       }),
       handler: wrapHandler((body: Record<string, unknown>) => margin.clearingBrokerNewOrder(client, body)),
+      destructive: true,
     },
     {
       name: 'gemini_clearing_order_status',
