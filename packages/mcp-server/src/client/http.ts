@@ -1,7 +1,21 @@
+import JSONBig from 'json-bigint';
 import { config } from '../config.js';
 import { buildSignedHeaders } from '../auth/signer.js';
 
 const REQUEST_TIMEOUT_MS = 30_000;
+
+// Precision-preserving JSON parser. The Gemini API emits some numeric fields
+// — most notably prediction-market `orderId` — as JSON numbers in the 17–18
+// digit range, which exceed JavaScript's `Number.MAX_SAFE_INTEGER` (2^53 − 1,
+// ≈ 16 digits). The native `res.json()` (a.k.a. `JSON.parse`) silently
+// truncates the trailing digits, so a real `orderId` of `73797746583641557`
+// is returned to the caller as `73797746583641550` and the MCP hands Claude
+// a wrong ID for any follow-up call. With `storeAsString: true`, json-bigint
+// keeps any integer larger than `Number.MAX_SAFE_INTEGER` as a string;
+// smaller integers and all non-integer numbers stay as JS numbers exactly
+// as before. Type definitions in `src/types/` declare the affected fields
+// as `string` so TypeScript catches any divergence.
+const jsonParse = JSONBig({ storeAsString: true });
 
 export class GeminiHttpClient {
   private baseUrl: string;
@@ -28,11 +42,11 @@ export class GeminiHttpClient {
     const res = await fetch(url.toString(), {
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
+    const text = await res.text();
     if (!res.ok) {
-      const text = await res.text();
       throw new Error(`Gemini API error ${res.status}: ${text}`);
     }
-    return res.json() as Promise<T>;
+    return jsonParse.parse(text) as T;
   }
 
   async authenticatedPost<T>(endpoint: string, body: Record<string, unknown> = {}): Promise<T> {
@@ -43,10 +57,10 @@ export class GeminiHttpClient {
       headers,
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
+    const text = await res.text();
     if (!res.ok) {
-      const text = await res.text();
       throw new Error(`Gemini API error ${res.status}: ${text}`);
     }
-    return res.json() as Promise<T>;
+    return jsonParse.parse(text) as T;
   }
 }

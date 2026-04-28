@@ -115,7 +115,13 @@ export function createPredictionTools(client: GeminiHttpClient): ToolDefinition[
       name: 'gemini_cancel_prediction_order',
       description: 'Cancel an open prediction market order by order ID.',
       inputSchema: z.object({
-        orderId: z.number().int().describe('Order ID to cancel'),
+        // String, not number — prediction-market order IDs are 17–18 digits
+        // (e.g. `145828833218573125` in prod), exceeding JavaScript's
+        // Number.MAX_SAFE_INTEGER (2^53 − 1, ≈ 16 digits). A `z.number().int()`
+        // schema silently truncates the trailing digit, so the cancel hits
+        // the API with the wrong ID and gets back a 404. Spot orders
+        // (orders.ts) use the same string-typed pattern.
+        orderId: z.string().describe('Order ID to cancel'),
       }),
       handler: wrapHandler(({ orderId }) => predictions.cancelOrder(client, orderId)),
     },
