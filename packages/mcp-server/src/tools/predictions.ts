@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { GeminiHttpClient } from '../client/http.js';
 import type { ToolDefinition } from './index.js';
-import { wrapHandler } from './index.js';
+import { wrapHandler, confirmField } from './index.js';
 import * as predictions from '../datasources/predictions.js';
 
 const EventStatusEnum = z.enum(['approved', 'active', 'closed', 'under_review', 'settled', 'invalid']);
@@ -108,8 +108,10 @@ export function createPredictionTools(client: GeminiHttpClient): ToolDefinition[
         timeInForce: TimeInForceEnum.optional().describe(
           'Time in force: good-til-cancel (default), immediate-or-cancel, fill-or-kill, maker-or-cancel'
         ),
+        confirm: confirmField,
       }),
       handler: wrapHandler((args) => predictions.placeOrder(client, args)),
+      destructive: true,
     },
     {
       name: 'gemini_cancel_prediction_order',

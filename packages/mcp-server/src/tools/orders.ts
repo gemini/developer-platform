@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { GeminiHttpClient } from '../client/http.js';
 import type { ToolDefinition } from './index.js';
-import { wrapHandler } from './index.js';
+import { wrapHandler, confirmField } from './index.js';
 import * as orders from '../datasources/orders.js';
 
 export function createOrderTools(client: GeminiHttpClient): ToolDefinition[] {
@@ -17,17 +17,23 @@ export function createOrderTools(client: GeminiHttpClient): ToolDefinition[] {
         type: z.string().describe('Order type e.g. exchange limit'),
         options: z.array(z.string()).optional().describe('Order options'),
         clientOrderId: z.string().optional().describe('Client-specified order ID'),
+        confirm: confirmField,
       }),
       handler: wrapHandler(({ symbol, amount, price, side, type, options, clientOrderId }: {
         symbol: string; amount: string; price: string; side: 'buy' | 'sell';
         type: string; options?: string[]; clientOrderId?: string;
       }) => orders.newOrder(client, symbol, amount, price, side, type, options, clientOrderId)),
+      destructive: true,
     },
     {
       name: 'gemini_cancel_order',
       description: 'Cancel an active order',
-      inputSchema: z.object({ orderId: z.string().describe('Order ID to cancel') }),
+      inputSchema: z.object({
+        orderId: z.string().describe('Order ID to cancel'),
+        confirm: confirmField,
+      }),
       handler: wrapHandler(({ orderId }: { orderId: string }) => orders.cancelOrder(client, orderId)),
+      destructive: true,
     },
     {
       name: 'gemini_cancel_all_session_orders',
@@ -38,8 +44,9 @@ export function createOrderTools(client: GeminiHttpClient): ToolDefinition[] {
     {
       name: 'gemini_cancel_all_active_orders',
       description: 'Cancel all active orders',
-      inputSchema: z.object({}),
+      inputSchema: z.object({ confirm: confirmField }),
       handler: wrapHandler(() => orders.cancelAllActiveOrders(client)),
+      destructive: true,
     },
     {
       name: 'gemini_get_order_status',

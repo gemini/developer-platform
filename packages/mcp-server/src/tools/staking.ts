@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { GeminiHttpClient } from '../client/http.js';
 import type { ToolDefinition } from './index.js';
-import { wrapHandler } from './index.js';
+import { wrapHandler, confirmField } from './index.js';
 import * as staking from '../datasources/staking.js';
 
 export function createStakingTools(client: GeminiHttpClient): ToolDefinition[] {
@@ -31,10 +31,12 @@ export function createStakingTools(client: GeminiHttpClient): ToolDefinition[] {
         currency: z.string().describe('Currency to stake'),
         amount: z.string().describe('Amount to stake'),
         providerId: z.string().describe('Staking provider ID'),
+        confirm: confirmField,
       }),
       handler: wrapHandler(({ currency, amount, providerId }: { currency: string; amount: string; providerId: string }) =>
         staking.stake(client, currency, amount, providerId)
       ),
+      destructive: true,
     },
     {
       name: 'gemini_unstake',
@@ -43,10 +45,12 @@ export function createStakingTools(client: GeminiHttpClient): ToolDefinition[] {
         currency: z.string().describe('Currency to unstake'),
         amount: z.string().describe('Amount to unstake'),
         providerId: z.string().describe('Staking provider ID'),
+        confirm: confirmField,
       }),
       handler: wrapHandler(({ currency, amount, providerId }: { currency: string; amount: string; providerId: string }) =>
         staking.unstake(client, currency, amount, providerId)
       ),
+      destructive: true,
     },
   ];
 }
