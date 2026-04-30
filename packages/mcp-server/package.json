@@ -12,12 +12,14 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",
     "json-bigint": "^1.0.0",
+    "ws": "^8.18.0",
     "zod": "^3.25.0",
     "zod-to-json-schema": "^3.24.5"
   },
   "devDependencies": {
     "@types/json-bigint": "^1.0.4",
     "@types/node": "^22.0.0",
+    "@types/ws": "^8.5.13",
     "tsx": "^4.0.0",
     "typescript": "^5.7.0"
   }

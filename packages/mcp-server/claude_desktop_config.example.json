@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "gemini": {
+      "command": "node",
+      "args": [
+        "/Users/debasish.bera/dev/developer-platform/packages/mcp-server/dist/index.js"
+      ],
+      "env": {
+        "GEMINI_API_KEY": "account-xxxxxxxxxxxxxx",
+        "GEMINI_API_SECRET": "xxxxxxxxxxxxxx",
+        "GEMINI_WS_URL": "wss://ws.gemini.com"
+      }
+    }
+  }
+}

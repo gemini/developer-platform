@@ -5,6 +5,8 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import { GeminiHttpClient } from './client/http.js';
+import { WebSocketManager } from './websocket/manager.js';
+import { config } from './config.js';
 import {
   createMarketTools,
   createOrderTools,
@@ -13,6 +15,8 @@ import {
   createMarginTools,
   createStakingTools,
   createPredictionTools,
+  createWebSocketTools,
+  createHybridTools,
 } from './tools/index.js';
 import type { ToolDefinition } from './tools/index.js';
 
@@ -29,11 +33,23 @@ export function createServer(): Server {
         'Gemini offers prediction markets covering sports outcomes, crypto price trends, ' +
         'political events, and financial markets — in addition to spot trading, derivatives, ' +
         'staking, and account management. Prediction market symbols all start with "GEMI-" ' +
-        '(e.g. GEMI-BTCUSD-...).',
+        '(e.g. GEMI-BTCUSD-...). ' +
+        'The server includes real-time WebSocket support for live market data. ' +
+        'Use gemini_ws_subscribe to start receiving real-time updates, then use gemini_ws_get_* tools ' +
+        'for instant access to cached data without HTTP requests.',
     }
   );
 
   const client = new GeminiHttpClient();
+
+  // Initialize WebSocket manager
+  const wsManager = new WebSocketManager(config.wsUrl);
+
+  // Start WebSocket connection in background
+  wsManager.initialize().catch((err) => {
+    console.error('[Server] WebSocket initialization failed:', err.message);
+    console.error('[Server] WebSocket features will be unavailable until connection is established');
+  });
 
   const allTools: ToolDefinition[] = [
     ...createMarketTools(client),
@@ -43,6 +59,8 @@ export function createServer(): Server {
     ...createMarginTools(client),
     ...createStakingTools(client),
     ...createPredictionTools(client),
+    ...createWebSocketTools(wsManager),
+    ...createHybridTools(client, wsManager), // Smart fallback tools
   ];
 
   const toolMap = new Map<string, ToolDefinition>(allTools.map((t) => [t.name, t]));
