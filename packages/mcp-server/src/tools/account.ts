@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { GeminiHttpClient } from '../client/http.js';
 import type { ToolDefinition } from './index.js';
 import { wrapHandler } from './index.js';
+import { redactAccount, redactAccountDetail, redactApprovedAddress } from './redact.js';
 import * as account from '../datasources/account.js';
 
 export function createAccountTools(client: GeminiHttpClient): ToolDefinition[] {
@@ -10,7 +11,7 @@ export function createAccountTools(client: GeminiHttpClient): ToolDefinition[] {
       name: 'gemini_get_account',
       description: 'Get account details',
       inputSchema: z.object({}),
-      handler: wrapHandler(() => account.getAccount(client)),
+      handler: wrapHandler(async () => redactAccount(await account.getAccount(client))),
     },
     {
       name: 'gemini_create_account',
@@ -27,7 +28,7 @@ export function createAccountTools(client: GeminiHttpClient): ToolDefinition[] {
       name: 'gemini_get_accounts',
       description: 'List all accounts',
       inputSchema: z.object({}),
-      handler: wrapHandler(() => account.getAccounts(client)),
+      handler: wrapHandler(async () => (await account.getAccounts(client)).map(redactAccountDetail)),
     },
     {
       name: 'gemini_get_roles',
@@ -39,7 +40,9 @@ export function createAccountTools(client: GeminiHttpClient): ToolDefinition[] {
       name: 'gemini_get_approved_addresses',
       description: 'Get approved withdrawal addresses for a network',
       inputSchema: z.object({ network: z.string().describe('Network name') }),
-      handler: wrapHandler(({ network }: { network: string }) => account.getApprovedAddresses(client, network)),
+      handler: wrapHandler(async ({ network }: { network: string }) =>
+        (await account.getApprovedAddresses(client, network)).map(redactApprovedAddress)
+      ),
     },
     {
       name: 'gemini_session_heartbeat',
