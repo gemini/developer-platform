@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { GeminiHttpClient } from '../client/http.js';
 import type { ToolDefinition } from './index.js';
 import { wrapHandler, confirmField } from './index.js';
+import { redactTransfer, redactWithdrawalResult } from './redact.js';
 import * as funds from '../datasources/funds.js';
 
 export function createFundTools(client: GeminiHttpClient): ToolDefinition[] {
@@ -25,8 +26,8 @@ export function createFundTools(client: GeminiHttpClient): ToolDefinition[] {
         limitTransfers: z.number().optional().describe('Maximum number of transfers to return'),
         currency: z.string().optional().describe('Filter by currency'),
       }),
-      handler: wrapHandler(({ limitTransfers, currency }: { limitTransfers?: number; currency?: string }) =>
-        funds.getTransfers(client, limitTransfers, currency)
+      handler: wrapHandler(async ({ limitTransfers, currency }: { limitTransfers?: number; currency?: string }) =>
+        (await funds.getTransfers(client, limitTransfers, currency)).map(redactTransfer)
       ),
     },
     {
@@ -56,9 +57,9 @@ export function createFundTools(client: GeminiHttpClient): ToolDefinition[] {
         memo: z.string().optional().describe('Memo for the transaction'),
         confirm: confirmField,
       }),
-      handler: wrapHandler(({ currency, address, amount, memo }: {
+      handler: wrapHandler(async ({ currency, address, amount, memo }: {
         currency: string; address: string; amount: string; memo?: string;
-      }) => funds.cryptoWithdrawal(client, currency, address, amount, memo)),
+      }) => redactWithdrawalResult(await funds.cryptoWithdrawal(client, currency, address, amount, memo))),
       destructive: true,
     },
     {
