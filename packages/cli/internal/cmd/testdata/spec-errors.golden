@@ -1,0 +1,77 @@
+[
+  {
+    "code": "INVALID_INPUT",
+    "retryable": false,
+    "httpStatus": 400,
+    "category": "client_error",
+    "suggestedAction": "Fix command arguments and retry"
+  },
+  {
+    "code": "AUTH_REQUIRED",
+    "retryable": false,
+    "httpStatus": 401,
+    "category": "authentication",
+    "suggestedAction": "Run 'gemini-markets auth login', or set GEMINI_ACCESS_TOKEN / GEMINI_API_KEY and GEMINI_API_SECRET"
+  },
+  {
+    "code": "AUTH_FAILED",
+    "retryable": false,
+    "httpStatus": 401,
+    "category": "authentication",
+    "suggestedAction": "Verify your token or API credentials are valid, or run 'gemini-markets auth login' to refresh OAuth access"
+  },
+  {
+    "code": "NOT_FOUND",
+    "retryable": false,
+    "httpStatus": 404,
+    "category": "client_error",
+    "suggestedAction": "Verify symbol, order ID, or resource identifier exists"
+  },
+  {
+    "code": "INSUFFICIENT_FUNDS",
+    "retryable": false,
+    "httpStatus": 400,
+    "category": "business_logic",
+    "suggestedAction": "Deposit funds or reduce order size"
+  },
+  {
+    "code": "RATE_LIMITED",
+    "retryable": true,
+    "httpStatus": 429,
+    "category": "rate_limit",
+    "suggestedAction": "Wait for Retry-After duration and use exponential backoff"
+  },
+  {
+    "code": "MARKET_CLOSED",
+    "retryable": false,
+    "httpStatus": 400,
+    "category": "business_logic",
+    "suggestedAction": "Check market status and wait for market to reopen"
+  },
+  {
+    "code": "ORDER_REJECTED",
+    "retryable": false,
+    "httpStatus": 400,
+    "category": "business_logic",
+    "suggestedAction": "Check order parameters (price, quantity, market status)"
+  },
+  {
+    "code": "NETWORK_ERROR",
+    "retryable": true,
+    "category": "network",
+    "suggestedAction": "Retry with exponential backoff (max 3 attempts)"
+  },
+  {
+    "code": "SERVER_ERROR",
+    "retryable": true,
+    "httpStatus": 500,
+    "category": "server_error",
+    "suggestedAction": "Retry with exponential backoff - temporary backend issue"
+  },
+  {
+    "code": "UNKNOWN_ERROR",
+    "retryable": false,
+    "category": "unknown",
+    "suggestedAction": "Check error message for details and contact support if persistent"
+  }
+]

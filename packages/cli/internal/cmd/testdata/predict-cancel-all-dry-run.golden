@@ -1,0 +1,17 @@
+{
+  "dry_run": true,
+  "action": "predict_cancel_all",
+  "order_count": 2,
+  "orders": [
+    {
+      "orderId": "1",
+      "side": "buy",
+      "symbol": "GEMI-OSCARBP26-OSBP26ONEB"
+    },
+    {
+      "orderId": "2",
+      "side": "sell",
+      "symbol": "GEMI-BTC2603052200-HI70500"
+    }
+  ]
+}

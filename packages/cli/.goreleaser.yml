@@ -1,0 +1,99 @@
+version: 2
+
+project_name: gemini-markets
+
+before:
+  hooks:
+    - go mod tidy
+    - go generate ./...
+
+builds:
+  - main: ./cmd/gemini-markets
+    binary: gemini-markets
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X github.com/gemini/developer-platform/packages/cli/internal/cmd.Version={{.Version}}
+      - -X github.com/gemini/developer-platform/packages/cli/internal/cmd.Commit={{.ShortCommit}}
+      - -X github.com/gemini/developer-platform/packages/cli/internal/cmd.Date={{.Date}}
+
+archives:
+  - format: tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        format: zip
+    files:
+      - README.md
+      - LICENSE
+      - CHANGELOG.md
+
+checksum:
+  name_template: 'checksums.txt'
+
+brews:
+  - name: gemini-markets
+    skip_upload: '{{ if .Env.HOMEBREW_TAP_TOKEN }}false{{ else }}true{{ end }}'
+    repository:
+      owner: gemini
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    homepage: "https://github.com/gemini/developer-platform/tree/main/packages/cli"
+    description: "CLI for trading on Gemini Exchange - spot and prediction markets"
+    license: "MIT"
+    install: |
+      bin.install "gemini-markets"
+    test: |
+      system "#{bin}/gemini-markets", "version"
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  use: github
+  groups:
+    - title: Features
+      regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
+      order: 0
+    - title: Bug Fixes
+      regexp: '^.*?fix(\([[:word:]]+\))??!?:.+$'
+      order: 1
+    - title: Documentation
+      regexp: '^.*?docs(\([[:word:]]+\))??!?:.+$'
+      order: 2
+    - title: Others
+      order: 999
+  filters:
+    exclude:
+      - '^test:'
+      - '^chore:'
+      - '^ci:'
+
+release:
+  github:
+    owner: gemini
+    name: developer-platform
+  draft: false
+  prerelease: auto
+  name_template: "cli/v{{.Version}}"
+  footer: |
+    ## Installation
+
+    Download the appropriate binary for your platform from the assets below.
+
+    ### Quick Install (Linux/macOS)
+    ```bash
+    curl -sSL https://raw.githubusercontent.com/gemini/developer-platform/main/packages/cli/scripts/install.sh | sh
+    ```
+
+    ## Checksums
+    See `checksums.txt` for SHA256 checksums of all binaries.

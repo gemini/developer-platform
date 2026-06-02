@@ -1,0 +1,59 @@
+Place a new spot trading order.
+
+Examples:
+  # Market buy 0.1 BTC
+  gemini-markets spot order place --symbol btcusd --side buy --type exchange market --amount 0.1
+
+  # Limit buy 0.5 ETH at $2000
+  gemini-markets spot order place --symbol ethusd --side buy --type exchange limit \
+    --amount 0.5 --price 2000
+
+  # With idempotency key (critical for agents)
+  gemini-markets spot order place --symbol btcusd --side buy --type exchange limit \
+    --amount 0.1 --price 50000 --client-order-id "agent-12345"
+
+  # Buy $50 worth of BTC (fee-adjusted)
+  gemini-markets spot order place --symbol btcusd --side buy --dollars 50 --price 50000
+
+  # From stdin (flags override stdin values)
+  echo '{"symbol":"btcusd","side":"buy","amount":"0.1","price":"50000"}' \
+    | gemini-markets spot order place --stdin
+
+  # Dry run (validate without placing)
+  gemini-markets spot order place --symbol btcusd --side buy --amount 0.1 --price 50000 --dry-run -q
+
+Usage:
+  gemini-markets spot order place [flags]
+
+Examples:
+  gemini-markets spot order place --symbol btcusd --side buy --amount 0.1 --price 50000
+  gemini-markets spot order place --symbol btcusd --side buy --amount 0.1 --price 50000 --client-order-id agent-123
+  gemini-markets spot order place --symbol btcusd --side buy --dollars 50 --price 50000 --dry-run -q
+  echo '{"symbol":"btcusd","side":"buy","amount":"0.1","price":"50000"}' | gemini-markets spot order place --stdin -q
+  gemini-markets --sandbox --no-websocket spot order place --symbol btcusd --side buy --amount 0.01 --price 50000 --client-order-id test-123 -q
+
+Flags:
+      --account string           account name (optional)
+      --amount string            order amount in base currency (required unless --dollars)
+      --client-order-id string   idempotency key (auto-generated if not provided)
+      --dollars string           total dollar spend including fees (adjusts for fee tier)
+      --dry-run                  validate and show order parameters without placing
+      --fok                      fill-or-kill
+      --ioc                      immediate-or-cancel
+      --maker-or-cancel          post-only order
+      --price string             limit price
+      --side string              order side: buy or sell (required)
+      --stdin                    read order parameters from stdin as JSON
+      --stop-price string        stop price for stop orders
+      --symbol string            trading pair symbol (required)
+      --type string              order type: exchange limit, exchange market (default "exchange limit")
+
+Global Flags:
+      --debug           enable debug logging
+      --no-websocket    disable WebSocket and use REST API only
+  -o, --output string   output format: json, table, or csv (default "json")
+  -q, --quiet           suppress stderr output for pure JSON piping
+      --raw             output compact JSON without pretty-printing
+      --sandbox         use sandbox environment
+      --timeout int     request timeout in seconds (default 30)
+      --verbose         use full field names in JSON output (default: abbreviated)

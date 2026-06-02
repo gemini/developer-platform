@@ -1,0 +1,55 @@
+Place a new prediction market order.
+
+Examples:
+  gemini-markets predict order place --symbol NBA-LAL-BOS-2024 --side buy --outcome yes \
+    --type limit --quantity 100 --price 0.62
+
+  # With idempotency key (critical for agents)
+  gemini-markets predict order place --symbol NBA-LAL-BOS-2024 --side buy --outcome yes \
+    --type limit --quantity 100 --price 0.62 --client-order-id "agent-12345"
+
+  # From stdin (flags override stdin values)
+  echo '{"symbol":"GEMI-...","side":"buy","outcome":"yes","quantity":"100","price":"0.65"}' \
+    | gemini-markets predict order place --stdin
+
+  # Buy up to $50 worth of contracts including estimated prediction fees
+  gemini-markets predict order place --symbol GEMI-... --side buy --outcome yes \
+    --dollars 50 --price 0.65
+
+  # Dry run (validate without placing)
+  gemini-markets predict order place --symbol GEMI-... --side buy --outcome yes \
+    --quantity 100 --price 0.65 --dry-run -q
+
+Usage:
+  gemini-markets predict order place [flags]
+
+Examples:
+  gemini-markets predict order place --symbol GEMI-OSCARBP26-OSBP26ONEB --side buy --outcome yes --quantity 100 --price 0.65
+  gemini-markets predict order place --symbol GEMI-OSCARBP26-OSBP26ONEB --side buy --outcome yes --quantity 100 --price 0.65 --client-order-id agent-123
+  gemini-markets predict order place --symbol GEMI-OSCARBP26-OSBP26ONEB --side buy --outcome yes --dollars 50 --price 0.65 --dry-run -q
+  echo '{"symbol":"GEMI-OSCARBP26-OSBP26ONEB","side":"buy","outcome":"yes","quantity":"100","price":"0.65"}' | gemini-markets predict order place --stdin -q
+  gemini-markets --sandbox --no-websocket predict order place --symbol GEMI-TEST --side buy --outcome yes --quantity 10 --price 0.50 --client-order-id test-123 -q
+
+Flags:
+      --client-order-id string   idempotency key (auto-generated if not provided)
+      --dollars string           dollar amount; buys cap spend including fees, sells target notional
+      --dry-run                  validate and show order parameters without placing
+      --outcome string           contract outcome: yes or no (required)
+      --price string             limit price
+      --quantity string          number of contracts (required unless --dollars)
+      --side string              order side: buy or sell (required)
+      --stdin                    read order parameters from stdin as JSON
+      --stop-price string        stop price
+      --symbol string            market symbol (required)
+      --tif string               time-in-force: good-til-cancel, immediate-or-cancel, fill-or-kill, post-only (default "good-til-cancel")
+      --type string              order type: limit, market (default "limit")
+
+Global Flags:
+      --debug           enable debug logging
+      --no-websocket    disable WebSocket and use REST API only
+  -o, --output string   output format: json, table, or csv (default "json")
+  -q, --quiet           suppress stderr output for pure JSON piping
+      --raw             output compact JSON without pretty-printing
+      --sandbox         use sandbox environment
+      --timeout int     request timeout in seconds (default 30)
+      --verbose         use full field names in JSON output (default: abbreviated)

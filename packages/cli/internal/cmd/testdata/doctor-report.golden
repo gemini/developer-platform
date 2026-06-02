@@ -1,0 +1,57 @@
+{
+  "status": "warn",
+  "environment": "production",
+  "authType": "hmac",
+  "authenticated": true,
+  "credentialSource": "environment variables",
+  "websocketEnabled": true,
+  "readyForTrading": true,
+  "readyForTradingReason": "All required trading checks passed.",
+  "checks": [
+    {
+      "name": "config",
+      "status": "ok",
+      "message": "Configuration looks sane."
+    },
+    {
+      "name": "sandbox",
+      "status": "warn",
+      "message": "Production environment is active; use --sandbox for safer testing."
+    },
+    {
+      "name": "rest_api",
+      "status": "ok",
+      "message": "Public REST API is reachable.",
+      "details": {
+        "latencyMs": 12
+      }
+    },
+    {
+      "name": "auth",
+      "status": "ok",
+      "message": "Authenticated API request succeeded.",
+      "details": {
+        "authType": "hmac",
+        "currencies": 2,
+        "latencyMs": 8
+      }
+    },
+    {
+      "name": "websocket",
+      "status": "ok",
+      "message": "Authenticated WebSocket endpoint is reachable.",
+      "details": {
+        "latencyMs": 5
+      }
+    }
+  ],
+  "summary": {
+    "ok": 4,
+    "warn": 1,
+    "fail": 0,
+    "skip": 0
+  },
+  "suggestions": [
+    "Use --sandbox while testing new workflows."
+  ]
+}

@@ -1,0 +1,26 @@
+Run the CLI's full trading-readiness preflight.
+
+Checks configuration sanity, sandbox posture, public REST connectivity,
+WebSocket reachability, authenticated API access, and rate-limit posture.
+
+Use this command as the final bot/operator preflight before live execution.
+For auth metadata only, use 'gemini-markets auth status'. For a live
+authenticated probe only, use 'gemini-markets auth test'.
+
+Usage:
+  gemini-markets doctor [flags]
+
+Examples:
+  gemini-markets doctor
+  gemini-markets --sandbox doctor -q
+  gemini-markets --no-websocket doctor -o table
+
+Global Flags:
+      --debug           enable debug logging
+      --no-websocket    disable WebSocket and use REST API only
+  -o, --output string   output format: json, table, or csv (default "json")
+  -q, --quiet           suppress stderr output for pure JSON piping
+      --raw             output compact JSON without pretty-printing
+      --sandbox         use sandbox environment
+      --timeout int     request timeout in seconds (default 30)
+      --verbose         use full field names in JSON output (default: abbreviated)

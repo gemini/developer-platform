@@ -1,0 +1,12 @@
+{
+  "dry_run": true,
+  "action": "predict_order_place",
+  "symbol": "GEMI-OSCARBP26-OSBP26ONEB",
+  "side": "buy",
+  "outcome": "yes",
+  "type": "limit",
+  "quantity": "100",
+  "price": "0.65",
+  "time_in_force": "good-til-cancel",
+  "client_order_id": "agent-123"
+}

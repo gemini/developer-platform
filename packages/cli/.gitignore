@@ -1,0 +1,42 @@
+# Binaries
+/gemini-markets
+/gemini-markets-*
+*.exe
+!*.go
+bin/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+ehthumbs.db
+
+# Build
+dist/
+*.test
+*.out
+
+# Test coverage
+coverage.out
+coverage.html
+*.coverprofile
+
+# Config & credentials (safety)
+.config/
+.env
+.env.local
+*.pem
+*.key
+
+# Dependencies
+vendor/
+
+# Temporary files
+tmp/
+temp/
