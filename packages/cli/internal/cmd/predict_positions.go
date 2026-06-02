@@ -9,6 +9,7 @@ import (
 
 	"github.com/gemini/developer-platform/packages/cli/internal/api"
 	"github.com/gemini/developer-platform/packages/cli/internal/output"
+	internalschema "github.com/gemini/developer-platform/packages/cli/internal/schema"
 )
 
 var (
@@ -90,6 +91,22 @@ Examples:
 }
 
 func init() {
+	internalschema.Register(&internalschema.CommandMeta{
+		MCPName:     "gemini_predict_positions_list",
+		Description: "List all open prediction market positions with P&L.",
+		Params:      map[string]internalschema.ParamMeta{},
+		Output:      &internalschema.OutputMeta{Type: "array", Description: "Open positions with avgPrice, pnl", Schema: "#/schemas/Position"},
+	})
+	internalschema.Register(&internalschema.CommandMeta{
+		MCPName:     "gemini_predict_positions_settled",
+		Description: "List settled prediction market positions (resolved markets).",
+		Params: map[string]internalschema.ParamMeta{
+			"limit":  {Type: internalschema.ParamString, Description: "Max results (default: 50)", Default: "50"},
+			"offset": {Type: internalschema.ParamString, Description: "Pagination offset", Default: "0"},
+		},
+		Output: &internalschema.OutputMeta{Type: "array", Description: "Settled positions with final P&L", Schema: "#/schemas/Position"},
+	})
+
 	predictPositionsListCmd.Flags().StringVar(&predictPositionsEventTicker, "event", "", "filter by event ticker")
 	predictPositionsListCmd.Flags().IntVar(&predictPositionsLimit, "limit", 50, "max results")
 	predictPositionsListCmd.Flags().IntVar(&predictPositionsOffset, "offset", 0, "pagination offset")

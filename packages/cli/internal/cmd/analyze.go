@@ -8,6 +8,7 @@ import (
 
 	"github.com/gemini/developer-platform/packages/cli/internal/api"
 	"github.com/gemini/developer-platform/packages/cli/internal/output"
+	internalschema "github.com/gemini/developer-platform/packages/cli/internal/schema"
 )
 
 var (
@@ -81,6 +82,16 @@ Examples:
 }
 
 func init() {
+	internalschema.Register(&internalschema.CommandMeta{
+		MCPName:     "gemini_analyze",
+		Description: "Analyze spread and estimate slippage for a target order size.",
+		Params: map[string]internalschema.ParamMeta{
+			"symbol":   {Type: internalschema.ParamString, Required: true, Description: "Symbol to analyze", Example: "BTCUSD"},
+			"quantity": {Type: internalschema.ParamString, Description: "Target order size for slippage estimation", Example: "1.0"},
+		},
+		Output: &internalschema.OutputMeta{Type: "object", Description: "Spread, slippage estimates, liquidity analysis"},
+	})
+
 	analyzeCmd.Flags().Float64Var(&analyzeQuantity, "quantity", 0, "quantity to estimate fill for")
 	analyzeCmd.Flags().IntVar(&analyzeLevels, "levels", 10, "number of price levels to analyze")
 	rootCmd.AddCommand(analyzeCmd)

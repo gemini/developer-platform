@@ -8,6 +8,7 @@ import (
 
 	"github.com/gemini/developer-platform/packages/cli/internal/api"
 	"github.com/gemini/developer-platform/packages/cli/internal/output"
+	internalschema "github.com/gemini/developer-platform/packages/cli/internal/schema"
 )
 
 var balanceCurrency string
@@ -58,6 +59,15 @@ Examples:
 }
 
 func init() {
+	internalschema.Register(&internalschema.CommandMeta{
+		MCPName:     "gemini_balance",
+		Description: "Get account balances for all currencies.",
+		Params: map[string]internalschema.ParamMeta{
+			"currency": {Type: internalschema.ParamString, Description: "Filter by currency (e.g., USD, BTC). Optional", Example: "USD"},
+		},
+		Output: &internalschema.OutputMeta{Type: "array", Description: "Balances with amount, available", Schema: "#/schemas/Balance"},
+	})
+
 	balanceCmd.Flags().StringVar(&balanceCurrency, "currency", "", "filter by currency (e.g., USD, BTC)")
 	rootCmd.AddCommand(balanceCmd)
 }

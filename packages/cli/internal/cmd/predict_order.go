@@ -10,6 +10,7 @@ import (
 	"github.com/gemini/developer-platform/packages/cli/internal/api"
 	apporders "github.com/gemini/developer-platform/packages/cli/internal/app/orders"
 	"github.com/gemini/developer-platform/packages/cli/internal/output"
+	internalschema "github.com/gemini/developer-platform/packages/cli/internal/schema"
 )
 
 var predictOrderCmd = &cobra.Command{
@@ -332,6 +333,67 @@ Examples:
 }
 
 func init() {
+	internalschema.Register(&internalschema.CommandMeta{
+		MCPName:     "gemini_predict_order_place",
+		Description: "Place a prediction market order. IMPORTANT: Always provide client_order_id for safe retries - if a request fails, retry with the SAME client_order_id and duplicates will be rejected. For active trading, run 'gemini-markets stream orders' in background to get real-time fill notifications instead of polling.",
+		Params: map[string]internalschema.ParamMeta{
+			"symbol":          {Type: internalschema.ParamString, Required: true, Description: "Contract symbol (e.g., GEMI-BTC2603052200-HI70500)", Example: "GEMI-BTC2603052200-HI70500"},
+			"side":            {Type: internalschema.ParamString, Required: true, Enum: []string{"buy", "sell"}, Description: "Order side", Example: "buy"},
+			"outcome":         {Type: internalschema.ParamString, Required: true, Enum: []string{"yes", "no"}, Description: "Contract outcome", Example: "yes"},
+			"client_order_id": {Type: internalschema.ParamString, Required: true, Description: "Idempotency key for safe retries. REQUIRED for agents. Use format: agent-{timestamp}-{uuid}", Example: "agent-1709424000-abc123"},
+			"quantity":        {Type: internalschema.ParamString, Description: "Number of contracts (1-10000). Required unless dollars is set", Example: "100"},
+			"dollars":         {Type: internalschema.ParamString, Description: "Dollar amount. Buys cap total spend including estimated prediction fees; sells target gross notional. Market/IOC/FOK sizing uses a WebSocket depth snapshot", Example: "50"},
+			"price":           {Type: internalschema.ParamString, Description: "Limit price (0.01-0.99). Required for limit orders and dollar-based sizing", Example: "0.65"},
+			"type":            {Type: internalschema.ParamString, Enum: []string{"limit", "market"}, Default: "limit", Description: "Order type"},
+			"time_in_force":   {Type: internalschema.ParamString, Enum: []string{"good-til-cancel", "immediate-or-cancel", "fill-or-kill", "post-only"}, Default: "good-til-cancel", Description: "Time in force policy"},
+			"dry_run":         {Type: internalschema.ParamBoolean, Description: "Validate and preview order without placing. Returns order params that would be sent"},
+		},
+		Output: &internalschema.OutputMeta{Type: "object", Description: "PredictOrderResponse with orderId, status, filledQuantity", Schema: "#/schemas/PredictOrderResponse"},
+	})
+	internalschema.Register(&internalschema.CommandMeta{
+		MCPName:     "gemini_predict_order_cancel",
+		Description: "Cancel a prediction market order by order ID.",
+		Params: map[string]internalschema.ParamMeta{
+			"order_id": {Type: internalschema.ParamString, Required: true, Description: "Server-assigned order ID to cancel", Example: "12345678"},
+		},
+		Output: &internalschema.OutputMeta{Type: "object", Description: "Canceled order details", Schema: "#/schemas/PredictOrderResponse"},
+	})
+	internalschema.Register(&internalschema.CommandMeta{
+		MCPName:     "gemini_predict_order_cancel_all",
+		Description: "Cancel ALL open prediction market orders atomically. Use as emergency kill switch. Use dry_run=true to preview which orders would be canceled.",
+		Params: map[string]internalschema.ParamMeta{
+			"dry_run": {Type: internalschema.ParamBoolean, Description: "List orders that would be canceled without canceling"},
+		},
+		Output: &internalschema.OutputMeta{Type: "object", Description: "List of canceled order IDs"},
+	})
+	internalschema.Register(&internalschema.CommandMeta{
+		MCPName:     "gemini_predict_order_list",
+		Description: "List all open prediction market orders.",
+		Params: map[string]internalschema.ParamMeta{
+			"ticker": {Type: internalschema.ParamString, Description: "Filter by market ticker (optional)", Example: "OSCARBP26"},
+			"limit":  {Type: internalschema.ParamString, Description: "Max results (default: 50)", Default: "50"},
+		},
+		Output: &internalschema.OutputMeta{Type: "array", Description: "Array of open orders", Schema: "#/schemas/PredictOrderResponse"},
+	})
+	internalschema.Register(&internalschema.CommandMeta{
+		MCPName:     "gemini_predict_order_get",
+		Description: "Get status and details of a specific prediction market order.",
+		Params: map[string]internalschema.ParamMeta{
+			"order_id": {Type: internalschema.ParamString, Required: true, Description: "Server-assigned order ID", Example: "12345678"},
+		},
+		Output: &internalschema.OutputMeta{Type: "object", Description: "Order details with current status", Schema: "#/schemas/PredictOrderResponse"},
+	})
+	internalschema.Register(&internalschema.CommandMeta{
+		MCPName:     "gemini_predict_order_history",
+		Description: "List prediction market order history (filled, canceled, etc.).",
+		Params: map[string]internalschema.ParamMeta{
+			"ticker": {Type: internalschema.ParamString, Description: "Filter by market ticker (optional)", Example: "OSCARBP26"},
+			"status": {Type: internalschema.ParamString, Description: "Filter by status (e.g., filled, canceled)", Example: "filled"},
+			"limit":  {Type: internalschema.ParamString, Description: "Max results (default: 50)", Default: "50"},
+		},
+		Output: &internalschema.OutputMeta{Type: "array", Description: "Historical orders", Schema: "#/schemas/PredictOrderResponse"},
+	})
+
 	predictOrderPlaceCmd.Flags().StringVar(&predictOrderSymbol, "symbol", "", "market symbol (required)")
 	predictOrderPlaceCmd.Flags().StringVar(&predictOrderSide, "side", "", "order side: buy or sell (required)")
 	predictOrderPlaceCmd.Flags().StringVar(&predictOrderOutcome, "outcome", "", "contract outcome: yes or no (required)")

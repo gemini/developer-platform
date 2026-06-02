@@ -8,6 +8,7 @@ import (
 
 	"github.com/gemini/developer-platform/packages/cli/internal/api"
 	"github.com/gemini/developer-platform/packages/cli/internal/output"
+	internalschema "github.com/gemini/developer-platform/packages/cli/internal/schema"
 )
 
 var bookLimit int
@@ -53,6 +54,16 @@ Examples:
 }
 
 func init() {
+	internalschema.Register(&internalschema.CommandMeta{
+		MCPName:     "gemini_book",
+		Description: "Get order book depth for any symbol (spot or prediction).",
+		Params: map[string]internalschema.ParamMeta{
+			"symbol": {Type: internalschema.ParamString, Required: true, Description: "Symbol (e.g., BTCUSD or GEMI-OSCARBP26-...)", Example: "BTCUSD"},
+			"limit":  {Type: internalschema.ParamString, Description: "Number of levels per side (default: 20)", Default: "20"},
+		},
+		Output: &internalschema.OutputMeta{Type: "object", Description: "Bids and asks arrays", Schema: "#/schemas/OrderBook"},
+	})
+
 	bookCmd.Flags().IntVar(&bookLimit, "limit", 10, "number of price levels to show")
 	rootCmd.AddCommand(bookCmd)
 }

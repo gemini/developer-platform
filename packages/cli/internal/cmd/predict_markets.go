@@ -9,6 +9,7 @@ import (
 	"github.com/gemini/developer-platform/packages/cli/internal/api"
 	appmarkets "github.com/gemini/developer-platform/packages/cli/internal/app/markets"
 	"github.com/gemini/developer-platform/packages/cli/internal/output"
+	internalschema "github.com/gemini/developer-platform/packages/cli/internal/schema"
 )
 
 var predictMarketsCmd = &cobra.Command{
@@ -314,6 +315,70 @@ Examples:
 }
 
 func init() {
+	internalschema.Register(&internalschema.CommandMeta{
+		MCPName:     "gemini_predict_markets_list",
+		Description: "List available prediction markets. Use to discover tradeable markets.",
+		Params: map[string]internalschema.ParamMeta{
+			"status":   {Type: internalschema.ParamString, Enum: []string{"active", "closed", "settled"}, Description: "Filter by status", Example: "active"},
+			"category": {Type: internalschema.ParamString, Description: "Filter by category (e.g., Sports, Politics, Crypto)", Example: "Crypto"},
+		},
+		Output: &internalschema.OutputMeta{Type: "object", Description: "Markets with pagination", Schema: "#/schemas/Market"},
+	})
+	internalschema.Register(&internalschema.CommandMeta{
+		MCPName:     "gemini_predict_markets_get",
+		Description: "Get detailed market info including contracts and current prices. Use this to find the instrumentSymbol needed for order placement.",
+		Params: map[string]internalschema.ParamMeta{
+			"ticker": {Type: internalschema.ParamString, Required: true, Description: "Market ticker (e.g., OSCARBP26)", Example: "BTC2603052200"},
+		},
+		Output: &internalschema.OutputMeta{Type: "object", Description: "Market with contracts[] containing instrumentSymbol for trading", Schema: "#/schemas/Market"},
+	})
+	internalschema.Register(&internalschema.CommandMeta{
+		MCPName:     "gemini_predict_markets_search",
+		Description: "Search prediction markets by keyword.",
+		Params: map[string]internalschema.ParamMeta{
+			"query": {Type: internalschema.ParamString, Required: true, Description: "Search query (e.g., 'NBA', 'Bitcoin', 'Election')", Example: "Bitcoin"},
+		},
+		Output: &internalschema.OutputMeta{Type: "object", Description: "Matching markets", Schema: "#/schemas/Market"},
+	})
+	internalschema.Register(&internalschema.CommandMeta{
+		MCPName:     "gemini_predict_markets_newly_listed",
+		Description: "List prediction markets created in the last 24 hours. Sorted by creation date (newest first).",
+		Params: map[string]internalschema.ParamMeta{
+			"category": {Type: internalschema.ParamString, Description: "Filter by category (e.g., Sports, Politics, Crypto)", Example: "Sports"},
+			"limit":    {Type: internalschema.ParamString, Description: "Max results (default: 50)", Default: "50"},
+			"offset":   {Type: internalschema.ParamString, Description: "Pagination offset", Default: "0"},
+		},
+		Output: &internalschema.OutputMeta{Type: "object", Description: "New markets with pagination", Schema: "#/schemas/Market"},
+	})
+	internalschema.Register(&internalschema.CommandMeta{
+		MCPName:     "gemini_predict_markets_recently_settled",
+		Description: "List prediction markets settled in the last 24 hours. Sorted by resolution date (most recent first).",
+		Params: map[string]internalschema.ParamMeta{
+			"category": {Type: internalschema.ParamString, Description: "Filter by category (e.g., Sports, Politics, Crypto)", Example: "Sports"},
+			"limit":    {Type: internalschema.ParamString, Description: "Max results (default: 50)", Default: "50"},
+			"offset":   {Type: internalschema.ParamString, Description: "Pagination offset", Default: "0"},
+		},
+		Output: &internalschema.OutputMeta{Type: "object", Description: "Settled markets with pagination", Schema: "#/schemas/Market"},
+	})
+	internalschema.Register(&internalschema.CommandMeta{
+		MCPName:     "gemini_predict_markets_upcoming",
+		Description: "List pre-launch approved prediction markets. Sorted by start time (soonest first).",
+		Params: map[string]internalschema.ParamMeta{
+			"category": {Type: internalschema.ParamString, Description: "Filter by category (e.g., Sports, Politics, Crypto)", Example: "Sports"},
+			"limit":    {Type: internalschema.ParamString, Description: "Max results (default: 50)", Default: "50"},
+			"offset":   {Type: internalschema.ParamString, Description: "Pagination offset", Default: "0"},
+		},
+		Output: &internalschema.OutputMeta{Type: "object", Description: "Upcoming markets with pagination", Schema: "#/schemas/Market"},
+	})
+	internalschema.Register(&internalschema.CommandMeta{
+		MCPName:     "gemini_predict_markets_categories",
+		Description: "List all available prediction market categories.",
+		Params: map[string]internalschema.ParamMeta{
+			"status": {Type: internalschema.ParamString, Enum: []string{"active", "closed", "settled"}, Description: "Filter categories by market status", Example: "active"},
+		},
+		Output: &internalschema.OutputMeta{Type: "object", Description: "Array of category strings"},
+	})
+
 	predictMarketsListCmd.Flags().StringSliceVar(&predictMarketsStatus, "status", nil, "filter by status")
 	predictMarketsListCmd.Flags().StringSliceVar(&predictMarketsCategory, "category", nil, "filter by category")
 	predictMarketsListCmd.Flags().StringVar(&predictMarketsSearch, "search", "", "search query")

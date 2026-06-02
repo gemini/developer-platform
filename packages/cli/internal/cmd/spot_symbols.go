@@ -9,6 +9,7 @@ import (
 	"github.com/gemini/developer-platform/packages/cli/internal/api"
 	appmarkets "github.com/gemini/developer-platform/packages/cli/internal/app/markets"
 	"github.com/gemini/developer-platform/packages/cli/internal/output"
+	internalschema "github.com/gemini/developer-platform/packages/cli/internal/schema"
 )
 
 var spotSymbolsCmd = &cobra.Command{
@@ -84,6 +85,21 @@ Examples:
 }
 
 func init() {
+	internalschema.Register(&internalschema.CommandMeta{
+		MCPName:     "gemini_spot_symbols",
+		Description: "List all available spot trading pairs.",
+		Params:      map[string]internalschema.ParamMeta{},
+		Output:      &internalschema.OutputMeta{Type: "array", Description: "Array of symbol strings (e.g., btcusd, ethusd)"},
+	})
+	internalschema.Register(&internalschema.CommandMeta{
+		MCPName:     "gemini_spot_symbol",
+		Description: "Get details for a spot trading pair including min order size and tick size.",
+		Params: map[string]internalschema.ParamMeta{
+			"symbol": {Type: internalschema.ParamString, Required: true, Description: "Trading pair (e.g., BTCUSD)", Example: "BTCUSD"},
+		},
+		Output: &internalschema.OutputMeta{Type: "object", Description: "Symbol details with min_order_size, tick_size", Schema: "#/schemas/SpotSymbolDetails"},
+	})
+
 	spotCmd.AddCommand(spotSymbolsCmd)
 	spotCmd.AddCommand(spotSymbolCmd)
 }

@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/gemini/developer-platform/packages/cli/internal/output"
+	internalschema "github.com/gemini/developer-platform/packages/cli/internal/schema"
 )
 
 var statusCmd = &cobra.Command{
@@ -74,4 +75,13 @@ Use 'gemini-markets auth test' for an authenticated probe and
 		}
 		return output.PrintJSON(result)
 	},
+}
+
+func init() {
+	internalschema.Register(&internalschema.CommandMeta{
+		MCPName:     "gemini_status",
+		Description: "Check API health and connectivity.",
+		Params:      map[string]internalschema.ParamMeta{},
+		Output:      &internalschema.OutputMeta{Type: "object", Description: "API status"},
+	})
 }

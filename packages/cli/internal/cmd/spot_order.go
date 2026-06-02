@@ -10,6 +10,7 @@ import (
 	"github.com/gemini/developer-platform/packages/cli/internal/api"
 	apporders "github.com/gemini/developer-platform/packages/cli/internal/app/orders"
 	"github.com/gemini/developer-platform/packages/cli/internal/output"
+	internalschema "github.com/gemini/developer-platform/packages/cli/internal/schema"
 )
 
 var spotOrderCmd = &cobra.Command{
@@ -289,6 +290,52 @@ Examples:
 }
 
 func init() {
+	internalschema.Register(&internalschema.CommandMeta{
+		MCPName:     "gemini_spot_order_place",
+		Description: "Place a spot/crypto trading order. IMPORTANT: Always provide client_order_id for safe retries. For active trading, run 'gemini-markets stream orders' in background to get real-time fill notifications instead of polling.",
+		Params: map[string]internalschema.ParamMeta{
+			"symbol":          {Type: internalschema.ParamString, Required: true, Description: "Trading pair (e.g., BTCUSD, ETHUSD)", Example: "BTCUSD"},
+			"side":            {Type: internalschema.ParamString, Required: true, Enum: []string{"buy", "sell"}, Description: "Order side", Example: "buy"},
+			"client_order_id": {Type: internalschema.ParamString, Required: true, Description: "Idempotency key for safe retries. REQUIRED for agents", Example: "agent-1709424000-btc"},
+			"amount":          {Type: internalschema.ParamString, Description: "Order amount in base currency. Required unless dollars is set", Example: "0.01"},
+			"dollars":         {Type: internalschema.ParamString, Description: "Total dollar spend including fees. Adjusts for your fee tier. Mutually exclusive with amount", Example: "50"},
+			"price":           {Type: internalschema.ParamString, Description: "Limit price. Required for limit orders and when using dollars", Example: "50000"},
+			"type":            {Type: internalschema.ParamString, Enum: []string{"exchange limit", "exchange stop limit"}, Default: "exchange limit", Description: "Order type"},
+			"dry_run":         {Type: internalschema.ParamBoolean, Description: "Validate and preview order without placing"},
+		},
+		Output: &internalschema.OutputMeta{Type: "object", Description: "Order response with order_id, status", Schema: "#/schemas/SpotOrderResponse"},
+	})
+	internalschema.Register(&internalschema.CommandMeta{
+		MCPName:     "gemini_spot_order_cancel",
+		Description: "Cancel a spot trading order.",
+		Params: map[string]internalschema.ParamMeta{
+			"order_id": {Type: internalschema.ParamString, Required: true, Description: "Server-assigned order ID to cancel", Example: "12345678"},
+		},
+		Output: &internalschema.OutputMeta{Type: "object", Description: "Canceled order details", Schema: "#/schemas/SpotOrderResponse"},
+	})
+	internalschema.Register(&internalschema.CommandMeta{
+		MCPName:     "gemini_spot_order_cancel_all",
+		Description: "Cancel ALL open spot orders atomically. Use dry_run=true to preview which orders would be canceled.",
+		Params: map[string]internalschema.ParamMeta{
+			"dry_run": {Type: internalschema.ParamBoolean, Description: "List orders that would be canceled without canceling"},
+		},
+		Output: &internalschema.OutputMeta{Type: "object", Description: "List of canceled order IDs"},
+	})
+	internalschema.Register(&internalschema.CommandMeta{
+		MCPName:     "gemini_spot_order_get",
+		Description: "Get status and details of a specific spot order.",
+		Params: map[string]internalschema.ParamMeta{
+			"order_id": {Type: internalschema.ParamString, Required: true, Description: "Server-assigned order ID", Example: "12345678"},
+		},
+		Output: &internalschema.OutputMeta{Type: "object", Description: "Order details", Schema: "#/schemas/SpotOrderResponse"},
+	})
+	internalschema.Register(&internalschema.CommandMeta{
+		MCPName:     "gemini_spot_order_list",
+		Description: "List all open spot orders.",
+		Params:      map[string]internalschema.ParamMeta{},
+		Output:      &internalschema.OutputMeta{Type: "array", Description: "Open orders", Schema: "#/schemas/SpotOrderResponse"},
+	})
+
 	spotOrderPlaceCmd.Flags().StringVar(&spotOrderSymbol, "symbol", "", "trading pair symbol (required)")
 	spotOrderPlaceCmd.Flags().StringVar(&spotOrderSide, "side", "", "order side: buy or sell (required)")
 	spotOrderPlaceCmd.Flags().StringVar(&spotOrderType, "type", "exchange limit", "order type: exchange limit, exchange market")

@@ -10,6 +10,7 @@ import (
 
 	"github.com/gemini/developer-platform/packages/cli/internal/api"
 	"github.com/gemini/developer-platform/packages/cli/internal/output"
+	internalschema "github.com/gemini/developer-platform/packages/cli/internal/schema"
 )
 
 var (
@@ -54,6 +55,16 @@ Examples:
 }
 
 func init() {
+	internalschema.Register(&internalschema.CommandMeta{
+		MCPName:     "gemini_spot_trades",
+		Description: "List your spot trade history (executed fills).",
+		Params: map[string]internalschema.ParamMeta{
+			"symbol": {Type: internalschema.ParamString, Description: "Filter by trading pair (optional)", Example: "BTCUSD"},
+			"limit":  {Type: internalschema.ParamString, Description: "Max results (default: 50)", Default: "50"},
+		},
+		Output: &internalschema.OutputMeta{Type: "array", Description: "Executed trades", Schema: "#/schemas/SpotTrade"},
+	})
+
 	spotTradesCmd.Flags().StringVar(&spotTradesSymbol, "symbol", "", "filter by trading pair")
 	spotTradesCmd.Flags().IntVar(&spotTradesLimit, "limit", 50, "max results")
 	spotTradesCmd.Flags().StringVar(&spotTradesAccount, "account", "", "account name (optional)")

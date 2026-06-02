@@ -9,6 +9,7 @@ import (
 
 	"github.com/gemini/developer-platform/packages/cli/internal/api"
 	"github.com/gemini/developer-platform/packages/cli/internal/output"
+	internalschema "github.com/gemini/developer-platform/packages/cli/internal/schema"
 )
 
 var (
@@ -137,6 +138,29 @@ Examples:
 }
 
 func init() {
+	internalschema.Register(&internalschema.CommandMeta{
+		MCPName:     "gemini_candles",
+		Description: "Get recent OHLCV candles for a symbol. Returns the most recent candles.",
+		Params: map[string]internalschema.ParamMeta{
+			"symbol":   {Type: internalschema.ParamString, Required: true, Description: "Trading symbol (e.g., BTCUSD)", Example: "BTCUSD"},
+			"interval": {Type: internalschema.ParamString, Enum: []string{"1m", "5m", "15m", "30m", "1h", "6h", "1d"}, Default: "1h", Description: "Candle interval"},
+			"limit":    {Type: internalschema.ParamString, Description: "Number of candles (default: 50)", Default: "50"},
+		},
+		Output: &internalschema.OutputMeta{Type: "array", Description: "OHLCV candles [timestamp, open, high, low, close, volume]"},
+	})
+	internalschema.Register(&internalschema.CommandMeta{
+		MCPName:     "gemini_klines",
+		Description: "Get historical OHLCV data with time range. Use for backtesting or historical analysis.",
+		Params: map[string]internalschema.ParamMeta{
+			"symbol":   {Type: internalschema.ParamString, Required: true, Description: "Trading symbol (e.g., BTCUSD)", Example: "BTCUSD"},
+			"interval": {Type: internalschema.ParamString, Enum: []string{"1m", "5m", "15m", "30m", "1h", "6h", "1d"}, Default: "1h", Description: "Candle interval"},
+			"start":    {Type: internalschema.ParamString, Description: "Start time (ISO 8601 or Unix timestamp)", Example: "2024-01-01T00:00:00Z"},
+			"end":      {Type: internalschema.ParamString, Description: "End time (ISO 8601 or Unix timestamp)", Example: "2024-01-07T00:00:00Z"},
+			"limit":    {Type: internalschema.ParamString, Description: "Max candles to return", Default: "500"},
+		},
+		Output: &internalschema.OutputMeta{Type: "array", Description: "OHLCV candles with timestamps"},
+	})
+
 	klinesCmd.Flags().StringVar(&klinesInterval, "interval", "1day", "candle interval: 1m, 5m, 15m, 30m, 1hr, 6hr, 1day")
 	klinesCmd.Flags().StringVar(&klinesStartTime, "start", "", "start time (YYYY-MM-DD or RFC3339)")
 	klinesCmd.Flags().StringVar(&klinesEndTime, "end", "", "end time (YYYY-MM-DD or RFC3339)")

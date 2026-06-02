@@ -8,6 +8,7 @@ import (
 
 	"github.com/gemini/developer-platform/packages/cli/internal/api"
 	"github.com/gemini/developer-platform/packages/cli/internal/output"
+	internalschema "github.com/gemini/developer-platform/packages/cli/internal/schema"
 )
 
 var spotFeesCmd = &cobra.Command{
@@ -41,6 +42,13 @@ Examples:
 }
 
 func init() {
+	internalschema.Register(&internalschema.CommandMeta{
+		MCPName:     "gemini_spot_fees",
+		Description: "Get your fee tier and 30-day trading volume for spot markets.",
+		Params:      map[string]internalschema.ParamMeta{},
+		Output:      &internalschema.OutputMeta{Type: "object", Description: "Fee tier and 30-day volume"},
+	})
+
 	spotCmd.AddCommand(spotFeesCmd)
 }
 
