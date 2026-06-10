@@ -2,7 +2,7 @@ module github.com/gemini/developer-platform/packages/cli
 
 go 1.25.0
 
-toolchain go1.25.10
+toolchain go1.25.11
 
 require (
 	github.com/99designs/keyring v1.2.2
