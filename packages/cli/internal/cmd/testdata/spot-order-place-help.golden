@@ -33,7 +33,7 @@ Examples:
   gemini-markets --sandbox --no-websocket spot order place --symbol btcusd --side buy --amount 0.01 --price 50000 --client-order-id test-123 -q
 
 Flags:
-      --account string           account name (optional)
+      --account string           account name (REST only; use --no-websocket)
       --amount string            order amount in base currency (required unless --dollars)
       --client-order-id string   idempotency key (auto-generated if not provided)
       --dollars string           total dollar spend including fees (adjusts for fee tier)

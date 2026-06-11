@@ -72,7 +72,7 @@ func BuildWorkflows() []WorkflowSpec {
 			Description: "Cancel all orders immediately (kill switch)",
 			Steps: []WorkflowStep{
 				{Step: 1, Action: "cancel_spot", Command: "gemini-markets spot order cancel-all -q", Description: "Cancel all spot orders atomically", Output: "CancelAllResult"},
-				{Step: 2, Action: "cancel_predict", Command: "gemini-markets predict order cancel-all -q", Description: "Cancel all prediction orders atomically", Output: "CancelAllResult"},
+				{Step: 2, Action: "cancel_predict", Command: "gemini-markets predict order cancel-all -q", Description: "Cancel all prediction orders", Output: "CancelAllResult"},
 				{Step: 3, Action: "verify_spot", Command: "gemini-markets spot order list -q", Description: "Confirm no open spot orders", Output: "SpotOrderResponse[]"},
 				{Step: 4, Action: "verify_predict", Command: "gemini-markets predict order list -q", Description: "Confirm no open prediction orders", Output: "PredictOrdersResponse"},
 			},

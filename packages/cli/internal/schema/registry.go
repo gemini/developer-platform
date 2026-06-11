@@ -36,7 +36,11 @@ type CommandMeta struct {
 	MCPName     string
 	Description string
 	Params      map[string]ParamMeta
-	Output      *OutputMeta
+	// AnyOf lists alternate required-field sets (JSON Schema anyOf). Each inner
+	// slice is one valid combination. Use when at least one of several params
+	// must be present (e.g. quantity OR dollars).
+	AnyOf  [][]string
+	Output *OutputMeta
 }
 
 var registry []*CommandMeta
@@ -77,6 +81,11 @@ func mcpToolFromMeta(meta *CommandMeta) MCPTool {
 	}
 	sort.Strings(required)
 
+	var anyOf []MCPRequiredSet
+	for _, set := range meta.AnyOf {
+		anyOf = append(anyOf, MCPRequiredSet{Required: set})
+	}
+
 	tool := MCPTool{
 		Name:        meta.MCPName,
 		Description: meta.Description,
@@ -84,6 +93,7 @@ func mcpToolFromMeta(meta *CommandMeta) MCPTool {
 			Type:       "object",
 			Properties: properties,
 			Required:   required,
+			AnyOf:      anyOf,
 		},
 	}
 	if meta.Output != nil {

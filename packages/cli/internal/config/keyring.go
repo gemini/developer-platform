@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"syscall"
 
 	"github.com/99designs/keyring"
@@ -18,6 +19,14 @@ const (
 	legacyOAuthTokenKey = "oauth-tokens" // #nosec G101 -- keyring item name, not a credential.
 )
 
+// keyringCache holds the opened keyring for the lifetime of the process so
+// that file-backend users are only prompted for their password once per command.
+var (
+	keyringCache     keyring.Keyring
+	keyringCacheErr  error
+	keyringCacheOnce sync.Once
+)
+
 // StoredCredentials contains credentials stored in the OS keychain.
 type StoredCredentials struct {
 	APIKey    string `json:"api_key"`
@@ -25,15 +34,23 @@ type StoredCredentials struct {
 }
 
 // getKeyring opens the appropriate keyring backend for the current OS.
-// Falls back to encrypted file if no system keychain is available.
+// The result is cached for the process lifetime so the file backend only
+// prompts for a password once per command invocation.
 func getKeyring() (keyring.Keyring, error) {
+	keyringCacheOnce.Do(func() {
+		keyringCache, keyringCacheErr = openKeyring()
+	})
+	return keyringCache, keyringCacheErr
+}
+
+func openKeyring() (keyring.Keyring, error) {
 	configDir, err := os.UserConfigDir()
 	if err != nil {
 		configDir = filepath.Join(os.Getenv("HOME"), ".config")
 	}
 
-	// Try platform-specific backend first without file fallback
-	// This avoids password prompts when system keychain fails
+	// Try platform-specific backend first without file fallback.
+	// This avoids password prompts when system keychain fails.
 	ring, err := keyring.Open(keyring.Config{
 		ServiceName: serviceName,
 
@@ -41,7 +58,6 @@ func getKeyring() (keyring.Keyring, error) {
 		KeychainName:             "login",
 		KeychainTrustApplication: true,
 
-		// Try only system keychains first
 		AllowedBackends: []keyring.BackendType{
 			keyring.KeychainBackend,      // macOS
 			keyring.WinCredBackend,       // Windows
@@ -53,7 +69,7 @@ func getKeyring() (keyring.Keyring, error) {
 		return ring, nil
 	}
 
-	// Fall back to encrypted file only if explicitly requested
+	// Fall back to encrypted file only if explicitly requested.
 	if os.Getenv("GEMINI_USE_FILE_KEYRING") != "" {
 		return keyring.Open(keyring.Config{
 			ServiceName:      serviceName,

@@ -145,15 +145,18 @@ func runAuthTest(cmd *cobra.Command) error {
 
 	balances, err := rt.API.GetBalances(cmd.Context())
 	if err != nil {
+		authErr := &output.CLIError{
+			Code:       output.ErrCodeAuthFailed,
+			Message:    err.Error(),
+			Retryable:  false,
+			Suggestion: "Verify your credentials are valid, or run 'gemini-markets auth login' to re-authenticate",
+		}
 		if IsTableOutput() {
 			fmt.Println("Status: FAILED")
 			fmt.Printf("Error: %v\n", err)
-			return nil
+			return authErr
 		}
-		return output.PrintJSON(map[string]any{
-			"success": false,
-			"error":   err.Error(),
-		})
+		return output.FormatError(authErr)
 	}
 
 	if IsTableOutput() {

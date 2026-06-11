@@ -3,6 +3,7 @@ package orders
 import (
 	"context"
 	"errors"
+	"reflect"
 	"testing"
 
 	"github.com/gemini/developer-platform/packages/cli/internal/api"
@@ -31,6 +32,10 @@ type stubAPIClient struct {
 	cancelAllSpotErr   error
 	placePredictCalls  int
 	placeSpotCalls     int
+	cancelPredictIDs   []string
+	cancelAllCalls     int
+	listPredictCalls   []api.ListPredictOrdersParams
+	predictOrdersPages map[int]*api.PredictOrdersResponse
 }
 
 func (s *stubAPIClient) GetNotionalVolume(context.Context) (*api.NotionalVolumeResponse, error) {
@@ -47,15 +52,26 @@ func (s *stubAPIClient) PlaceSpotOrder(context.Context, *api.SpotOrderRequest) (
 	return s.spotOrderResp, s.spotOrderErr
 }
 
-func (s *stubAPIClient) CancelPredictOrder(context.Context, string) (*api.PredictOrderResponse, error) {
-	return s.cancelPredictResp, s.cancelPredictErr
+func (s *stubAPIClient) CancelPredictOrder(_ context.Context, orderID string) (*api.PredictOrderResponse, error) {
+	s.cancelPredictIDs = append(s.cancelPredictIDs, orderID)
+	if s.cancelPredictResp != nil || s.cancelPredictErr != nil {
+		return s.cancelPredictResp, s.cancelPredictErr
+	}
+	return &api.PredictOrderResponse{OrderID: orderID, Status: "cancelled"}, nil
 }
 
 func (s *stubAPIClient) CancelSpotOrder(context.Context, string) (*api.SpotOrderResponse, error) {
 	return s.cancelSpotResp, s.cancelSpotErr
 }
 
-func (s *stubAPIClient) ListOpenPredictOrders(context.Context, api.ListPredictOrdersParams) (*api.PredictOrdersResponse, error) {
+func (s *stubAPIClient) ListOpenPredictOrders(_ context.Context, params api.ListPredictOrdersParams) (*api.PredictOrdersResponse, error) {
+	s.listPredictCalls = append(s.listPredictCalls, params)
+	if s.predictOrdersPages != nil {
+		if resp, ok := s.predictOrdersPages[params.Offset]; ok {
+			return resp, s.predictOrdersErr
+		}
+		return &api.PredictOrdersResponse{}, s.predictOrdersErr
+	}
 	return s.predictOrdersResp, s.predictOrdersErr
 }
 
@@ -64,6 +80,7 @@ func (s *stubAPIClient) ListSpotOrders(context.Context, api.ListSpotOrdersParams
 }
 
 func (s *stubAPIClient) CancelAllOrders(context.Context) (*api.CancelAllResult, error) {
+	s.cancelAllCalls++
 	return s.cancelAllResp, s.cancelAllErr
 }
 
@@ -72,16 +89,21 @@ func (s *stubAPIClient) CancelAllSpotOrders(context.Context, string) (*api.Cance
 }
 
 type stubWSManager struct {
-	depthResp       *api.OrderBook
-	depthErr        error
-	depthSymbol     string
-	depthLevels     int
-	placeOrderResp  *ws.OrderResult
-	placeOrderErr   error
-	cancelOrderResp *ws.OrderResult
-	cancelOrderErr  error
-	cancelAllResp   *ws.CancelAllResult
-	cancelAllErr    error
+	depthResp        *api.OrderBook
+	depthErr         error
+	depthSymbol      string
+	depthLevels      int
+	placeOrderResp   *ws.OrderResult
+	placeOrderErr    error
+	cancelOrderResp  *ws.OrderResult
+	cancelOrderErr   error
+	cancelAllResp    *ws.CancelAllResult
+	cancelAllErr     error
+	placeOrderCalls  int
+	placeOrderParams *ws.OrderParams
+	cancelOrderIDs   []string
+	cancelAllCalls   int
+	cancelAllParams  *ws.CancelAllParams
 }
 
 func (s *stubWSManager) DepthSnapshot(_ context.Context, symbol string, levels int) (*api.OrderBook, error) {
@@ -90,15 +112,20 @@ func (s *stubWSManager) DepthSnapshot(_ context.Context, symbol string, levels i
 	return s.depthResp, s.depthErr
 }
 
-func (s *stubWSManager) PlaceOrder(context.Context, *ws.OrderParams) (*ws.OrderResult, error) {
+func (s *stubWSManager) PlaceOrder(_ context.Context, params *ws.OrderParams) (*ws.OrderResult, error) {
+	s.placeOrderCalls++
+	s.placeOrderParams = params
 	return s.placeOrderResp, s.placeOrderErr
 }
 
-func (s *stubWSManager) CancelOrder(context.Context, ws.CancelParams) (*ws.OrderResult, error) {
+func (s *stubWSManager) CancelOrder(_ context.Context, params ws.CancelParams) (*ws.OrderResult, error) {
+	s.cancelOrderIDs = append(s.cancelOrderIDs, params.OrderID)
 	return s.cancelOrderResp, s.cancelOrderErr
 }
 
-func (s *stubWSManager) CancelAllOrders(context.Context, *ws.CancelAllParams) (*ws.CancelAllResult, error) {
+func (s *stubWSManager) CancelAllOrders(_ context.Context, params *ws.CancelAllParams) (*ws.CancelAllResult, error) {
+	s.cancelAllCalls++
+	s.cancelAllParams = params
 	return s.cancelAllResp, s.cancelAllErr
 }
 
@@ -371,41 +398,156 @@ func TestExecuteSpotPlaceFailsClosedWhenWebSocketFails(t *testing.T) {
 	}
 }
 
-func TestCancelAllPredictOrdersAlwaysReturnsContractShape(t *testing.T) {
-	svc := NewService(&stubAPIClient{
-		cancelAllResp: &api.CancelAllResult{
-			Details: api.CancelAllDetails{
-				CancelledOrders: []api.CancelledOrderDetail{{OrderID: "ORD1"}, {OrderID: "ORD2"}},
+func TestExecuteSpotPlaceRejectsAccountOverWebSocket(t *testing.T) {
+	apiClient := &stubAPIClient{
+		spotOrderResp: &api.SpotOrderResponse{OrderID: "REST1"},
+	}
+	wsMgr := &stubWSManager{
+		placeOrderResp: &ws.OrderResult{OrderID: "WS1"},
+	}
+	svc := NewService(apiClient, wsMgr, false)
+
+	resp, err := svc.ExecuteSpotPlace(context.Background(), &api.SpotOrderRequest{
+		Symbol:  "btcusd",
+		Side:    "buy",
+		Type:    "exchange limit",
+		Amount:  "0.01",
+		Price:   "50000",
+		Account: "primary",
+	})
+	if err == nil {
+		t.Fatal("ExecuteSpotPlace() error = nil, want account/WebSocket error")
+	}
+	if resp != nil {
+		t.Fatalf("ExecuteSpotPlace() response = %#v, want nil", resp)
+	}
+	if wsMgr.placeOrderCalls != 0 || apiClient.placeSpotCalls != 0 {
+		t.Fatalf("place calls = ws %d api %d, want 0/0", wsMgr.placeOrderCalls, apiClient.placeSpotCalls)
+	}
+}
+
+func TestPredictRequestToWSParamsUsesMOCForMakerOnly(t *testing.T) {
+	params := predictRequestToWSParams(&api.PredictOrderRequest{
+		Symbol:        "GEMI-TEST",
+		Side:          "buy",
+		Outcome:       "yes",
+		OrderType:     "limit",
+		Quantity:      "1",
+		Price:         "0.50",
+		TimeInForce:   "good-til-cancel",
+		ClientOrderID: "client-1",
+		MakerOrCancel: true,
+	})
+
+	if params.TimeInForce != "MOC" {
+		t.Fatalf("TimeInForce = %s, want MOC", params.TimeInForce)
+	}
+	if !params.MakerOrCancel {
+		t.Fatal("MakerOrCancel = false, want true")
+	}
+}
+
+func TestSpotRequestToWSParamsPreservesMakerOrCancel(t *testing.T) {
+	params := spotRequestToWSParams(&api.SpotOrderRequest{
+		Symbol:        "btcusd",
+		Side:          "buy",
+		Type:          "exchange limit",
+		Amount:        "0.01",
+		Price:         "50000",
+		ClientOrderID: "client-1",
+		Options:       []string{"maker-or-cancel"},
+	})
+
+	if params.TimeInForce != "MOC" {
+		t.Fatalf("TimeInForce = %s, want MOC", params.TimeInForce)
+	}
+	if !params.MakerOrCancel {
+		t.Fatal("MakerOrCancel = false, want true")
+	}
+}
+
+func TestPreviewPredictCancelAllPaginatesOpenOrders(t *testing.T) {
+	apiClient := &stubAPIClient{
+		predictOrdersPages: map[int]*api.PredictOrdersResponse{
+			0: {
+				Data: make([]api.PredictOrderResponse, predictCancelAllPageSize),
+			},
+			predictCancelAllPageSize: {
+				Data: []api.PredictOrderResponse{{OrderID: "ORD101"}},
 			},
 		},
-	}, nil, true)
+	}
+	for i := range apiClient.predictOrdersPages[0].Data {
+		apiClient.predictOrdersPages[0].Data[i] = api.PredictOrderResponse{OrderID: "ORD"}
+	}
+	svc := NewService(apiClient, nil, true)
+
+	orders, dryRun, err := svc.PreviewPredictCancelAll(context.Background())
+	if err != nil {
+		t.Fatalf("PreviewPredictCancelAll() error = %v", err)
+	}
+	if len(orders) != predictCancelAllPageSize+1 {
+		t.Fatalf("len(orders) = %d, want %d", len(orders), predictCancelAllPageSize+1)
+	}
+	if dryRun.OrderCount != len(orders) {
+		t.Fatalf("dryRun.OrderCount = %d, want %d", dryRun.OrderCount, len(orders))
+	}
+	wantCalls := []api.ListPredictOrdersParams{
+		{Limit: predictCancelAllPageSize, Offset: 0},
+		{Limit: predictCancelAllPageSize, Offset: predictCancelAllPageSize},
+	}
+	if !reflect.DeepEqual(apiClient.listPredictCalls, wantCalls) {
+		t.Fatalf("list calls = %#v, want %#v", apiClient.listPredictCalls, wantCalls)
+	}
+}
+
+func TestCancelAllPredictOrdersCancelsPreviewedPredictionOrders(t *testing.T) {
+	apiClient := &stubAPIClient{
+		predictOrdersResp: &api.PredictOrdersResponse{
+			Data: []api.PredictOrderResponse{{OrderID: "ORD1"}, {OrderID: "ORD2"}},
+		},
+	}
+	svc := NewService(apiClient, nil, true)
 
 	resp, err := svc.CancelAllPredictOrders(context.Background())
 	if err != nil {
 		t.Fatalf("CancelAllPredictOrders() error = %v", err)
 	}
-	if len(resp.CanceledOrders) != 2 {
-		t.Fatalf("len(CanceledOrders) = %d, want 2", len(resp.CanceledOrders))
+	if !reflect.DeepEqual(resp.CanceledOrders, []string{"ORD1", "ORD2"}) {
+		t.Fatalf("CanceledOrders = %#v, want [ORD1 ORD2]", resp.CanceledOrders)
+	}
+	if !reflect.DeepEqual(apiClient.cancelPredictIDs, []string{"ORD1", "ORD2"}) {
+		t.Fatalf("cancelPredictIDs = %#v, want [ORD1 ORD2]", apiClient.cancelPredictIDs)
+	}
+	if apiClient.cancelAllCalls != 0 {
+		t.Fatalf("CancelAllOrders calls = %d, want 0", apiClient.cancelAllCalls)
 	}
 }
 
-func TestCancelAllPredictOrdersFallsBackToREST(t *testing.T) {
-	svc := NewService(&stubAPIClient{
-		cancelAllResp: &api.CancelAllResult{
-			Details: api.CancelAllDetails{
-				CancelledOrders: []api.CancelledOrderDetail{{OrderID: "REST1"}},
-			},
+func TestCancelAllPredictOrdersFallsBackToRESTPerOrder(t *testing.T) {
+	apiClient := &stubAPIClient{
+		predictOrdersResp: &api.PredictOrdersResponse{
+			Data: []api.PredictOrderResponse{{OrderID: "REST1"}},
 		},
-	}, &stubWSManager{
-		cancelAllErr: errors.New("ws unavailable"),
-	}, false)
+	}
+	wsMgr := &stubWSManager{cancelOrderErr: errors.New("ws unavailable")}
+	svc := NewService(apiClient, wsMgr, false)
 
 	resp, err := svc.CancelAllPredictOrders(context.Background())
 	if err != nil {
 		t.Fatalf("CancelAllPredictOrders() error = %v", err)
 	}
 	if len(resp.CanceledOrders) != 1 || resp.CanceledOrders[0] != "REST1" {
-		t.Fatalf("CabeledOrders = %#v, want [REST1]", resp.CanceledOrders)
+		t.Fatalf("CanceledOrders = %#v, want [REST1]", resp.CanceledOrders)
+	}
+	if !reflect.DeepEqual(wsMgr.cancelOrderIDs, []string{"REST1"}) {
+		t.Fatalf("ws cancel IDs = %#v, want [REST1]", wsMgr.cancelOrderIDs)
+	}
+	if !reflect.DeepEqual(apiClient.cancelPredictIDs, []string{"REST1"}) {
+		t.Fatalf("REST cancel IDs = %#v, want [REST1]", apiClient.cancelPredictIDs)
+	}
+	if wsMgr.cancelAllCalls != 0 || apiClient.cancelAllCalls != 0 {
+		t.Fatalf("cancel-all calls = ws %d api %d, want 0/0", wsMgr.cancelAllCalls, apiClient.cancelAllCalls)
 	}
 }
 
@@ -464,5 +606,30 @@ func TestCancelSpotOrderPrefersWebSocket(t *testing.T) {
 	}
 	if !resp.IsCancelled {
 		t.Fatal("IsCancelled = false, want true")
+	}
+}
+
+func TestCancelAllSpotOrdersRejectsAccountOverWebSocket(t *testing.T) {
+	apiClient := &stubAPIClient{
+		cancelAllSpotResp: &api.CancelAllResult{
+			Details: api.CancelAllDetails{
+				CancelledOrders: []api.CancelledOrderDetail{{OrderID: "REST1"}},
+			},
+		},
+	}
+	wsMgr := &stubWSManager{
+		cancelAllResp: &ws.CancelAllResult{CancelledOrders: []string{"WS1"}},
+	}
+	svc := NewService(apiClient, wsMgr, false)
+
+	resp, err := svc.CancelAllSpotOrders(context.Background(), "primary")
+	if err == nil {
+		t.Fatal("CancelAllSpotOrders() error = nil, want account/WebSocket error")
+	}
+	if resp != nil {
+		t.Fatalf("CancelAllSpotOrders() response = %#v, want nil", resp)
+	}
+	if wsMgr.cancelAllCalls != 0 {
+		t.Fatalf("WS cancel-all calls = %d, want 0", wsMgr.cancelAllCalls)
 	}
 }

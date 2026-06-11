@@ -101,11 +101,10 @@ type PredictOrdersResponse struct {
 
 // ListPredictOrdersParams contains filter parameters for listing prediction orders.
 type ListPredictOrdersParams struct {
-	TickerID    string
-	EventTicker string
-	Status      string
-	Limit       int
-	Offset      int
+	TickerID string
+	Status   string
+	Limit    int
+	Offset   int
 }
 
 // PlacePredictOrder places a new prediction market order.

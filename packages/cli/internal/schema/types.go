@@ -133,6 +133,12 @@ type MCPInputSchema struct {
 	Type       string              `json:"type"`
 	Properties map[string]MCPParam `json:"properties"`
 	Required   []string            `json:"required"`
+	AnyOf      []MCPRequiredSet    `json:"anyOf,omitempty"`
+}
+
+// MCPRequiredSet describes an alternate set of required fields.
+type MCPRequiredSet struct {
+	Required []string `json:"required"`
 }
 
 // MCPOutputSchema describes the expected output of a tool.

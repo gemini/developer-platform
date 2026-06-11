@@ -303,6 +303,7 @@ func init() {
 			"type":            {Type: internalschema.ParamString, Enum: []string{"exchange limit", "exchange stop limit"}, Default: "exchange limit", Description: "Order type"},
 			"dry_run":         {Type: internalschema.ParamBoolean, Description: "Validate and preview order without placing"},
 		},
+		AnyOf:  [][]string{{"amount"}, {"dollars"}},
 		Output: &internalschema.OutputMeta{Type: "object", Description: "Order response with order_id, status", Schema: "#/schemas/SpotOrderResponse"},
 	})
 	internalschema.Register(&internalschema.CommandMeta{
@@ -347,11 +348,11 @@ func init() {
 	spotOrderPlaceCmd.Flags().BoolVar(&spotOrderMakerOrCancel, "maker-or-cancel", false, "post-only order")
 	spotOrderPlaceCmd.Flags().BoolVar(&spotOrderIOC, "ioc", false, "immediate-or-cancel")
 	spotOrderPlaceCmd.Flags().BoolVar(&spotOrderFOK, "fok", false, "fill-or-kill")
-	spotOrderPlaceCmd.Flags().StringVar(&spotOrderAccount, "account", "", "account name (optional)")
+	spotOrderPlaceCmd.Flags().StringVar(&spotOrderAccount, "account", "", "account name (REST only; use --no-websocket)")
 
-	spotOrderListCmd.Flags().StringVar(&spotOrderAccount, "account", "", "account name (optional)")
+	spotOrderListCmd.Flags().StringVar(&spotOrderAccount, "account", "", "account name (REST only; use --no-websocket)")
 
-	spotOrderCancelAllCmd.Flags().StringVar(&spotOrderAccount, "account", "", "account name (optional)")
+	spotOrderCancelAllCmd.Flags().StringVar(&spotOrderAccount, "account", "", "account name (REST only; use --no-websocket)")
 	spotOrderCancelAllCmd.Flags().BoolVarP(&spotCancelAllYes, "yes", "y", false, "skip confirmation prompt")
 	spotOrderCancelAllCmd.Flags().BoolVar(&spotCancelAllDryRun, "dry-run", false, "list orders that would be canceled without canceling")
 

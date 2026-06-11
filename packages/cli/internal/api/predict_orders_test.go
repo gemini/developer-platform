@@ -161,6 +161,19 @@ func TestListOpenPredictOrders(t *testing.T) {
 		if r.URL.Path != "/v1/prediction-markets/orders/active" {
 			t.Errorf("unexpected path: %s", r.URL.Path)
 		}
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode request body: %v", err)
+		}
+		if got := body["symbol"]; got != "GEMI-TEST" {
+			t.Errorf("symbol = %v, want GEMI-TEST", got)
+		}
+		if got := body["limit"]; got != float64(10) {
+			t.Errorf("limit = %v, want 10", got)
+		}
+		if got := body["offset"]; got != float64(5) {
+			t.Errorf("offset = %v, want 5", got)
+		}
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(expectedResp)
@@ -175,8 +188,9 @@ func TestListOpenPredictOrders(t *testing.T) {
 	}
 
 	got, err := client.ListOpenPredictOrders(context.Background(), ListPredictOrdersParams{
-		Limit:  10,
-		Offset: 0,
+		TickerID: "GEMI-TEST",
+		Limit:    10,
+		Offset:   5,
 	})
 	if err != nil {
 		t.Fatalf("ListOpenPredictOrders() error = %v", err)

@@ -108,7 +108,7 @@ func (c *Client) CancelSpotOrder(ctx context.Context, orderID string) (*SpotOrde
 	return &resp, err
 }
 
-// CancelAllSpotOrders cancels all open spot orders.
+// CancelAllSpotOrders cancels all open orders across all symbols (spot and prediction markets).
 func (c *Client) CancelAllSpotOrders(ctx context.Context, account string) (*CancelAllResult, error) {
 	params := map[string]any{}
 	if account != "" {

@@ -136,11 +136,10 @@ Examples:
 }
 
 var (
-	predictOrdersTickerID    string
-	predictOrdersEventTicker string
-	predictOrdersStatus      string
-	predictOrdersLimit       int
-	predictOrdersOffset      int
+	predictOrdersTickerID string
+	predictOrdersStatus   string
+	predictOrdersLimit    int
+	predictOrdersOffset   int
 )
 
 var predictOrdersListCmd = &cobra.Command{
@@ -155,10 +154,9 @@ var predictOrdersListCmd = &cobra.Command{
 		ctx := context.Background()
 
 		params := api.ListPredictOrdersParams{
-			TickerID:    predictOrdersTickerID,
-			EventTicker: predictOrdersEventTicker,
-			Limit:       predictOrdersLimit,
-			Offset:      predictOrdersOffset,
+			TickerID: predictOrdersTickerID,
+			Limit:    predictOrdersLimit,
+			Offset:   predictOrdersOffset,
 		}
 
 		orders, err := client.ListOpenPredictOrders(ctx, params)
@@ -185,11 +183,10 @@ var predictOrdersHistoryCmd = &cobra.Command{
 		ctx := context.Background()
 
 		params := api.ListPredictOrdersParams{
-			TickerID:    predictOrdersTickerID,
-			EventTicker: predictOrdersEventTicker,
-			Status:      predictOrdersStatus,
-			Limit:       predictOrdersLimit,
-			Offset:      predictOrdersOffset,
+			TickerID: predictOrdersTickerID,
+			Status:   predictOrdersStatus,
+			Limit:    predictOrdersLimit,
+			Offset:   predictOrdersOffset,
 		}
 
 		orders, err := client.ListPredictOrderHistory(ctx, params)
@@ -266,19 +263,19 @@ var predictOrderCancelCmd = &cobra.Command{
 
 var predictOrderCancelAllCmd = &cobra.Command{
 	Use:   "cancel-all",
-	Short: "Cancel all open orders",
+	Short: "Cancel all open prediction market orders",
 	Example: `  gemini-markets predict order cancel-all --dry-run -q
   gemini-markets predict order cancel-all --yes -q
   gemini-markets --sandbox predict order cancel-all --yes -q`,
-	Long: `Cancel all open orders atomically. Essential for risk management.
+	Long: `Cancel all open prediction market orders. Essential for risk management.
 
-Cancels ALL open orders for your account (both spot and prediction markets).
-Uses the native Gemini cancel-all endpoint for atomic execution.
+The command previews open prediction orders, then cancels those prediction orders
+by order ID. Spot orders are not canceled by this command.
 
 Use this as an emergency kill switch or before shutting down a bot.
 
 Note: the preview may not reflect orders placed by other sessions between
-preview and execution. The cancel itself is atomic on the exchange.
+preview and execution.
 
 Examples:
   gemini-markets predict order cancel-all
@@ -348,6 +345,7 @@ func init() {
 			"time_in_force":   {Type: internalschema.ParamString, Enum: []string{"good-til-cancel", "immediate-or-cancel", "fill-or-kill", "post-only"}, Default: "good-til-cancel", Description: "Time in force policy"},
 			"dry_run":         {Type: internalschema.ParamBoolean, Description: "Validate and preview order without placing. Returns order params that would be sent"},
 		},
+		AnyOf:  [][]string{{"quantity"}, {"dollars"}},
 		Output: &internalschema.OutputMeta{Type: "object", Description: "PredictOrderResponse with orderId, status, filledQuantity", Schema: "#/schemas/PredictOrderResponse"},
 	})
 	internalschema.Register(&internalschema.CommandMeta{
@@ -410,12 +408,10 @@ func init() {
 	predictOrderPlaceCmd.Flags().BoolVar(&predictOrderStdin, "stdin", false, "read order parameters from stdin as JSON")
 
 	predictOrdersListCmd.Flags().StringVar(&predictOrdersTickerID, "ticker", "", "filter by ticker")
-	predictOrdersListCmd.Flags().StringVar(&predictOrdersEventTicker, "event", "", "filter by event")
 	predictOrdersListCmd.Flags().IntVar(&predictOrdersLimit, "limit", 50, "max results")
 	predictOrdersListCmd.Flags().IntVar(&predictOrdersOffset, "offset", 0, "pagination offset")
 
 	predictOrdersHistoryCmd.Flags().StringVar(&predictOrdersTickerID, "ticker", "", "filter by ticker")
-	predictOrdersHistoryCmd.Flags().StringVar(&predictOrdersEventTicker, "event", "", "filter by event")
 	predictOrdersHistoryCmd.Flags().StringVar(&predictOrdersStatus, "status", "", "filter by status")
 	predictOrdersHistoryCmd.Flags().IntVar(&predictOrdersLimit, "limit", 50, "max results")
 	predictOrdersHistoryCmd.Flags().IntVar(&predictOrdersOffset, "offset", 0, "pagination offset")

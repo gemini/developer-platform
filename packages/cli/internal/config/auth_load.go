@@ -74,7 +74,11 @@ func LoadWithOptions(opts LoadOptions) (*Config, error) {
 
 	if os.Getenv("GEMINI_NO_KEYRING") == "" {
 		oauthData, err := loadOAuthTokensFn(env)
-		if err == nil && oauthData != nil {
+		if err != nil {
+			return nil, fmt.Errorf("stored OAuth credentials could not be read (keyring error: %w); "+
+				"run 'gemini-markets auth logout' to clear them or 'gemini-markets auth login' to re-authenticate", err)
+		}
+		if oauthData != nil {
 			var stored struct {
 				AccessToken string `json:"access_token"`
 			}
@@ -88,7 +92,11 @@ func LoadWithOptions(opts LoadOptions) (*Config, error) {
 		}
 
 		creds, err := loadFromKeyringFn()
-		if err == nil && creds != nil && creds.APIKey != "" {
+		if err != nil {
+			return nil, fmt.Errorf("stored API credentials could not be read (keyring error: %w); "+
+				"run 'gemini-markets auth logout' to clear them or 'gemini-markets auth setup' to re-configure", err)
+		}
+		if creds != nil && creds.APIKey != "" {
 			return &Config{
 				APIKey:      creds.APIKey,
 				APISecret:   creds.APISecret,

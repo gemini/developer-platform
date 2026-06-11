@@ -21,6 +21,7 @@ import (
 const (
 	predictDollarDepthLevels  = 20
 	predictDollarDepthTimeout = 5 * time.Second
+	predictCancelAllPageSize  = 100
 	predictionMaxContracts    = 10000
 )
 
@@ -554,17 +555,40 @@ func (s *Service) ExecutePredictPlace(ctx context.Context, req *api.PredictOrder
 }
 
 func (s *Service) PreviewPredictCancelAll(ctx context.Context) ([]api.PredictOrderResponse, *contracts.CancelAllDryRun, error) {
-	orders, err := s.api.ListOpenPredictOrders(ctx, api.ListPredictOrdersParams{Limit: 100})
+	orders, err := s.listOpenPredictOrders(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	return orders.Data, &contracts.CancelAllDryRun{
+	return orders, &contracts.CancelAllDryRun{
 		DryRun:     true,
 		Action:     contracts.ActionPredictCancelAll,
-		OrderCount: len(orders.Data),
-		Orders:     orders.Data,
+		OrderCount: len(orders),
+		Orders:     orders,
 	}, nil
+}
+
+func (s *Service) listOpenPredictOrders(ctx context.Context) ([]api.PredictOrderResponse, error) {
+	var orders []api.PredictOrderResponse
+	for offset := 0; ; {
+		resp, err := s.api.ListOpenPredictOrders(ctx, api.ListPredictOrdersParams{
+			Limit:  predictCancelAllPageSize,
+			Offset: offset,
+		})
+		if err != nil {
+			return nil, err
+		}
+		if resp == nil || len(resp.Data) == 0 {
+			break
+		}
+
+		orders = append(orders, resp.Data...)
+		offset += len(resp.Data)
+		if len(resp.Data) < predictCancelAllPageSize {
+			break
+		}
+	}
+	return orders, nil
 }
 
 func (s *Service) CancelPredictOrder(ctx context.Context, orderID string) (*api.PredictOrderResponse, error) {
@@ -597,27 +621,26 @@ func normalizePredictCancelResponse(orderID string, resp *api.PredictOrderRespon
 }
 
 func (s *Service) CancelAllPredictOrders(ctx context.Context) (*contracts.CancelAllResponse, error) {
-	var canceledIDs []string
-
-	if s.wsDisabled || s.ws == nil {
-		result, err := s.api.CancelAllOrders(ctx)
-		if err != nil {
-			return nil, err
-		}
-		return canceledResponseFromAPI(result), nil
+	orders, err := s.listOpenPredictOrders(ctx)
+	if err != nil {
+		return nil, err
 	}
 
-	wsResult, wsErr := s.ws.CancelAllOrders(ctx, &ws.CancelAllParams{})
-	if wsErr != nil {
-		debug.Log("WebSocket cancel-all failed, using REST fallback: %v", wsErr)
-		result, err := s.api.CancelAllOrders(ctx)
-		if err != nil {
-			return nil, err
+	canceledIDs := make([]string, 0, len(orders))
+	for _, order := range orders {
+		if order.OrderID == "" {
+			continue
 		}
-		return canceledResponseFromAPI(result), nil
+		resp, err := s.CancelPredictOrder(ctx, order.OrderID)
+		if err != nil {
+			return nil, fmt.Errorf("cancel prediction order %s: %w", order.OrderID, err)
+		}
+		canceledID := order.OrderID
+		if resp != nil && resp.OrderID != "" {
+			canceledID = resp.OrderID
+		}
+		canceledIDs = append(canceledIDs, canceledID)
 	}
-
-	canceledIDs = append(canceledIDs, wsResult.CancelledOrders...)
 	return &contracts.CancelAllResponse{CanceledOrders: canceledIDs}, nil
 }
 
@@ -734,6 +757,9 @@ func (s *Service) ExecuteSpotPlace(ctx context.Context, req *api.SpotOrderReques
 	if s.wsDisabled || s.ws == nil {
 		return s.api.PlaceSpotOrder(ctx, req)
 	}
+	if req.Account != "" {
+		return nil, output.NewInputError("--account is only supported with REST order placement; use --no-websocket")
+	}
 
 	wsParams := spotRequestToWSParams(req)
 	wsResult, wsErr := s.ws.PlaceOrder(ctx, &wsParams)
@@ -781,6 +807,9 @@ func (s *Service) CancelAllSpotOrders(ctx context.Context, account string) (*con
 		}
 		return canceledResponseFromAPI(result), nil
 	}
+	if account != "" {
+		return nil, output.NewInputError("--account is only supported with REST cancel-all; use --no-websocket")
+	}
 
 	wsResult, wsErr := s.ws.CancelAllOrders(ctx, &ws.CancelAllParams{})
 	if wsErr != nil {
@@ -807,6 +836,9 @@ func predictRequestToWSParams(req *api.PredictOrderRequest) ws.OrderParams {
 		timeInForce = "IOC"
 	case "fill-or-kill", "fok":
 		timeInForce = "FOK"
+	}
+	if req.MakerOrCancel {
+		timeInForce = "MOC"
 	}
 
 	return ws.OrderParams{
@@ -846,6 +878,8 @@ func spotRequestToWSParams(req *api.SpotOrderRequest) ws.OrderParams {
 	timeInForce := "GTC"
 	for _, opt := range req.Options {
 		switch opt {
+		case "maker-or-cancel":
+			timeInForce = "MOC"
 		case "immediate-or-cancel":
 			timeInForce = "IOC"
 		case "fill-or-kill":
@@ -861,7 +895,17 @@ func spotRequestToWSParams(req *api.SpotOrderRequest) ws.OrderParams {
 		Price:         req.Price,
 		Quantity:      req.Amount,
 		ClientOrderID: req.ClientOrderID,
+		MakerOrCancel: hasOrderOption(req.Options, "maker-or-cancel"),
 	}
+}
+
+func hasOrderOption(options []string, target string) bool {
+	for _, option := range options {
+		if option == target {
+			return true
+		}
+	}
+	return false
 }
 
 func wsOrderResultToSpotResponse(r *ws.OrderResult) *api.SpotOrderResponse {
