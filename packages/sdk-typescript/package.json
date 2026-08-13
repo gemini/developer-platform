@@ -1,0 +1,83 @@
+{
+  "name": "gemini-markets",
+  "version": "0.1.0",
+  "description": "Gemini exchange TypeScript SDK — browser and server entry points with HMAC, OAuth (PKCE), REST, and WebSocket support.",
+  "type": "module",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gemini/developer-platform.git",
+    "directory": "packages/sdk-typescript"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "sideEffects": false,
+  "exports": {
+    "./browser": {
+      "types": "./dist/browser/index.d.ts",
+      "import": "./dist/browser/index.js"
+    },
+    "./server": {
+      "types": "./dist/server/index.d.ts",
+      "import": "./dist/server/index.js"
+    }
+  },
+  "files": [
+    "dist/"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc -p tsconfig.typecheck.json",
+    "test": "tsx --test \"src/**/*.test.ts\" \"scripts/**/*.test.mjs\"",
+    "smoke:sandbox": "npm run build && GEMINI_SMOKE_ENV=sandbox node --env-file=.env.sandbox scripts/smoke-sandbox.mjs --market-type=market-data",
+    "smoke:sandbox:market-data": "npm run build && GEMINI_SMOKE_ENV=sandbox node --env-file=.env.sandbox scripts/smoke-sandbox.mjs --market-type=market-data",
+    "smoke:sandbox:prediction-markets": "npm run build && GEMINI_SMOKE_ENV=sandbox node --env-file=.env.sandbox scripts/smoke-sandbox.mjs --market-type=prediction-markets",
+    "smoke:sandbox:oauth": "npm run build && GEMINI_OAUTH_ENV=sandbox node --env-file=.env.sandbox scripts/smoke-oauth.mjs",
+    "smoke:qa": "npm run build && node --use-system-ca --env-file=.env.qa --import ./scripts/qa-bootstrap.mjs scripts/smoke-sandbox.mjs --market-type=market-data",
+    "smoke:qa:market-data": "npm run build && node --use-system-ca --env-file=.env.qa --import ./scripts/qa-bootstrap.mjs scripts/smoke-sandbox.mjs --market-type=market-data",
+    "smoke:qa:prediction-markets": "npm run build && node --use-system-ca --env-file=.env.qa --import ./scripts/qa-bootstrap.mjs scripts/smoke-sandbox.mjs --market-type=prediction-markets",
+    "smoke:oauth": "npm run build && GEMINI_OAUTH_ENV=sandbox node --env-file=.env.sandbox scripts/smoke-oauth.mjs",
+    "verify:sandbox:rest": "npm run build && GEMINI_SMOKE_ENV=sandbox node --env-file=.env.sandbox scripts/verify-sandbox-rest.mjs",
+    "verify:sandbox:market-data": "npm run build && GEMINI_MD_ENV=sandbox node --env-file=.env.sandbox scripts/verify-market-data-live.mjs",
+    "smoke:prod:market-data": "npm run build && GEMINI_SMOKE_ENV=production node --env-file=.env scripts/smoke-sandbox.mjs --market-type=market-data",
+    "smoke:prod:prediction-markets": "npm run build && GEMINI_SMOKE_ENV=production node --env-file=.env scripts/smoke-sandbox.mjs --market-type=prediction-markets",
+    "smoke:prod:oauth": "npm run build && GEMINI_OAUTH_ENV=production node --env-file=.env scripts/smoke-oauth.mjs",
+    "verify:prod:rest": "npm run build && GEMINI_SMOKE_ENV=production node --env-file=.env scripts/verify-sandbox-rest.mjs",
+    "verify:prod:market-data": "npm run build && GEMINI_MD_ENV=production node --env-file=.env scripts/verify-market-data-live.mjs",
+    "verify:browser": "npm run build && node scripts/verify-browser-imports.mjs",
+    "verify:bundle": "npm run build && node scripts/verify-browser-bundle.mjs",
+    "verify:package": "npm run build && node scripts/verify-browser-imports.mjs && node scripts/verify-browser-bundle.mjs && node scripts/verify-package.mjs",
+    "verify:runtimes": "npm run build && node scripts/verify-multi-runtime.mjs",
+    "verify:market-data:live": "npm run build && node scripts/verify-market-data-live.mjs",
+    "verify:market-data:qa": "npm run build && node --use-system-ca --env-file=.env.qa --import ./scripts/qa-bootstrap.mjs scripts/verify-market-data-live.mjs",
+    "regenerate:websocket-types": "node scripts/generate-ws-types.mjs src/generated/websocket",
+    "regenerate": "node scripts/generate-prediction-markets.mjs && node scripts/generate-rest-modules.mjs && node scripts/generate-rest-ownership.mjs && npm run regenerate:websocket-types",
+    "dev": "tsx",
+    "prepublishOnly": "npm run build && npm test"
+  },
+  "devDependencies": {
+    "@asyncapi/modelina": "5.10.1",
+    "@types/node": "^22",
+    "@types/ws": "^8.18.1",
+    "esbuild": "^0.28.2",
+    "miniflare": "^3.20250718.3",
+    "openapi-typescript": "7.13.0",
+    "tsx": "^4",
+    "typescript": "^5.7",
+    "ws": "^8.21.1",
+    "yaml": "2.9.0"
+  },
+  "peerDependencies": {
+    "ws": ">=8"
+  },
+  "peerDependenciesMeta": {
+    "ws": {
+      "optional": true
+    }
+  }
+}

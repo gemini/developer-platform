@@ -49,12 +49,10 @@ venv/
 tmp/
 .tmp/
 
-# SDK generation
+# SDK generation (auto-generated — sdk-typescript is committed)
 scripts/rest.yaml
 packages/sdk-go/
 packages/sdk-python/
-packages/sdk-typescript/
-
 
 # AI
 .claude/

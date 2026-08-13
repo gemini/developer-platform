@@ -1,0 +1,74 @@
+name: SDK Smoke Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment"
+        required: true
+        default: "sandbox"
+        type: choice
+        options:
+          - sandbox
+          - production
+      market-type:
+        description: "Market type to smoke test"
+        required: true
+        default: "market-data"
+        type: choice
+        options:
+          - market-data
+          - prediction-markets
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: packages/sdk-typescript
+
+jobs:
+  smoke:
+    runs-on: gha-runner-scale-set-standard
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955  # v4.3.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4.4.0
+        with:
+          node-version: "22"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Run smoke test
+        run: |
+          GEMINI_SMOKE_ENV=${{ inputs.environment }} \
+          node scripts/smoke-sandbox.mjs --market-type=${{ inputs.market-type }}
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
+
+      - name: Verify REST operations
+        if: inputs.environment == 'sandbox'
+        run: |
+          GEMINI_SMOKE_ENV=sandbox \
+          node scripts/verify-sandbox-rest.mjs
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}
+
+      - name: Verify market data
+        if: inputs.market-type == 'market-data'
+        run: |
+          GEMINI_MD_ENV=${{ inputs.environment }} \
+          node scripts/verify-market-data-live.mjs
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_SECRET: ${{ secrets.GEMINI_API_SECRET }}

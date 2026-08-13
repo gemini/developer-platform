@@ -1,0 +1,64 @@
+name: SDK CI
+
+on:
+  pull_request:
+    paths:
+      - "packages/sdk-typescript/**"
+      - ".github/workflows/sdk-ci.yml"
+  push:
+    branches: [main]
+    paths:
+      - "packages/sdk-typescript/**"
+      - ".github/workflows/sdk-ci.yml"
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: packages/sdk-typescript
+
+jobs:
+  build-and-test:
+    runs-on: gha-runner-scale-set-standard
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955  # v4.3.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4.4.0
+        with:
+          node-version: "22"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Verify package (browser imports + bundle + pack)
+        run: npm run verify:package
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6  # v2
+        continue-on-error: true
+        with:
+          bun-version: "1.x"
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@4606d5cc6fb3f673efd4f594850e3f4b3e9d29cd  # v2
+        continue-on-error: true
+        with:
+          deno-version: v2.x
+
+      - name: Verify multi-runtime (Node, Bun, Deno)
+        run: npm run verify:runtimes
+        continue-on-error: true
