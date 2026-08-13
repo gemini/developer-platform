@@ -8,6 +8,7 @@ import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { createRequire } from "node:module";
 
 const FORBIDDEN_PATTERNS = [
   /\brequire\s*\(\s*["']node:/g,
@@ -23,9 +24,12 @@ const outfile = join(temp, "browser-bundle.js");
 try {
   const entry = resolve("dist/browser/index.js");
 
+  const moduleRequire = createRequire(import.meta.url);
+  const esbuild = moduleRequire.resolve("esbuild/bin/esbuild");
+
   execFileSync(
-    join(process.cwd(), "node_modules", ".bin", "esbuild"),
-    [
+    process.execPath,
+    [esbuild,
       entry,
       "--bundle",
       "--platform=browser",

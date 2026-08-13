@@ -1,6 +1,6 @@
 {
   "name": "gemini-markets",
-  "version": "0.1.0",
+  "version": "0.0.0",
   "description": "Gemini exchange TypeScript SDK — browser and server entry points with HMAC, OAuth (PKCE), REST, and WebSocket support.",
   "type": "module",
   "license": "Apache-2.0",
@@ -62,6 +62,7 @@
   },
   "devDependencies": {
     "@asyncapi/modelina": "5.10.1",
+    "@changesets/cli": "^2.31.1",
     "@types/node": "^22",
     "@types/ws": "^8.18.1",
     "esbuild": "^0.28.2",

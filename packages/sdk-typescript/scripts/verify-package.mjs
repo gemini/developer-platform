@@ -1,9 +1,12 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
+import { createRequire } from "node:module";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+const moduleRequire = createRequire(import.meta.url);
+const tscPath = moduleRequire.resolve("typescript/bin/tsc");
 const temp = mkdtempSync(join(tmpdir(), "gemini-sdk-consumer-"));
 try {
   const packed = JSON.parse(execFileSync("npm", ["pack", "--json", "--pack-destination", temp, "--cache", join(temp, ".npm")], { encoding: "utf8" }))[0];
@@ -286,14 +289,14 @@ if (
 ) throw new Error("missing generated REST contracts");
 `);
   writeFileSync(join(temp, "tsconfig.json"), '{"compilerOptions":{"module":"NodeNext","moduleResolution":"NodeNext","strict":true,"noEmit":true},"include":["consumer.ts"]}');
-  execFileSync(join(process.cwd(), "node_modules", ".bin", "tsc"), ["-p", join(temp, "tsconfig.json")], { cwd: temp, stdio: "inherit" });
+  execFileSync(process.execPath, [tscPath, "-p", join(temp, "tsconfig.json")], { cwd: temp, stdio: "inherit" });
 
   // Negative type test: HmacAuth must NOT be importable from the browser entry point.
   writeFileSync(join(temp, "negative.ts"), `import { HmacAuth } from "gemini-markets/browser";\nvoid HmacAuth;\n`);
   writeFileSync(join(temp, "tsconfig.negative.json"), '{"compilerOptions":{"module":"NodeNext","moduleResolution":"NodeNext","strict":true,"noEmit":true},"include":["negative.ts"]}');
   let negativePassed = false;
   try {
-    execFileSync(join(process.cwd(), "node_modules", ".bin", "tsc"), ["-p", join(temp, "tsconfig.negative.json")], { cwd: temp, stdio: "pipe" });
+    execFileSync(process.execPath, [tscPath, "-p", join(temp, "tsconfig.negative.json")], { cwd: temp, stdio: "pipe" });
     negativePassed = true;
   } catch {
     // Expected: tsc should fail because HmacAuth is not exported from browser

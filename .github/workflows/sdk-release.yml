@@ -5,7 +5,7 @@ on:
     branches: [main]
     paths:
       - "packages/sdk-typescript/package.json"
-      - ".changeset/**"
+      - "packages/sdk-typescript/.changeset/**"
 
 permissions:
   contents: write
@@ -46,8 +46,10 @@ jobs:
       - name: Create Release Pull Request or Publish
         uses: changesets/action@c8bada60c408975afd1a20b3db81d6eee6789308  # v1.4.9
         with:
+          version: npx --no-install changeset version
           publish: npm publish --provenance
           cwd: packages/sdk-typescript
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
