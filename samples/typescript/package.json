@@ -21,8 +21,8 @@
   "license": "MIT",
   "dependencies": {
     "dotenv": "^16.0.3",
-    "axios": "^1.15.2",
-    "ws": "^8.20.1"
+    "axios": "^1.16.0",
+    "ws": "^8.21.0"
   },
   "devDependencies": {
     "@types/ws": "^8.5.10",
