@@ -52,7 +52,7 @@
     "verify:browser": "npm run build && node scripts/verify-browser-imports.mjs",
     "verify:bundle": "npm run build && node scripts/verify-browser-bundle.mjs",
     "verify:package": "npm run build && node scripts/verify-browser-imports.mjs && node scripts/verify-browser-bundle.mjs && node scripts/verify-package.mjs",
-    "verify:runtimes": "npm run build && node scripts/verify-multi-runtime.mjs",
+    "verify:changeset": "node scripts/verify-changeset.mjs",
     "verify:market-data:live": "npm run build && node scripts/verify-market-data-live.mjs",
     "verify:market-data:qa": "npm run build && node --use-system-ca --env-file=.env.qa --import ./scripts/qa-bootstrap.mjs scripts/verify-market-data-live.mjs",
     "regenerate:websocket-types": "node scripts/generate-ws-types.mjs src/generated/websocket",
