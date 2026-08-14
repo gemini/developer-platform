@@ -47,7 +47,7 @@ jobs:
         uses: changesets/action@c8bada60c408975afd1a20b3db81d6eee6789308  # v1.4.9
         with:
           version: npx --no-install changeset version
-          publish: npm publish --provenance
+          publish: npm publish --tag beta --provenance
           cwd: packages/sdk-typescript
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

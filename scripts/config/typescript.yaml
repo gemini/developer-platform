@@ -1,4 +1,4 @@
-npmName: "gemini-markets"
+npmName: "@gemini-markets/sdk"
 npmVersion: "0.1.0"
 supportsES6: true
 withSeparateModelsAndApi: true

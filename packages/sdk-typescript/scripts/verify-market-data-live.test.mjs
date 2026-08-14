@@ -45,7 +45,7 @@ test("missing marketData blocks all operations and writes reports", async () => 
   try {
     const results = await runVerification({ reportDir, loadSdk: async () => ({ GeminiMarkets: class { close() {} } }) });
     assert.equal(results.operations.length, 15);
-    assert(results.operations.every((operation) => operation.status === "blocked" && operation.message === "Prerequisite missing: gemini-markets GeminiMarkets.marketData facade is not available in the packed package."));
+    assert(results.operations.every((operation) => operation.status === "blocked" && operation.message === "Prerequisite missing: @gemini-markets/sdk GeminiMarkets.marketData facade is not available in the packed package."));
     assert.equal(JSON.parse(readFileSync(join(reportDir, "results.json"))).operations.length, 15);
     assert.match(readFileSync(join(reportDir, "summary.md"), "utf8"), /15 blocked/);
   } finally { rmSync(reportDir, { recursive: true, force: true }); }

@@ -30,7 +30,7 @@ import {
   BrowserOAuthAuth,
   MarketDataRest,
   HttpTransport,
-} from "gemini-markets/browser";
+} from "@gemini-markets/sdk/browser";
 
 // Verify core construction works
 const client = new GeminiMarkets({ env: "sandbox" });
@@ -60,7 +60,7 @@ import {
   OAuthAuth,
   serverSocketFactory,
   initServerWebSocket,
-} from "gemini-markets/server";
+} from "@gemini-markets/sdk/server";
 
 // Verify HMAC auth constructs and uses Web Crypto
 const auth = new HmacAuth({ apiKey: "test-key", apiSecret: "test-secret" });
@@ -90,7 +90,7 @@ import {
   BrowserOAuthAuth,
   MarketDataRest,
   HttpTransport,
-} from "gemini-markets/browser";
+} from "@gemini-markets/sdk/browser";
 
 export default {
   async fetch() {
@@ -148,7 +148,7 @@ try {
   // Set up a consumer project with the packed tarball
   writeFileSync(
     join(temp, "package.json"),
-    JSON.stringify({ type: "module", dependencies: { "gemini-markets": `file:./${packed.filename}` } }),
+    JSON.stringify({ type: "module", dependencies: { "@gemini-markets/sdk": `file:./${packed.filename}` } }),
   );
   execFileSync("npm", ["install", "--ignore-scripts", "--no-package-lock", "--cache", join(temp, ".npm")], {
     cwd: temp,

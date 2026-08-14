@@ -2,7 +2,7 @@
 
 ```ts
 // Server — HMAC authenticated
-import { createClient, HmacAuth } from "gemini-markets/server";
+import { createClient, HmacAuth } from "@gemini-markets/sdk/server";
 
 const gemini = await createClient({
   env: "sandbox",
@@ -23,7 +23,7 @@ const book = gemini.orderBook("GEMI-PREDICTION-SYMBOL");
 
 ```ts
 // Browser — public data, no config needed
-import { createClient } from "gemini-markets/browser";
+import { createClient } from "@gemini-markets/sdk/browser";
 
 const gemini = createClient();
 const ticker = await gemini.marketData.getTicker({ symbol: "BTCUSD" });
@@ -88,8 +88,8 @@ events across REST, WebSocket, and order-book operations, or inject
 output:
 
 ```ts
-import { ConsoleLogger } from "gemini-markets/server";
-import { createClient } from "gemini-markets/server";
+import { ConsoleLogger } from "@gemini-markets/sdk/server";
+import { createClient } from "@gemini-markets/sdk/server";
 
 const gemini = await createClient({
   onDiagnostic: (event) => supportLogger.write(event),

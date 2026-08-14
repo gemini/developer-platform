@@ -49,7 +49,7 @@ try {
   }
   assert([...paths].every((path) => !path.startsWith("src/") && !path.includes("test")), "package contains source or tests");
 
-  writeFileSync(join(temp, "package.json"), '{"type":"module","dependencies":{"gemini-markets":"file:./' + packed.filename + '"}}');
+  writeFileSync(join(temp, "package.json"), '{"type":"module","dependencies":{"@gemini-markets/sdk":"file:./' + packed.filename + '"}}');
   execFileSync("npm", ["install", "--ignore-scripts", "--no-package-lock", "--cache", join(temp, ".npm")], { cwd: temp, stdio: "inherit" });
   writeFileSync(join(temp, "consumer.mjs"), `
 import {
@@ -74,12 +74,12 @@ import {
   PERPETUALS_OPERATIONS,
   ACCOUNT_SERVICES_OPERATIONS,
   CLEARING_INSTANT_OPERATIONS,
-} from "gemini-markets/browser";
+} from "@gemini-markets/sdk/browser";
 
 import {
   HmacAuth,
   createClient,
-} from "gemini-markets/server";
+} from "@gemini-markets/sdk/server";
 
 const sdk = new GeminiMarkets({ env: "sandbox" });
 const websocket = new GeminiWebSocket({ url: "wss://example.test" });
@@ -154,12 +154,12 @@ import {
   type WebSocketStream,
   type WsSessionOptions,
   type WsSubscription,
-} from "gemini-markets/browser";
+} from "@gemini-markets/sdk/browser";
 
 import {
   HmacAuth,
   createClient,
-} from "gemini-markets/server";
+} from "@gemini-markets/sdk/server";
 
 const sdk = new GeminiMarkets({
   env: "sandbox",
@@ -292,7 +292,7 @@ if (
   execFileSync(process.execPath, [tscPath, "-p", join(temp, "tsconfig.json")], { cwd: temp, stdio: "inherit" });
 
   // Negative type test: HmacAuth must NOT be importable from the browser entry point.
-  writeFileSync(join(temp, "negative.ts"), `import { HmacAuth } from "gemini-markets/browser";\nvoid HmacAuth;\n`);
+  writeFileSync(join(temp, "negative.ts"), `import { HmacAuth } from "@gemini-markets/sdk/browser";\nvoid HmacAuth;\n`);
   writeFileSync(join(temp, "tsconfig.negative.json"), '{"compilerOptions":{"module":"NodeNext","moduleResolution":"NodeNext","strict":true,"noEmit":true},"include":["negative.ts"]}');
   let negativePassed = false;
   try {
@@ -301,9 +301,9 @@ if (
   } catch {
     // Expected: tsc should fail because HmacAuth is not exported from browser
   }
-  assert(!negativePassed, "HmacAuth must not be importable from gemini-markets/browser");
+  assert(!negativePassed, "HmacAuth must not be importable from @gemini-markets/sdk/browser");
 
-  JSON.parse(readFileSync(join(temp, "node_modules", "gemini-markets", "package.json"), "utf8"));
+  JSON.parse(readFileSync(join(temp, "node_modules", "@gemini-markets", "sdk", "package.json"), "utf8"));
   console.log(`verified ${packed.entryCount} packed entries in an isolated consumer`);
 } finally {
   rmSync(temp, { recursive: true, force: true });

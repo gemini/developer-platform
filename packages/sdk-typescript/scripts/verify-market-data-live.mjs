@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-const PREREQUISITE = "Prerequisite missing: gemini-markets GeminiMarkets.marketData facade is not available in the packed package.";
+const PREREQUISITE = "Prerequisite missing: @gemini-markets/sdk GeminiMarkets.marketData facade is not available in the packed package.";
 export const OPERATIONS = [
   ["listSymbols", "public JSON"],
   ["getSymbolDetails", "public JSON"],
@@ -131,7 +131,7 @@ async function responseBytes(response) {
   return response;
 }
 
-export async function runVerification({ reportDir, env = process.env, loadSdk = () => import(process.argv.includes("--consumer") ? "gemini-markets/server" : "../dist/server/index.js") } = {}) {
+export async function runVerification({ reportDir, env = process.env, loadSdk = () => import(process.argv.includes("--consumer") ? "@gemini-markets/sdk/server" : "../dist/server/index.js") } = {}) {
   const results = new Map(OPERATIONS.map(([name, kind]) => [name, operationResult(name, kind, "blocked", "Verification did not run.")]));
   const secrets = [env.GEMINI_API_KEY, env.GEMINI_API_SECRET];
   const safeError = (error) => redact(error?.message ?? String(error), secrets);
@@ -139,7 +139,7 @@ export async function runVerification({ reportDir, env = process.env, loadSdk = 
   try {
     sdk = await loadSdk();
   } catch (error) {
-    for (const [name, kind] of OPERATIONS) results.set(name, operationResult(name, kind, "blocked", `Unable to import gemini-markets: ${safeError(error)}`));
+    for (const [name, kind] of OPERATIONS) results.set(name, operationResult(name, kind, "blocked", `Unable to import @gemini-markets/sdk: ${safeError(error)}`));
     return writeReports(reportDir, [...results.values()], secrets);
   }
   const publicClient = new sdk.GeminiMarkets({ env: env.GEMINI_MD_ENV ?? "production" });
@@ -242,7 +242,7 @@ function runPackedVerifier() {
   const reportDir = join(root, ".market-data-verification", new Date().toISOString().replace(/[:.]/g, "-"));
   try {
     const packed = JSON.parse(execFileSync("npm", ["pack", "--json", "--pack-destination", tempDir, "--cache", join(tempDir, ".npm")], { cwd: root, encoding: "utf8" }))[0];
-    writeFileSync(join(tempDir, "package.json"), JSON.stringify({ type: "module", dependencies: { "gemini-markets": `file:./${packed.filename}` } }));
+    writeFileSync(join(tempDir, "package.json"), JSON.stringify({ type: "module", dependencies: { "@gemini-markets/sdk": `file:./${packed.filename}` } }));
     execFileSync("npm", ["install", "--ignore-scripts", "--no-package-lock", "--cache", join(tempDir, ".npm")], { cwd: tempDir, stdio: "inherit" });
     cpSync(fileURLToPath(import.meta.url), join(tempDir, "verify-market-data-live.mjs"));
     const verificationProcess = spawnSync(
