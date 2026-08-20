@@ -129,8 +129,8 @@ Configure your Claude client to use the server (example for Claude Desktop):
 
 ## API Documentation
 
-- [Gemini REST API](https://docs.gemini.com/rest-api/)
-- [Gemini WebSocket API](https://docs.gemini.com/websocket-api/)
+- [Gemini REST API](https://developer.gemini.com/rest-api/)
+- [Gemini WebSocket API](https://developer.gemini.com/websocket-api/)
 
 ## License
 

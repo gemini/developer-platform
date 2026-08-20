@@ -1,6 +1,6 @@
 # Gemini MCP Server
 
-An MCP (Model Context Protocol) server that exposes the [Gemini cryptocurrency exchange API](https://docs.gemini.com/rest-api/) as tools for AI assistants like Claude.
+An MCP (Model Context Protocol) server that exposes the [Gemini cryptocurrency exchange API](https://developer.gemini.com/rest-api/) as tools for AI assistants like Claude.
 
 **Features:**
 - 📊 Market data, trading, funds, account, margin, staking, and prediction-market tools
