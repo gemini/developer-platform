@@ -893,6 +893,8 @@ type RestRequestOptions = {
   path: string;
   query?: BoundaryRecord;
   queryParameters?: readonly RestQueryParameter[];
+  /** Whether query parameters are included in the signed request path. */
+  queryInRequest?: boolean;
   headers?: Record<string, string>;
   responseInt64Paths?: readonly Int64Path[];
   responseMode?: RestResponseMode;
@@ -994,7 +996,8 @@ export class HttpTransport {
   /** Send a signed private request and return the body and response metadata. */
   async requestWithResponse<T = BoundaryValue>(options: PrivateRestRequestOptions): Promise<RestResponse<T>> {
     const { method, path, params } = options;
-    const requestPath = withQuery(path, options.query, options.queryParameters);
+    const urlPath = withQuery(path, options.query, options.queryParameters);
+    const requestPath = options.queryInRequest === false ? path : urlPath;
     if (!this.auth) {
       throw new SdkError("private request requires an injected AuthStrategy");
     }
@@ -1061,7 +1064,7 @@ export class HttpTransport {
 
     return this.send<T>(
       method,
-      requestPath,
+      urlPath,
       build,
       options.responseInt64Paths,
       options.responseMode,

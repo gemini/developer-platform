@@ -136,30 +136,26 @@ jobs:
           }
 
           const actualBypassActors = releaseRuleset.bypass_actors;
-          if (actualBypassActors === undefined) {
-            // GitHub may hide bypass actors from read-only callers. The native
-            // tag ruleset remains authoritative; verify its bypass list manually
-            // before the first release when this warning is emitted.
-            console.log("::warning::GitHub did not expose tag-ruleset bypass actors; native ruleset bypass list was not verified");
-          } else {
-            const expectedBypassActors = [
-              ["fuller", "User"],
-              ["ximt", "User"],
-            ].map(([login, actorType]) => ({
-              actor_id: api(`users/${login}`).id,
-              actor_type: actorType,
-              bypass_mode: "always",
-            }));
-            const normalizedBypassActors = (actors) => Array.isArray(actors)
-              ? actors.map(({ actor_id, actor_type, bypass_mode }) => ({ actor_id, actor_type, bypass_mode })).sort((left, right) =>
-                JSON.stringify(left).localeCompare(JSON.stringify(right)))
-              : undefined;
-            if (
-              JSON.stringify(normalizedBypassActors(actualBypassActors)) !==
-              JSON.stringify(normalizedBypassActors(expectedBypassActors))
-            ) {
-              fail("tag ruleset bypass actors are not exactly fuller and ximt with always bypass mode");
-            }
+          if (!Array.isArray(actualBypassActors)) {
+            fail("GitHub did not expose tag-ruleset bypass actors; refusing to publish without verifying the allowlist");
+          }
+          const expectedBypassActors = [
+            ["fuller", "User"],
+            ["ximt", "User"],
+          ].map(([login, actorType]) => ({
+            actor_id: api(`users/${login}`).id,
+            actor_type: actorType,
+            bypass_mode: "always",
+          }));
+          const normalizedBypassActors = (actors) => Array.isArray(actors)
+            ? actors.map(({ actor_id, actor_type, bypass_mode }) => ({ actor_id, actor_type, bypass_mode })).sort((left, right) =>
+              JSON.stringify(left).localeCompare(JSON.stringify(right)))
+            : undefined;
+          if (
+            JSON.stringify(normalizedBypassActors(actualBypassActors)) !==
+            JSON.stringify(normalizedBypassActors(expectedBypassActors))
+          ) {
+            fail("tag ruleset bypass actors are not exactly fuller and ximt with always bypass mode");
           }
 
           const environment = api("repos/gemini/developer-platform/environments/npm");

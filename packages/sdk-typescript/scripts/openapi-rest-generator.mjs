@@ -421,6 +421,7 @@ export function discoverOperations(document, options = {}) {
           responseContentTypes: response.contentTypes,
           responseInt64Paths: responseMode === "json" ? int64Paths(response.schema, resolveRef) : [],
           requestInt64Paths: requestInt64Paths(pathItem, operation, resolveRef),
+          queryInRequest: options.operationQueryInRequest?.[operationId],
           // GET is the generated SDK's explicit safe-read policy; every mutation is false.
           retryable: method === "get",
         };
@@ -625,6 +626,10 @@ export async function generateOpenApiRestModule(options) {
     operationResponseModes: Object.fromEntries(ownedOperations.map(({ operationId, responseMode }) => [
       operationId,
       responseMode,
+    ])),
+    operationQueryInRequest: Object.fromEntries(ownedOperations.map(({ operationId, queryInRequest }) => [
+      operationId,
+      queryInRequest,
     ])),
     fileResponseImportPath: options.fileResponseImportPath,
     modelsImportPath: options.modelsImportPath,

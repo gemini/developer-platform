@@ -36,6 +36,7 @@ type RestOperation = {
   responseMode: string;
   responseContentTypes: readonly string[];
   responseInt64Paths: readonly Int64Path[];
+  queryInRequest?: boolean;
   requestInt64Paths?: {
     body: readonly RequestInt64Path[];
     path: readonly RequestInt64Path[];
@@ -320,6 +321,7 @@ export function executeRestOperation<T extends OperationCallTypes>(
       path: renderPath(operation, input),
       query,
       queryParameters: operation.parameters.filter((parameter) => parameter.in === "query"),
+      queryInRequest: operation.queryInRequest,
       responseInt64Paths: operation.responseInt64Paths,
       responseMode,
       responseContract: {

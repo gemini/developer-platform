@@ -203,6 +203,27 @@ test("private request signs the same canonical query path that it sends", async 
   );
 });
 
+test("private request can send a query while signing the bare request path", async () => {
+  const { fetchImpl, last } = recordingFetch({ status: 200, body: "{}" });
+  const client = new HttpTransport({ env: "sandbox", auth: stubAuth, fetchImpl });
+
+  await client.request({
+    method: "POST",
+    path: "/v1/fundingPayment",
+    query: { since: 1700000000000n, to: 1700003600000n },
+    queryInRequest: false,
+  });
+
+  assert.equal(
+    last().url,
+    "https://api.sandbox.gemini.com/v1/fundingPayment?since=1700000000000&to=1700003600000",
+  );
+  assert.equal(
+    JSON.parse(fromBase64(last().init.headers["X-GEMINI-PAYLOAD"])).request,
+    "/v1/fundingPayment",
+  );
+});
+
 test("REST requests use manual redirects and reject representative redirect responses before reading a body", async () => {
   for (const response of [
     { status: 301 },

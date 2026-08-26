@@ -129,6 +129,7 @@ type GeneratedOperationMetadata = {
   successStatuses: readonly number[];
   responseContentTypes: readonly string[];
   responseInt64Paths: readonly unknown[];
+  queryInRequest?: boolean;
   requestInt64Paths: {
     body: readonly unknown[];
     path: readonly unknown[];
@@ -173,7 +174,10 @@ function assertModuleMetadata(
   assert.equal(entries.length, expectedCount);
   assert.equal(new Set(entries.map(([operationId]) => operationId)).size, expectedCount);
   for (const [, operation] of entries) {
-    assert.deepEqual(Object.keys(operation).sort(), metadataKeys);
+    const expectedKeys = operation.queryInRequest === undefined
+      ? metadataKeys
+      : [...metadataKeys, "queryInRequest"].sort();
+    assert.deepEqual(Object.keys(operation).sort(), expectedKeys);
     assert.equal(operation.successStatuses.length > 0, true);
     assert.equal(operation.responseContentTypes.length > 0, true);
   }
@@ -457,6 +461,10 @@ test("Margin wrappers shape signed requests without using the network", async ()
 test("Perpetuals wrappers shape public, authenticated JSON, and file requests", async () => {
   const { sdk, requests, fileBytes } = testClient();
 
+  assert.equal(PERPETUALS_OPERATIONS.listFundingPayments.queryInRequest, false);
+  assert.equal(PERPETUALS_OPERATIONS.getFundingPaymentReportJson.queryInRequest, true);
+  assert.equal(PERPETUALS_OPERATIONS.getFundingPaymentReportFile.queryInRequest, true);
+
   await sdk.perpetuals.getRiskStats({ symbol: "BTCGUSDPERP" });
   await sdk.perpetuals.getAccountMargin({
     account: "primary",
@@ -523,7 +531,7 @@ test("Perpetuals wrappers shape public, authenticated JSON, and file requests", 
     nonce: 1001,
   });
   assert.deepEqual(payload(requests[3]!), {
-    request: "/v1/perpetuals/fundingPayment?since=1700000000000&to=1700003600000",
+    request: "/v1/perpetuals/fundingPayment",
     account: "primary",
     nonce: 1002,
   });
