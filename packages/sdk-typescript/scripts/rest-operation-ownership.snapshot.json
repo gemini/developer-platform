@@ -1,0 +1,1274 @@
+[
+  {
+    "spec": "predictionMarkets",
+    "module": "predictionMarkets",
+    "operationId": "acceptPredictionMarketsTerms",
+    "methodName": "acceptTerms",
+    "responseMode": "json",
+    "method": "post",
+    "path": "/v1/prediction-markets/terms/accept",
+    "tags": [
+      "Terms"
+    ]
+  },
+  {
+    "spec": "predictionMarkets",
+    "module": "predictionMarkets",
+    "operationId": "cancelOrder",
+    "methodName": "cancelOrder",
+    "responseMode": "json",
+    "method": "post",
+    "path": "/v1/prediction-markets/order/cancel",
+    "tags": [
+      "Trading"
+    ]
+  },
+  {
+    "spec": "predictionMarkets",
+    "module": "predictionMarkets",
+    "operationId": "cancelOrderBatch",
+    "methodName": "cancelOrderBatch",
+    "responseMode": "json",
+    "method": "post",
+    "path": "/v1/prediction-markets/order/batch/cancel",
+    "tags": [
+      "Trading"
+    ]
+  },
+  {
+    "spec": "predictionMarkets",
+    "module": "predictionMarkets",
+    "operationId": "createCombo",
+    "methodName": "createCombo",
+    "responseMode": "json",
+    "method": "post",
+    "path": "/v1/prediction-markets/combos",
+    "tags": [
+      "Combos"
+    ]
+  },
+  {
+    "spec": "predictionMarkets",
+    "module": "predictionMarkets",
+    "operationId": "getActiveOrders",
+    "methodName": "getActiveOrders",
+    "responseMode": "json",
+    "method": "post",
+    "path": "/v1/prediction-markets/orders/active",
+    "tags": [
+      "Positions"
+    ]
+  },
+  {
+    "spec": "predictionMarkets",
+    "module": "predictionMarkets",
+    "operationId": "getCategories",
+    "methodName": "getCategories",
+    "responseMode": "json",
+    "method": "get",
+    "path": "/v1/prediction-markets/categories",
+    "tags": [
+      "Markets"
+    ]
+  },
+  {
+    "spec": "predictionMarkets",
+    "module": "predictionMarkets",
+    "operationId": "getComboByInstrumentSymbol",
+    "methodName": "getComboByInstrumentSymbol",
+    "responseMode": "json",
+    "method": "get",
+    "path": "/v1/prediction-markets/combos/{instrumentSymbol}",
+    "tags": [
+      "Combos"
+    ]
+  },
+  {
+    "spec": "predictionMarkets",
+    "module": "predictionMarkets",
+    "operationId": "getEvent",
+    "methodName": "getEvent",
+    "responseMode": "json",
+    "method": "get",
+    "path": "/v1/prediction-markets/events/{eventTicker}",
+    "tags": [
+      "Markets"
+    ]
+  },
+  {
+    "spec": "predictionMarkets",
+    "module": "predictionMarkets",
+    "operationId": "getEventStrike",
+    "methodName": "getEventStrike",
+    "responseMode": "json",
+    "method": "get",
+    "path": "/v1/prediction-markets/events/{eventTicker}/strike",
+    "tags": [
+      "Markets"
+    ]
+  },
+  {
+    "spec": "predictionMarkets",
+    "module": "predictionMarkets",
+    "operationId": "getLiquidityRewardsConfig",
+    "methodName": "getLiquidityRewardsConfig",
+    "responseMode": "json",
+    "method": "get",
+    "path": "/v1/prediction-markets/liquidity-rewards/config",
+    "tags": [
+      "Rewards"
+    ]
+  },
+  {
+    "spec": "predictionMarkets",
+    "module": "predictionMarkets",
+    "operationId": "getLiquidityRewardsDailySummary",
+    "methodName": "getLiquidityRewardsDailySummary",
+    "responseMode": "json",
+    "method": "get",
+    "path": "/v1/prediction-markets/liquidity-rewards/summary/daily",
+    "tags": [
+      "Rewards"
+    ]
+  },
+  {
+    "spec": "predictionMarkets",
+    "module": "predictionMarkets",
+    "operationId": "getLiquidityRewardsLifetimeSummary",
+    "methodName": "getLiquidityRewardsLifetimeSummary",
+    "responseMode": "json",
+    "method": "get",
+    "path": "/v1/prediction-markets/liquidity-rewards/summary/total",
+    "tags": [
+      "Rewards"
+    ]
+  },
+  {
+    "spec": "predictionMarkets",
+    "module": "predictionMarkets",
+    "operationId": "getMakerRebateLifetimeSummary",
+    "methodName": "getMakerRebateLifetimeSummary",
+    "responseMode": "json",
+    "method": "get",
+    "path": "/v1/prediction-markets/maker-rebate/summary/total",
+    "tags": [
+      "Rewards"
+    ]
+  },
+  {
+    "spec": "predictionMarkets",
+    "module": "predictionMarkets",
+    "operationId": "getMakerRebateRates",
+    "methodName": "getMakerRebateRates",
+    "responseMode": "json",
+    "method": "get",
+    "path": "/v1/prediction-markets/maker-rebate/rates",
+    "tags": [
+      "Rewards"
+    ]
+  },
+  {
+    "spec": "predictionMarkets",
+    "module": "predictionMarkets",
+    "operationId": "getOrderHistory",
+    "methodName": "getOrderHistory",
+    "responseMode": "json",
+    "method": "post",
+    "path": "/v1/prediction-markets/orders/history",
+    "tags": [
+      "Positions"
+    ]
+  },
+  {
+    "spec": "predictionMarkets",
+    "module": "predictionMarkets",
+    "operationId": "getPositions",
+    "methodName": "getPositions",
+    "responseMode": "json",
+    "method": "post",
+    "path": "/v1/prediction-markets/positions",
+    "tags": [
+      "Positions"
+    ]
+  },
+  {
+    "spec": "predictionMarkets",
+    "module": "predictionMarkets",
+    "operationId": "getPredictionMarketDailyVolume",
+    "methodName": "getPredictionMarketDailyVolume",
+    "responseMode": "json",
+    "method": "get",
+    "path": "/v1/prediction-markets/volume/{date}",
+    "tags": [
+      "Volume"
+    ]
+  },
+  {
+    "spec": "predictionMarkets",
+    "module": "predictionMarkets",
+    "operationId": "getPredictionMarketHourlyVolume",
+    "methodName": "getPredictionMarketHourlyVolume",
+    "responseMode": "json",
+    "method": "get",
+    "path": "/v1/prediction-markets/volume/{date}/hourly",
+    "tags": [
+      "Volume"
+    ]
+  },
+  {
+    "spec": "predictionMarkets",
+    "module": "predictionMarkets",
+    "operationId": "getPredictionMarketsTerms",
+    "methodName": "getPredictionMarketsTerms",
+    "responseMode": "json",
+    "method": "get",
+    "path": "/v1/prediction-markets/terms",
+    "tags": [
+      "Terms"
+    ]
+  },
+  {
+    "spec": "predictionMarkets",
+    "module": "predictionMarkets",
+    "operationId": "getPredictionMarketsTermsStatus",
+    "methodName": "getPredictionMarketsTermsStatus",
+    "responseMode": "json",
+    "method": "get",
+    "path": "/v1/prediction-markets/terms/status",
+    "tags": [
+      "Terms"
+    ]
+  },
+  {
+    "spec": "predictionMarkets",
+    "module": "predictionMarkets",
+    "operationId": "getSettledPositions",
+    "methodName": "getSettledPositions",
+    "responseMode": "json",
+    "method": "post",
+    "path": "/v1/prediction-markets/positions/settled",
+    "tags": [
+      "Positions"
+    ]
+  },
+  {
+    "spec": "predictionMarkets",
+    "module": "predictionMarkets",
+    "operationId": "getVolumeMetrics",
+    "methodName": "getVolumeMetrics",
+    "responseMode": "json",
+    "method": "post",
+    "path": "/v1/prediction-markets/metrics/volume",
+    "tags": [
+      "Positions"
+    ]
+  },
+  {
+    "spec": "predictionMarkets",
+    "module": "predictionMarkets",
+    "operationId": "listCombos",
+    "methodName": "listCombos",
+    "responseMode": "json",
+    "method": "get",
+    "path": "/v1/prediction-markets/combos",
+    "tags": [
+      "Combos"
+    ]
+  },
+  {
+    "spec": "predictionMarkets",
+    "module": "predictionMarkets",
+    "operationId": "listEvents",
+    "methodName": "listEvents",
+    "responseMode": "json",
+    "method": "get",
+    "path": "/v1/prediction-markets/events",
+    "tags": [
+      "Markets"
+    ]
+  },
+  {
+    "spec": "predictionMarkets",
+    "module": "predictionMarkets",
+    "operationId": "listLiquidityRewardsEvents",
+    "methodName": "listLiquidityRewardsEvents",
+    "responseMode": "json",
+    "method": "get",
+    "path": "/v1/prediction-markets/liquidity-rewards/events",
+    "tags": [
+      "Rewards"
+    ]
+  },
+  {
+    "spec": "predictionMarkets",
+    "module": "predictionMarkets",
+    "operationId": "listMakerRebatePayouts",
+    "methodName": "listMakerRebatePayouts",
+    "responseMode": "json",
+    "method": "post",
+    "path": "/v1/prediction-markets/maker-rebate/payouts",
+    "tags": [
+      "Rewards"
+    ]
+  },
+  {
+    "spec": "predictionMarkets",
+    "module": "predictionMarkets",
+    "operationId": "listNewlyListedEvents",
+    "methodName": "listNewlyListedEvents",
+    "responseMode": "json",
+    "method": "get",
+    "path": "/v1/prediction-markets/events/newly-listed",
+    "tags": [
+      "Markets"
+    ]
+  },
+  {
+    "spec": "predictionMarkets",
+    "module": "predictionMarkets",
+    "operationId": "listRecentlySettledEvents",
+    "methodName": "listRecentlySettledEvents",
+    "responseMode": "json",
+    "method": "get",
+    "path": "/v1/prediction-markets/events/recently-settled",
+    "tags": [
+      "Markets"
+    ]
+  },
+  {
+    "spec": "predictionMarkets",
+    "module": "predictionMarkets",
+    "operationId": "listUpcomingEvents",
+    "methodName": "listUpcomingEvents",
+    "responseMode": "json",
+    "method": "get",
+    "path": "/v1/prediction-markets/events/upcoming",
+    "tags": [
+      "Markets"
+    ]
+  },
+  {
+    "spec": "predictionMarkets",
+    "module": "predictionMarkets",
+    "operationId": "placeOrder",
+    "methodName": "placeOrder",
+    "responseMode": "json",
+    "method": "post",
+    "path": "/v1/prediction-markets/order",
+    "tags": [
+      "Trading"
+    ]
+  },
+  {
+    "spec": "predictionMarkets",
+    "module": "predictionMarkets",
+    "operationId": "placeOrderBatch",
+    "methodName": "placeOrderBatch",
+    "responseMode": "json",
+    "method": "post",
+    "path": "/v1/prediction-markets/order/batch",
+    "tags": [
+      "Trading"
+    ]
+  },
+  {
+    "spec": "rest",
+    "module": "account",
+    "operationId": "addBank",
+    "methodName": "addBank",
+    "responseMode": "json",
+    "method": "post",
+    "path": "/v1/payments/addbank",
+    "tags": [
+      "Fund Management"
+    ]
+  },
+  {
+    "spec": "rest",
+    "module": "account",
+    "operationId": "addBankCAD",
+    "methodName": "addBankCAD",
+    "responseMode": "json",
+    "method": "post",
+    "path": "/v1/payments/addbank/cad",
+    "tags": [
+      "Fund Management"
+    ]
+  },
+  {
+    "spec": "rest",
+    "module": "account",
+    "operationId": "createNewAccount",
+    "methodName": "createNewAccount",
+    "responseMode": "json",
+    "method": "post",
+    "path": "/v1/account/create",
+    "tags": [
+      "Account Administration"
+    ]
+  },
+  {
+    "spec": "rest",
+    "module": "account",
+    "operationId": "createNewApprovedAddress",
+    "methodName": "createNewApprovedAddress",
+    "responseMode": "json",
+    "method": "post",
+    "path": "/v1/approvedAddresses/{network}/request",
+    "tags": [
+      "Fund Management"
+    ]
+  },
+  {
+    "spec": "rest",
+    "module": "account",
+    "operationId": "createNewDepositAddress",
+    "methodName": "createNewDepositAddress",
+    "responseMode": "json",
+    "method": "post",
+    "path": "/v1/deposit/{network}/newAddress",
+    "tags": [
+      "Fund Management"
+    ]
+  },
+  {
+    "spec": "rest",
+    "module": "account",
+    "operationId": "getAccountDetail",
+    "methodName": "getAccountDetail",
+    "responseMode": "json",
+    "method": "post",
+    "path": "/v1/account",
+    "tags": [
+      "Account Administration"
+    ]
+  },
+  {
+    "spec": "rest",
+    "module": "account",
+    "operationId": "getAvailableBalances",
+    "methodName": "getAvailableBalances",
+    "responseMode": "json",
+    "method": "post",
+    "path": "/v1/balances",
+    "tags": [
+      "Fund Management"
+    ]
+  },
+  {
+    "spec": "rest",
+    "module": "account",
+    "operationId": "getNotionalBalances",
+    "methodName": "getNotionalBalances",
+    "responseMode": "json",
+    "method": "post",
+    "path": "/v1/notionalbalances/{currency}",
+    "tags": [
+      "Fund Management"
+    ]
+  },
+  {
+    "spec": "rest",
+    "module": "account",
+    "operationId": "getRoles",
+    "methodName": "getRoles",
+    "responseMode": "json",
+    "method": "post",
+    "path": "/v1/roles",
+    "tags": [
+      "Account Administration"
+    ]
+  },
+  {
+    "spec": "rest",
+    "module": "account",
+    "operationId": "listAccountsInGroup",
+    "methodName": "listAccountsInGroup",
+    "responseMode": "json",
+    "method": "post",
+    "path": "/v1/account/list",
+    "tags": [
+      "Account Administration"
+    ]
+  },
+  {
+    "spec": "rest",
+    "module": "account",
+    "operationId": "listApprovedAddresses",
+    "methodName": "listApprovedAddresses",
+    "responseMode": "json",
+    "method": "post",
+    "path": "/v1/approvedAddresses/account/{network}",
+    "tags": [
+      "Fund Management"
+    ]
+  },
+  {
+    "spec": "rest",
+    "module": "account",
+    "operationId": "listDepositAddresses",
+    "methodName": "listDepositAddresses",
+    "responseMode": "json",
+    "method": "post",
+    "path": "/v1/addresses/{network}",
+    "tags": [
+      "Fund Management"
+    ]
+  },
+  {
+    "spec": "rest",
+    "module": "account",
+    "operationId": "listPaymentMethods",
+    "methodName": "listPaymentMethods",
+    "responseMode": "json",
+    "method": "post",
+    "path": "/v1/payments/methods",
+    "tags": [
+      "Fund Management"
+    ]
+  },
+  {
+    "spec": "rest",
+    "module": "account",
+    "operationId": "removeApprovedAddress",
+    "methodName": "removeApprovedAddress",
+    "responseMode": "json",
+    "method": "post",
+    "path": "/v1/approvedAddresses/{network}/remove",
+    "tags": [
+      "Fund Management"
+    ]
+  },
+  {
+    "spec": "rest",
+    "module": "account",
+    "operationId": "renameAccount",
+    "methodName": "renameAccount",
+    "responseMode": "json",
+    "method": "post",
+    "path": "/v1/account/rename",
+    "tags": [
+      "Account Administration"
+    ]
+  },
+  {
+    "spec": "rest",
+    "module": "account",
+    "operationId": "revokeOAuthToken",
+    "methodName": "revokeOAuthToken",
+    "responseMode": "json",
+    "method": "post",
+    "path": "/v1/oauth/revokeByToken",
+    "tags": [
+      "OAuth"
+    ]
+  },
+  {
+    "spec": "rest",
+    "module": "clearing",
+    "operationId": "cancelClearingOrder",
+    "methodName": "cancelClearingOrder",
+    "responseMode": "json",
+    "method": "post",
+    "path": "/v1/clearing/cancel",
+    "tags": [
+      "Clearing"
+    ]
+  },
+  {
+    "spec": "rest",
+    "module": "clearing",
+    "operationId": "confirmClearingOrder",
+    "methodName": "confirmClearingOrder",
+    "responseMode": "json",
+    "method": "post",
+    "path": "/v1/clearing/confirm",
+    "tags": [
+      "Clearing"
+    ]
+  },
+  {
+    "spec": "rest",
+    "module": "clearing",
+    "operationId": "createNewBrokerOrder",
+    "methodName": "createNewBrokerOrder",
+    "responseMode": "json",
+    "method": "post",
+    "path": "/v1/clearing/broker/new",
+    "tags": [
+      "Clearing"
+    ]
+  },
+  {
+    "spec": "rest",
+    "module": "clearing",
+    "operationId": "createNewClearingOrder",
+    "methodName": "createNewClearingOrder",
+    "responseMode": "json",
+    "method": "post",
+    "path": "/v1/clearing/new",
+    "tags": [
+      "Clearing"
+    ]
+  },
+  {
+    "spec": "rest",
+    "module": "clearing",
+    "operationId": "getClearingOrder",
+    "methodName": "getClearingOrder",
+    "responseMode": "json",
+    "method": "post",
+    "path": "/v1/clearing/status",
+    "tags": [
+      "Clearing"
+    ]
+  },
+  {
+    "spec": "rest",
+    "module": "clearing",
+    "operationId": "listClearingBrokers",
+    "methodName": "listClearingBrokers",
+    "responseMode": "json",
+    "method": "post",
+    "path": "/v1/clearing/broker/list",
+    "tags": [
+      "Clearing"
+    ]
+  },
+  {
+    "spec": "rest",
+    "module": "clearing",
+    "operationId": "listClearingOrders",
+    "methodName": "listClearingOrders",
+    "responseMode": "json",
+    "method": "post",
+    "path": "/v1/clearing/list",
+    "tags": [
+      "Clearing"
+    ]
+  },
+  {
+    "spec": "rest",
+    "module": "clearing",
+    "operationId": "listClearingTrades",
+    "methodName": "listClearingTrades",
+    "responseMode": "json",
+    "method": "post",
+    "path": "/v1/clearing/trades",
+    "tags": [
+      "Clearing"
+    ]
+  },
+  {
+    "spec": "rest",
+    "module": "instant",
+    "operationId": "executeInstantOrder",
+    "methodName": "executeInstantOrder",
+    "responseMode": "json",
+    "method": "post",
+    "path": "/v1/instant/execute",
+    "tags": [
+      "Instant"
+    ]
+  },
+  {
+    "spec": "rest",
+    "module": "instant",
+    "operationId": "getInstantQuote",
+    "methodName": "getInstantQuote",
+    "responseMode": "json",
+    "method": "post",
+    "path": "/v1/instant/quote",
+    "tags": [
+      "Instant"
+    ]
+  },
+  {
+    "spec": "rest",
+    "module": "margin",
+    "operationId": "getMarginAccount",
+    "methodName": "getMarginAccount",
+    "responseMode": "json",
+    "method": "post",
+    "path": "/v1/margin/account",
+    "tags": [
+      "Margin Trading"
+    ]
+  },
+  {
+    "spec": "rest",
+    "module": "margin",
+    "operationId": "getMarginRates",
+    "methodName": "getMarginRates",
+    "responseMode": "json",
+    "method": "post",
+    "path": "/v1/margin/rates",
+    "tags": [
+      "Margin Trading"
+    ]
+  },
+  {
+    "spec": "rest",
+    "module": "margin",
+    "operationId": "previewMarginOrder",
+    "methodName": "previewMarginOrder",
+    "responseMode": "json",
+    "method": "post",
+    "path": "/v1/margin/order/preview",
+    "tags": [
+      "Margin Trading"
+    ]
+  },
+  {
+    "spec": "rest",
+    "module": "marketData",
+    "operationId": "getAssetsForNetwork",
+    "methodName": "getAssetsForNetwork",
+    "responseMode": "json",
+    "method": "get",
+    "path": "/v2/networks/{network}/assets",
+    "tags": [
+      "Market Data"
+    ]
+  },
+  {
+    "spec": "rest",
+    "module": "marketData",
+    "operationId": "getCurrentOrderBook",
+    "methodName": "getCurrentOrderBook",
+    "responseMode": "json",
+    "method": "get",
+    "path": "/v1/book/{symbol}",
+    "tags": [
+      "Market Data"
+    ]
+  },
+  {
+    "spec": "rest",
+    "module": "marketData",
+    "operationId": "getFXRate",
+    "methodName": "getFXRate",
+    "responseMode": "json",
+    "method": "get",
+    "path": "/v2/fxrate/{symbol}/{timestamp}",
+    "tags": [
+      "Market Data"
+    ]
+  },
+  {
+    "spec": "rest",
+    "module": "marketData",
+    "operationId": "getFundingAmount",
+    "methodName": "getFundingAmount",
+    "responseMode": "json",
+    "method": "get",
+    "path": "/v1/fundingamount/{symbol}",
+    "tags": [
+      "Market Data"
+    ]
+  },
+  {
+    "spec": "rest",
+    "module": "marketData",
+    "operationId": "getFundingAmountReportFile",
+    "methodName": "getFundingAmountReportFile",
+    "responseMode": "file",
+    "method": "get",
+    "path": "/v1/fundingamountreport/records.xlsx",
+    "tags": [
+      "Market Data"
+    ]
+  },
+  {
+    "spec": "rest",
+    "module": "marketData",
+    "operationId": "getNextFundingTimestamp",
+    "methodName": "getNextFundingTimestamp",
+    "responseMode": "json",
+    "method": "get",
+    "path": "/v1/nextfundingtimestamp/{symbol}",
+    "tags": [
+      "Market Data"
+    ]
+  },
+  {
+    "spec": "rest",
+    "module": "marketData",
+    "operationId": "getSymbolDetails",
+    "methodName": "getSymbolDetails",
+    "responseMode": "json",
+    "method": "get",
+    "path": "/v1/symbols/details/{symbol}",
+    "tags": [
+      "Market Data"
+    ]
+  },
+  {
+    "spec": "rest",
+    "module": "marketData",
+    "operationId": "getTicker",
+    "methodName": "getTicker",
+    "responseMode": "json",
+    "method": "get",
+    "path": "/v1/pubticker/{symbol}",
+    "tags": [
+      "Market Data"
+    ]
+  },
+  {
+    "spec": "rest",
+    "module": "marketData",
+    "operationId": "getTickerV2",
+    "methodName": "getTickerV2",
+    "responseMode": "json",
+    "method": "get",
+    "path": "/v2/ticker/{symbol}",
+    "tags": [
+      "Market Data"
+    ]
+  },
+  {
+    "spec": "rest",
+    "module": "marketData",
+    "operationId": "getTokenNetworkV2",
+    "methodName": "getTokenNetworkV2",
+    "responseMode": "json",
+    "method": "get",
+    "path": "/v2/network/{token}",
+    "tags": [
+      "Market Data"
+    ]
+  },
+  {
+    "spec": "rest",
+    "module": "marketData",
+    "operationId": "listCandles",
+    "methodName": "listCandles",
+    "responseMode": "json",
+    "method": "get",
+    "path": "/v2/candles/{symbol}/{time_frame}",
+    "tags": [
+      "Market Data"
+    ]
+  },
+  {
+    "spec": "rest",
+    "module": "marketData",
+    "operationId": "listDerivativeCandles",
+    "methodName": "listDerivativeCandles",
+    "responseMode": "json",
+    "method": "get",
+    "path": "/v2/derivatives/candles/{symbol}/{time_frame}",
+    "tags": [
+      "Market Data"
+    ]
+  },
+  {
+    "spec": "rest",
+    "module": "marketData",
+    "operationId": "listFeePromos",
+    "methodName": "listFeePromos",
+    "responseMode": "json",
+    "method": "get",
+    "path": "/v1/feepromos",
+    "tags": [
+      "Market Data"
+    ]
+  },
+  {
+    "spec": "rest",
+    "module": "marketData",
+    "operationId": "listPrices",
+    "methodName": "listPrices",
+    "responseMode": "json",
+    "method": "get",
+    "path": "/v1/pricefeed",
+    "tags": [
+      "Market Data"
+    ]
+  },
+  {
+    "spec": "rest",
+    "module": "marketData",
+    "operationId": "listSymbols",
+    "methodName": "listSymbols",
+    "responseMode": "json",
+    "method": "get",
+    "path": "/v1/symbols",
+    "tags": [
+      "Market Data"
+    ]
+  },
+  {
+    "spec": "rest",
+    "module": "marketData",
+    "operationId": "listTrades",
+    "methodName": "listTrades",
+    "responseMode": "json",
+    "method": "get",
+    "path": "/v1/trades/{symbol}",
+    "tags": [
+      "Market Data"
+    ]
+  },
+  {
+    "spec": "rest",
+    "module": "perpetuals",
+    "operationId": "getAccountMargin",
+    "methodName": "getAccountMargin",
+    "responseMode": "json",
+    "method": "post",
+    "path": "/v1/margin",
+    "tags": [
+      "Derivatives"
+    ]
+  },
+  {
+    "spec": "rest",
+    "module": "perpetuals",
+    "operationId": "getFundingPaymentReportFile",
+    "methodName": "getFundingPaymentReportFile",
+    "responseMode": "file",
+    "method": "get",
+    "path": "/v1/perpetuals/fundingpaymentreport/records.xlsx",
+    "tags": [
+      "Derivatives"
+    ]
+  },
+  {
+    "spec": "rest",
+    "module": "perpetuals",
+    "operationId": "getFundingPaymentReportJson",
+    "methodName": "getFundingPaymentReportJson",
+    "responseMode": "json",
+    "method": "post",
+    "path": "/v1/perpetuals/fundingpaymentreport/records.json",
+    "tags": [
+      "Derivatives"
+    ]
+  },
+  {
+    "spec": "rest",
+    "module": "perpetuals",
+    "operationId": "getOpenPositions",
+    "methodName": "getOpenPositions",
+    "responseMode": "json",
+    "method": "post",
+    "path": "/v1/positions",
+    "tags": [
+      "Derivatives"
+    ]
+  },
+  {
+    "spec": "rest",
+    "module": "perpetuals",
+    "operationId": "getRiskStats",
+    "methodName": "getRiskStats",
+    "responseMode": "json",
+    "method": "get",
+    "path": "/v1/riskstats/{symbol}",
+    "tags": [
+      "Derivatives"
+    ]
+  },
+  {
+    "spec": "rest",
+    "module": "perpetuals",
+    "operationId": "listFundingPayments",
+    "methodName": "listFundingPayments",
+    "responseMode": "json",
+    "method": "post",
+    "path": "/v1/perpetuals/fundingPayment",
+    "tags": [
+      "Derivatives"
+    ]
+  },
+  {
+    "spec": "rest",
+    "module": "staking",
+    "operationId": "listStakingBalances",
+    "methodName": "listStakingBalances",
+    "responseMode": "json",
+    "method": "post",
+    "path": "/v1/balances/staking",
+    "tags": [
+      "Staking"
+    ]
+  },
+  {
+    "spec": "rest",
+    "module": "staking",
+    "operationId": "listStakingEventHistory",
+    "methodName": "listStakingEventHistory",
+    "responseMode": "json",
+    "method": "post",
+    "path": "/v1/staking/history",
+    "tags": [
+      "Staking"
+    ]
+  },
+  {
+    "spec": "rest",
+    "module": "staking",
+    "operationId": "listStakingRates",
+    "methodName": "listStakingRates",
+    "responseMode": "json",
+    "method": "get",
+    "path": "/v1/staking/rates",
+    "tags": [
+      "Staking"
+    ]
+  },
+  {
+    "spec": "rest",
+    "module": "staking",
+    "operationId": "listStakingRewards",
+    "methodName": "listStakingRewards",
+    "responseMode": "json",
+    "method": "post",
+    "path": "/v1/staking/rewards",
+    "tags": [
+      "Staking"
+    ]
+  },
+  {
+    "spec": "rest",
+    "module": "staking",
+    "operationId": "stakeCryptoFunds",
+    "methodName": "stakeCryptoFunds",
+    "responseMode": "json",
+    "method": "post",
+    "path": "/v1/staking/stake",
+    "tags": [
+      "Staking"
+    ]
+  },
+  {
+    "spec": "rest",
+    "module": "staking",
+    "operationId": "unstakeCryptoFunds",
+    "methodName": "unstakeCryptoFunds",
+    "responseMode": "json",
+    "method": "post",
+    "path": "/v1/staking/unstake",
+    "tags": [
+      "Staking"
+    ]
+  },
+  {
+    "spec": "rest",
+    "module": "trading",
+    "operationId": "cancelAllActiveOrders",
+    "methodName": "cancelAllActiveOrders",
+    "responseMode": "json",
+    "method": "post",
+    "path": "/v1/order/cancel/all",
+    "tags": [
+      "Orders"
+    ]
+  },
+  {
+    "spec": "rest",
+    "module": "trading",
+    "operationId": "cancelAllSessionOrders",
+    "methodName": "cancelAllSessionOrders",
+    "responseMode": "json",
+    "method": "post",
+    "path": "/v1/order/cancel/session",
+    "tags": [
+      "Orders"
+    ]
+  },
+  {
+    "spec": "rest",
+    "module": "trading",
+    "operationId": "cancelOrder",
+    "methodName": "cancelOrder",
+    "responseMode": "json",
+    "method": "post",
+    "path": "/v1/order/cancel",
+    "tags": [
+      "Orders"
+    ]
+  },
+  {
+    "spec": "rest",
+    "module": "trading",
+    "operationId": "createNewOrder",
+    "methodName": "createNewOrder",
+    "responseMode": "json",
+    "method": "post",
+    "path": "/v1/order/new",
+    "tags": [
+      "Orders"
+    ]
+  },
+  {
+    "spec": "rest",
+    "module": "trading",
+    "operationId": "getNotionalTradingVolume",
+    "methodName": "getNotionalTradingVolume",
+    "responseMode": "json",
+    "method": "post",
+    "path": "/v1/notionalvolume",
+    "tags": [
+      "Orders"
+    ]
+  },
+  {
+    "spec": "rest",
+    "module": "trading",
+    "operationId": "getOrderStatus",
+    "methodName": "getOrderStatus",
+    "responseMode": "json",
+    "method": "post",
+    "path": "/v1/order/status",
+    "tags": [
+      "Orders"
+    ]
+  },
+  {
+    "spec": "rest",
+    "module": "trading",
+    "operationId": "getTradingVolume",
+    "methodName": "getTradingVolume",
+    "responseMode": "json",
+    "method": "post",
+    "path": "/v1/tradevolume",
+    "tags": [
+      "Orders"
+    ]
+  },
+  {
+    "spec": "rest",
+    "module": "trading",
+    "operationId": "listActiveOrders",
+    "methodName": "listActiveOrders",
+    "responseMode": "json",
+    "method": "post",
+    "path": "/v1/orders",
+    "tags": [
+      "Orders"
+    ]
+  },
+  {
+    "spec": "rest",
+    "module": "trading",
+    "operationId": "listPastOrders",
+    "methodName": "listPastOrders",
+    "responseMode": "json",
+    "method": "post",
+    "path": "/v1/orders/history",
+    "tags": [
+      "Orders"
+    ]
+  },
+  {
+    "spec": "rest",
+    "module": "trading",
+    "operationId": "listPastTrades",
+    "methodName": "listPastTrades",
+    "responseMode": "json",
+    "method": "post",
+    "path": "/v1/mytrades",
+    "tags": [
+      "Orders"
+    ]
+  },
+  {
+    "spec": "rest",
+    "module": "trading",
+    "operationId": "sendHeartbeat",
+    "methodName": "sendHeartbeat",
+    "responseMode": "json",
+    "method": "post",
+    "path": "/v1/heartbeat",
+    "tags": [
+      "Session"
+    ]
+  },
+  {
+    "spec": "rest",
+    "module": "trading",
+    "operationId": "wrapOrder",
+    "methodName": "wrapOrder",
+    "responseMode": "json",
+    "method": "post",
+    "path": "/v1/wrap/{symbol}",
+    "tags": [
+      "Orders"
+    ]
+  },
+  {
+    "spec": "rest",
+    "module": "transfers",
+    "operationId": "getGasFeeEstimation",
+    "methodName": "getGasFeeEstimation",
+    "responseMode": "json",
+    "method": "post",
+    "path": "/v2/withdraw/{network}/{ticker}/feeEstimate",
+    "tags": [
+      "Fund Management"
+    ]
+  },
+  {
+    "spec": "rest",
+    "module": "transfers",
+    "operationId": "getTransactionHistory",
+    "methodName": "getTransactionHistory",
+    "responseMode": "json",
+    "method": "post",
+    "path": "/v1/transactions",
+    "tags": [
+      "Fund Management"
+    ]
+  },
+  {
+    "spec": "rest",
+    "module": "transfers",
+    "operationId": "listCustodyFeeTransfers",
+    "methodName": "listCustodyFeeTransfers",
+    "responseMode": "json",
+    "method": "post",
+    "path": "/v1/custodyaccountfees",
+    "tags": [
+      "Fund Management"
+    ]
+  },
+  {
+    "spec": "rest",
+    "module": "transfers",
+    "operationId": "listPastTransfers",
+    "methodName": "listPastTransfers",
+    "responseMode": "json",
+    "method": "post",
+    "path": "/v2/transfers",
+    "tags": [
+      "Fund Management"
+    ]
+  },
+  {
+    "spec": "rest",
+    "module": "transfers",
+    "operationId": "transferBetweenAccounts",
+    "methodName": "transferBetweenAccounts",
+    "responseMode": "json",
+    "method": "post",
+    "path": "/v1/account/transfer/{currency}",
+    "tags": [
+      "Fund Management"
+    ]
+  },
+  {
+    "spec": "rest",
+    "module": "transfers",
+    "operationId": "withdrawCryptoFunds",
+    "methodName": "withdrawCryptoFunds",
+    "responseMode": "json",
+    "method": "post",
+    "path": "/v2/withdraw/{network}/{ticker}",
+    "tags": [
+      "Fund Management"
+    ]
+  }
+]

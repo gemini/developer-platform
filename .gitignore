@@ -51,9 +51,6 @@ tmp/
 
 # SDK generation
 scripts/rest.yaml
-packages/sdk-go/
-packages/sdk-python/
-packages/sdk-typescript/
 
 
 # AI

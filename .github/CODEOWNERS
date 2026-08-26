@@ -1,0 +1,7 @@
+# Release and security-sensitive repository controls.
+/.github/CODEOWNERS @fuller @ximt
+/.github/workflows/** @fuller @ximt
+/SECURITY.md @fuller @ximt
+
+# Published TypeScript SDK source, packaging, and release metadata.
+/packages/sdk-typescript/** @fuller @ximt
