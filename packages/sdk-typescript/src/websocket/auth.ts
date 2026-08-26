@@ -1,4 +1,5 @@
 import { toBase64 } from "../utils/encoding.js";
+import { HmacAuth } from "../auth/hmac.js";
 import type { AuthStrategy } from "../transport/http.js";
 import { SdkError } from "../errors.js";
 import { isBoundaryString } from "../utils/boundary-value.js";
@@ -36,16 +37,17 @@ export async function createServerWebSocketAuthHeaders(
   auth: AuthStrategy,
   options?: RequestOptions,
 ): Promise<Record<string, string>> {
-  const nonce = auth.nextNonce();
+  const websocketAuth = auth instanceof HmacAuth ? auth.forWebSocket() : auth;
+  const nonce = websocketAuth.nextNonce();
   if (nonce === undefined) {
-    const headers = await auth.credentialHeaders("", options);
+    const headers = await websocketAuth.credentialHeaders("", options);
     const reserved = reservedCredentialHeader(headers);
     if (reserved) throw new SdkError(`AuthStrategy returned reserved header ${reserved}`);
     return headers;
   }
   if (!isBoundaryString(nonce) || !isNumericNonce(nonce)) throw new SdkError("AuthStrategy returned an invalid nonce");
   const payloadBase64 = toBase64(nonce);
-  const headers = await auth.credentialHeaders(payloadBase64, options);
+  const headers = await websocketAuth.credentialHeaders(payloadBase64, options);
   const reserved = reservedCredentialHeader(headers);
   if (reserved) throw new SdkError(`AuthStrategy returned reserved header ${reserved}`);
   return { ...headers, "X-GEMINI-NONCE": nonce, "X-GEMINI-PAYLOAD": payloadBase64 };

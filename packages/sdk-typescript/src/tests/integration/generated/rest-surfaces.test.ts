@@ -523,17 +523,17 @@ test("Perpetuals wrappers shape public, authenticated JSON, and file requests", 
     nonce: 1001,
   });
   assert.deepEqual(payload(requests[3]!), {
-    request: "/v1/perpetuals/fundingPayment",
+    request: "/v1/perpetuals/fundingPayment?since=1700000000000&to=1700003600000",
     account: "primary",
     nonce: 1002,
   });
   assert.deepEqual(payload(requests[4]!), {
-    request: "/v1/perpetuals/fundingpaymentreport/records.json",
+    request: "/v1/perpetuals/fundingpaymentreport/records.json?fromDate=2026-01-01&toDate=2026-01-31&numRows=10",
     account: "primary",
     nonce: 1003,
   });
   assert.deepEqual(payload(requests[5]!), {
-    request: "/v1/perpetuals/fundingpaymentreport/records.xlsx",
+    request: "/v1/perpetuals/fundingpaymentreport/records.xlsx?fromDate=2026-01-01&toDate=2026-01-31&numRows=10",
     account: "primary",
     nonce: 1004,
   });

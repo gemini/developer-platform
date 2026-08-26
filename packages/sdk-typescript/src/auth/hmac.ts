@@ -60,11 +60,23 @@ export class HmacAuth implements AuthStrategy {
   }
 
   nextNonce(): string {
+    return this.#nextNonceFor(this.#nonceMode);
+  }
+
+  /** Return an auth strategy with the epoch-second nonce required by WebSockets. */
+  forWebSocket(): AuthStrategy {
+    return {
+      nextNonce: () => this.#nextNonceFor("time-based"),
+      credentialHeaders: (payloadBase64) => this.credentialHeaders(payloadBase64),
+    };
+  }
+
+  #nextNonceFor(mode: HmacNonceMode): string {
     const now = this.#now();
     if (!Number.isSafeInteger(now) || now < 0) {
       throw new SdkError("nonce clock must return a non-negative safe integer timestamp");
     }
-    if (this.#nonceMode === "time-based") {
+    if (mode === "time-based") {
       return Math.floor(now / 1000).toString();
     }
 

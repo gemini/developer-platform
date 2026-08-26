@@ -115,7 +115,7 @@
       {
         "kind": "InterfaceDeclaration",
         "name": "AuthStrategy",
-        "declaration": "export interface AuthStrategy { /** Return a strictly increasing nonce, or `undefined` when the scheme does not use one. */ nextNonce(): string | undefined; /** Return headers for a request with the private payload `payloadBase64`. */ credentialHeaders(payloadBase64: string, options?: RequestOptions): Promise<Record<string, string>>; }"
+        "declaration": "export interface AuthStrategy { /** Return the nonce required by the request, or `undefined` when the scheme does not use one. */ nextNonce(): string | undefined; /** Return headers for a request with the private payload `payloadBase64`. */ credentialHeaders(payloadBase64: string, options?: RequestOptions): Promise<Record<string, string>>; }"
       },
       {
         "kind": "InterfaceDeclaration",
@@ -1077,7 +1077,7 @@
       {
         "kind": "InterfaceDeclaration",
         "name": "AuthStrategy",
-        "declaration": "export interface AuthStrategy { /** Return a strictly increasing nonce, or `undefined` when the scheme does not use one. */ nextNonce(): string | undefined; /** Return headers for a request with the private payload `payloadBase64`. */ credentialHeaders(payloadBase64: string, options?: RequestOptions): Promise<Record<string, string>>; }"
+        "declaration": "export interface AuthStrategy { /** Return the nonce required by the request, or `undefined` when the scheme does not use one. */ nextNonce(): string | undefined; /** Return headers for a request with the private payload `payloadBase64`. */ credentialHeaders(payloadBase64: string, options?: RequestOptions): Promise<Record<string, string>>; }"
       },
       {
         "kind": "InterfaceDeclaration",
@@ -1297,7 +1297,7 @@
       {
         "kind": "ClassDeclaration",
         "name": "HmacAuth",
-        "declaration": "export declare class HmacAuth implements AuthStrategy { #private; /** Runtime marker. Browser clients must reject this strategy. */ readonly authCapability: \"server\"; constructor(options: HmacAuthOptions); nextNonce(): string; credentialHeaders(payloadBase64: string): Promise<Record<string, string>>; }"
+        "declaration": "export declare class HmacAuth implements AuthStrategy { #private; /** Runtime marker. Browser clients must reject this strategy. */ readonly authCapability: \"server\"; constructor(options: HmacAuthOptions); nextNonce(): string; /** Return an auth strategy with the epoch-second nonce required by WebSockets. */ forWebSocket(): AuthStrategy; credentialHeaders(payloadBase64: string): Promise<Record<string, string>>; }"
       },
       {
         "kind": "InterfaceDeclaration",

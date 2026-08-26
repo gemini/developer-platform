@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import { WebSocketSession } from "./session.js";
 import { createServerWebSocketAuthHeaders } from "./auth.js";
+import { HmacAuth } from "../auth/hmac.js";
 import { serializeError, SdkError, WebSocketRequestError } from "../errors.js";
 import type { AuthStrategy } from "../transport/http.js";
 import type { BoundaryValue } from "../utils/boundary-value.js";
@@ -629,6 +630,21 @@ test("HMAC auth creates WebSocket upgrade headers", async () => {
     "X-GEMINI-NONCE": "1700000000",
     "X-GEMINI-PAYLOAD": "MTcwMDAwMDAwMA==",
   });
+  session.close();
+});
+
+test("default HmacAuth uses epoch-second nonces for WebSocket upgrades", async () => {
+  const auth = new HmacAuth({
+    apiKey: "key",
+    apiSecret: "secret",
+    now: () => 1_700_000_000_123,
+  });
+  const { session, sockets, options } = harness({ auth });
+
+  await open(session, sockets);
+
+  assert.equal(options[0].headers?.["X-GEMINI-NONCE"], "1700000000");
+  assert.equal(options[0].headers?.["X-GEMINI-PAYLOAD"], "MTcwMDAwMDAwMA==");
   session.close();
 });
 

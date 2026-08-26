@@ -241,7 +241,7 @@ export type ResponseHook = (payload: ResponseHookPayload) => void;
 
 /** Create credentials for a private request. */
 export interface AuthStrategy {
-  /** Return a strictly increasing nonce, or `undefined` when the scheme does not use one. */
+  /** Return the nonce required by the request, or `undefined` when the scheme does not use one. */
   nextNonce(): string | undefined;
   /** Return headers for a request with the private payload `payloadBase64`. */
   credentialHeaders(payloadBase64: string, options?: RequestOptions): Promise<Record<string, string>>;
@@ -994,6 +994,7 @@ export class HttpTransport {
   /** Send a signed private request and return the body and response metadata. */
   async requestWithResponse<T = BoundaryValue>(options: PrivateRestRequestOptions): Promise<RestResponse<T>> {
     const { method, path, params } = options;
+    const requestPath = withQuery(path, options.query, options.queryParameters);
     if (!this.auth) {
       throw new SdkError("private request requires an injected AuthStrategy");
     }
@@ -1019,10 +1020,10 @@ export class HttpTransport {
     // Build the signed request for each attempt.
     // Each attempt gets a new nonce and signature.
     const build = async (signal?: AbortSignal) => {
-      const payload: BoundaryRecord = { request: path, ...stableParams };
+      const payload: BoundaryRecord = { request: requestPath, ...stableParams };
       // A params key must not override the signed endpoint.
-      if (payload.request !== path) {
-        throw new EndpointMismatch(path, payload.request);
+      if (payload.request !== requestPath) {
+        throw new EndpointMismatch(requestPath, payload.request);
       }
       const nonce = auth.nextNonce();
       if (nonce !== undefined) {
@@ -1060,7 +1061,7 @@ export class HttpTransport {
 
     return this.send<T>(
       method,
-      withQuery(path, options.query, options.queryParameters),
+      requestPath,
       build,
       options.responseInt64Paths,
       options.responseMode,

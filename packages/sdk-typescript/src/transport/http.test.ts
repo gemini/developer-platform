@@ -180,6 +180,29 @@ test("declared query serialization preserves array and object wire formats", asy
   );
 });
 
+test("private request signs the same canonical query path that it sends", async () => {
+  const { fetchImpl, last } = recordingFetch({ status: 200, body: "{}" });
+  const client = new HttpTransport({ env: "sandbox", auth: stubAuth, fetchImpl });
+
+  await client.request({
+    method: "POST",
+    path: "/v1/report",
+    query: { fromDate: "2026-01-01", toDate: "2026-01-31", numRows: 10 },
+    queryParameters: [
+      { name: "fromDate", in: "query", required: false, style: "form", explode: true },
+      { name: "toDate", in: "query", required: false, style: "form", explode: true },
+      { name: "numRows", in: "query", required: false, style: "form", explode: true },
+    ],
+  });
+
+  const requestPath = "/v1/report?fromDate=2026-01-01&toDate=2026-01-31&numRows=10";
+  assert.equal(last().url, `https://api.sandbox.gemini.com${requestPath}`);
+  assert.equal(
+    JSON.parse(fromBase64(last().init.headers["X-GEMINI-PAYLOAD"])).request,
+    requestPath,
+  );
+});
+
 test("REST requests use manual redirects and reject representative redirect responses before reading a body", async () => {
   for (const response of [
     { status: 301 },
@@ -1206,7 +1229,7 @@ test("paginate sends public offsets as query parameters without requiring auth",
   ]);
 });
 
-test("paginate can send private offsets in the URL while signing the base path", async () => {
+test("paginate can send private offsets in the URL while signing the canonical query path", async () => {
   const urls: string[] = [];
   const payloads: Array<BoundaryRecord> = [];
   const pages = [
@@ -1243,11 +1266,11 @@ test("paginate can send private offsets in the URL while signing the base path",
   ]);
   assert.deepEqual(payloads, [
     {
-      request: "/v1/prediction-markets/maker-rebate/payouts",
+      request: "/v1/prediction-markets/maker-rebate/payouts?limit=100&offset=0",
       nonce: 1700000000000,
     },
     {
-      request: "/v1/prediction-markets/maker-rebate/payouts",
+      request: "/v1/prediction-markets/maker-rebate/payouts?limit=100&offset=100",
       nonce: 1700000000000,
     },
   ]);
