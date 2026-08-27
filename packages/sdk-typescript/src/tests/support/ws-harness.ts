@@ -10,6 +10,7 @@ export interface WebSocketHarness {
   readonly urls: string[];
   readonly options: SocketFactoryOptions[];
   readonly socketFactory: SocketFactory;
+  waitForSocket(index?: number): Promise<FakeSocket>;
   open(index?: number): FakeSocket;
   message(data: BoundaryValue, index?: number): void;
   networkClose(index?: number): void;
@@ -25,11 +26,23 @@ export function createWebSocketHarness(): WebSocketHarness {
   const sockets: FakeSocket[] = [];
   const urls: string[] = [];
   const options: SocketFactoryOptions[] = [];
+  const socketWaiters = new Map<number, ((socket: FakeSocket) => void)[]>();
+  const waitForSocket = (index = 0): Promise<FakeSocket> => {
+    const existing = sockets[index];
+    if (existing) return Promise.resolve(existing);
+    return new Promise((resolve) => {
+      const waiters = socketWaiters.get(index) ?? [];
+      waiters.push(resolve);
+      socketWaiters.set(index, waiters);
+    });
+  };
   const socketFactory: SocketFactory = (url, socketOptions) => {
     const socket = new FakeSocket();
-    sockets.push(socket);
+    const index = sockets.push(socket) - 1;
     urls.push(url);
     options.push(socketOptions);
+    for (const resolve of socketWaiters.get(index) ?? []) resolve(socket);
+    socketWaiters.delete(index);
     return socket;
   };
   const socketAt = (index = sockets.length - 1): FakeSocket => {
@@ -42,6 +55,7 @@ export function createWebSocketHarness(): WebSocketHarness {
     urls,
     options,
     socketFactory,
+    waitForSocket,
     open: (index) => {
       const socket = socketAt(index);
       socket.fireOpen();

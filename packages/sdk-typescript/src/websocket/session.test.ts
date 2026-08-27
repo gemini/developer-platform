@@ -26,11 +26,22 @@ function harness(opts?: { auth?: AuthStrategy; timeoutMs?: number; liveness?: { 
   return { session, ...socketHarness };
 }
 
-async function open(session: WebSocketSession, sockets: FakeSocket[]): Promise<void> {
+async function open(session: WebSocketSession, waitForSocket: () => Promise<FakeSocket>): Promise<void> {
   const connected = session.connect();
-  if (!sockets[0]) await new Promise<void>((resolve) => setImmediate(resolve));
-  sockets[0].fire("open");
-  await connected;
+  try {
+    const socket = await Promise.race([
+      waitForSocket(),
+      connected.then(
+        () => { throw new Error("WebSocket connected before the test socket was created"); },
+        (error) => { throw error; },
+      ),
+    ]);
+    socket.fire("open");
+    await connected;
+  } catch (error) {
+    session.close();
+    throw error;
+  }
 }
 
 test("request() sends one frame with a generated id and resolves the matching response", async () => {
@@ -132,8 +143,8 @@ test("connect() aborts pending WebSocket credential generation", async (t) => {
 });
 
 test("connect() preserves caller cancellation when the session is already open", async () => {
-  const { session, sockets } = harness();
-  await open(session, sockets);
+  const { session, sockets, waitForSocket } = harness();
+  await open(session, waitForSocket);
 
   const controller = new AbortController();
   controller.abort();
@@ -173,9 +184,9 @@ test("subscribe() timeout removes replay state and unsubscribes after the reques
 });
 
 test("opt-in liveness watchdog pings and reconnects after a missed response", async (t) => {
-  const { session, sockets } = harness({ liveness: { intervalMs: 10, timeoutMs: 5 } });
+  const { session, sockets, waitForSocket } = harness({ liveness: { intervalMs: 10, timeoutMs: 5 } });
   t.mock.timers.enable({ apis: ["setTimeout"] });
-  await open(session, sockets);
+  await open(session, waitForSocket);
 
   t.mock.timers.tick(10);
   await new Promise<void>((resolve) => setImmediate(resolve));
@@ -261,9 +272,9 @@ describe("reconnect diagnostics", () => {
 
   test("explicit reconnect fences the intentional close from transport failures", async (t) => {
     const events: DiagnosticEvent[] = [];
-    const { session, sockets } = harness({ onDiagnostic: (event) => events.push(event) });
+    const { session, sockets, waitForSocket } = harness({ onDiagnostic: (event) => events.push(event) });
     t.mock.timers.enable({ apis: ["setTimeout"] });
-    await open(session, sockets);
+    await open(session, waitForSocket);
 
     session.reconnect(0);
     sockets[0].fire("close");
@@ -317,9 +328,9 @@ describe("reconnect diagnostics", () => {
 });
 
 test("connect() during reconnect waits for the fresh socket", async (t) => {
-  const { session, sockets } = harness();
+  const { session, sockets, waitForSocket } = harness();
   t.mock.timers.enable({ apis: ["setTimeout"] });
-  await open(session, sockets);
+  await open(session, waitForSocket);
 
   sockets[0].fire("close");
   let settled = false;
@@ -338,9 +349,9 @@ test("connect() during reconnect waits for the fresh socket", async (t) => {
 });
 
 test("new method requests during reconnect reject with a stable reconnect error", async (t) => {
-  const { session, sockets } = harness();
+  const { session, sockets, waitForSocket } = harness();
   t.mock.timers.enable({ apis: ["setTimeout"] });
-  await open(session, sockets);
+  await open(session, waitForSocket);
 
   sockets[0].fire("close");
   await assert.rejects(session.request({ method: "ping" }), /WebSocket session reconnecting/);
@@ -348,9 +359,9 @@ test("new method requests during reconnect reject with a stable reconnect error"
 });
 
 test("a pending durable subscription survives reconnect and resolves on the replay ack", async (t) => {
-  const { session, sockets } = harness();
+  const { session, sockets, waitForSocket } = harness();
   t.mock.timers.enable({ apis: ["setTimeout"] });
-  await open(session, sockets);
+  await open(session, waitForSocket);
 
   const sub = session.subscribe(["btcusd@trade"]);
   await Promise.resolve();
@@ -370,9 +381,9 @@ test("a pending durable subscription survives reconnect and resolves on the repl
 });
 
 test("replayed subscriptions emit success and rejection separately from initial ready", async (t) => {
-  const { session, sockets } = harness();
+  const { session, sockets, waitForSocket } = harness();
   t.mock.timers.enable({ apis: ["setTimeout"] });
-  await open(session, sockets);
+  await open(session, waitForSocket);
 
   const events: string[] = [];
   session.on("resubscribed", () => events.push("resubscribed"));
@@ -392,9 +403,9 @@ test("replayed subscriptions emit success and rejection separately from initial 
 });
 
 test("a rejected replay is not sent on a later reconnect", async (t) => {
-  const { session, sockets } = harness();
+  const { session, sockets, waitForSocket } = harness();
   t.mock.timers.enable({ apis: ["setTimeout"] });
-  await open(session, sockets);
+  await open(session, waitForSocket);
 
   const sub = session.subscribe(["btcusd@trade"]);
   await Promise.resolve();
@@ -415,9 +426,9 @@ test("a rejected replay is not sent on a later reconnect", async (t) => {
 });
 
 test("reconnect rejects method requests while retaining a pending subscription", async (t) => {
-  const { session, sockets } = harness();
+  const { session, sockets, waitForSocket } = harness();
   t.mock.timers.enable({ apis: ["setTimeout"] });
-  await open(session, sockets);
+  await open(session, waitForSocket);
 
   const sub = session.subscribe(["btcusd@trade"]);
   const request = session.request({ method: "ping" });
@@ -438,8 +449,8 @@ test("reconnect rejects method requests while retaining a pending subscription",
 });
 
 test("malformed transport errors reject method requests without destroying pending subscriptions", async () => {
-  const { session, sockets } = harness();
-  await open(session, sockets);
+  const { session, sockets, waitForSocket } = harness();
+  await open(session, waitForSocket);
 
   const sub = session.subscribe(["btcusd@trade"]);
   const request = session.request({ method: "ping" });
@@ -453,9 +464,9 @@ test("malformed transport errors reject method requests without destroying pendi
 });
 
 test("subscribe() sends a durable SUBSCRIBE, resolves ready on ack, and replays on reconnect", async (t) => {
-  const { session, sockets } = harness();
+  const { session, sockets, waitForSocket } = harness();
   t.mock.timers.enable({ apis: ["setTimeout"] });
-  await open(session, sockets);
+  await open(session, waitForSocket);
 
   const sub = session.subscribe(["btcusd@trade"]);
   await Promise.resolve();
@@ -480,9 +491,9 @@ test("subscribe() sends a durable SUBSCRIBE, resolves ready on ack, and replays 
 });
 
 test("replays every active durable subscription exactly once across repeated reconnects", async (t) => {
-  const { session, sockets } = harness();
+  const { session, sockets, waitForSocket } = harness();
   t.mock.timers.enable({ apis: ["setTimeout"] });
-  await open(session, sockets);
+  await open(session, waitForSocket);
 
   const first = session.subscribe(["btcusd@trade"]);
   const second = session.subscribe(["ethusd@trade"]);
@@ -513,9 +524,9 @@ test("replays every active durable subscription exactly once across repeated rec
 });
 
 test("subscription close removes durable replay and sends UNSUBSCRIBE", async (t) => {
-  const { session, sockets } = harness();
+  const { session, sockets, waitForSocket } = harness();
   t.mock.timers.enable({ apis: ["setTimeout"] });
-  await open(session, sockets);
+  await open(session, waitForSocket);
 
   const sub = session.subscribe(["btcusd@trade"]);
   await Promise.resolve();
@@ -541,9 +552,9 @@ test("subscription close removes durable replay and sends UNSUBSCRIBE", async (t
 });
 
 test("subscription close during reconnect resolves without retaining unsubscribe state", async (t) => {
-  const { session, sockets } = harness();
+  const { session, sockets, waitForSocket } = harness();
   t.mock.timers.enable({ apis: ["setTimeout"] });
-  await open(session, sockets);
+  await open(session, waitForSocket);
 
   const sub = session.subscribe(["btcusd@trade"]);
   await Promise.resolve();
@@ -598,10 +609,10 @@ test("authenticated reconnects generate fresh upgrade headers", async (t) => {
       "X-GEMINI-SIGNATURE": `sig:${payloadBase64}`,
     }),
   };
-  const { session, sockets, options } = harness({ auth });
+  const { session, sockets, options, waitForSocket } = harness({ auth });
   t.mock.timers.enable({ apis: ["setTimeout"] });
 
-  await open(session, sockets);
+  await open(session, waitForSocket);
   sockets[0].fire("close");
   t.mock.timers.tick(0);
   await new Promise<void>((resolve) => setImmediate(resolve));
@@ -620,9 +631,9 @@ test("HMAC auth creates WebSocket upgrade headers", async () => {
       "X-GEMINI-SIGNATURE": `sig:${payloadBase64}`,
     }),
   };
-  const { session, sockets, options } = harness({ auth });
+  const { session, sockets, options, waitForSocket } = harness({ auth });
 
-  await open(session, sockets);
+  await open(session, waitForSocket);
 
   assert.deepEqual(options[0].headers, {
     "X-GEMINI-APIKEY": "key",
@@ -639,9 +650,9 @@ test("default HmacAuth uses epoch-second nonces for WebSocket upgrades", async (
     apiSecret: "secret",
     now: () => 1_700_000_000_123,
   });
-  const { session, sockets, options } = harness({ auth });
+  const { session, sockets, options, waitForSocket } = harness({ auth });
 
-  await open(session, sockets);
+  await open(session, waitForSocket);
 
   assert.equal(options[0].headers?.["X-GEMINI-NONCE"], "1700000000");
   assert.equal(options[0].headers?.["X-GEMINI-PAYLOAD"], "MTcwMDAwMDAwMA==");
@@ -672,9 +683,9 @@ test("OAuth auth creates only Authorization upgrade headers", async () => {
     nextNonce: () => undefined,
     credentialHeaders: async () => ({ Authorization: "Bearer token" }),
   };
-  const { session, sockets, options } = harness({ auth });
+  const { session, sockets, options, waitForSocket } = harness({ auth });
 
-  await open(session, sockets);
+  await open(session, waitForSocket);
 
   assert.deepEqual(options[0].headers, { Authorization: "Bearer token" });
   session.close();
