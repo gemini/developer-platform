@@ -72,6 +72,11 @@ test("generated WebSocket types preserve wire keys and widened int64 fields", ()
   assert.match(depthUpdate, /^\s*u: number \| bigint;/m);
 });
 
+test("RFQ legs expose the underlying contract symbol", () => {
+  const source = readFileSync(sdkGeneratedPath, "utf8");
+  assert.match(interfaceBlock(source, "RfqLeg"), /^\s*s\?: string;/m);
+});
+
 test("generated control-plane request method literals stay narrowed", () => {
   const source = readFileSync(sdkGeneratedPath, "utf8");
 

@@ -1141,7 +1141,7 @@ test("public status and RFQ validators deliver valid frames", async () => {
       E: 3,
       r: "rfq-1",
       s: "PRED-EVENT",
-      l: [{ c: "contract-yes", o: "YES" }],
+      l: [{ c: "contract-yes", s: "CONTRACT-YES", o: "YES" }],
       n: "10",
       f: "10",
       S: "OPEN",
@@ -1157,6 +1157,11 @@ test("public status and RFQ validators deliver valid frames", async () => {
   assert.equal(rfqs.length, 1);
   assert.ok(isBoundaryObject(rfqs[0]) && isBoundaryString(rfqs[0].S));
   assert.equal(rfqs[0].S, "OPEN");
+  assert.equal(rfqs[0].s, "PRED-EVENT");
+  assert.ok(Array.isArray(rfqs[0].l) && isBoundaryObject(rfqs[0].l[0]));
+  assert.equal(rfqs[0].l[0].c, "contract-yes");
+  assert.equal(rfqs[0].l[0].s, "CONTRACT-YES");
+  assert.equal(rfqs[0].c, 6);
   client.close();
 });
 
@@ -1190,7 +1195,7 @@ test("public financial stream validators reject malformed decimal fields", async
       E: 3,
       r: "rfq-1",
       s: "PRED-EVENT",
-      l: [{ c: "contract-yes", o: "YES" }],
+      l: [{ c: "contract-yes", s: "CONTRACT-YES", o: "YES" }],
       n: "10",
       q: "1",
       f: "1",
@@ -1222,12 +1227,21 @@ test("public streams reject malformed typed frames at the transport boundary", a
   sockets[0].fire("message", { data: '{"e":"depthUpdate","E":1,"s":"solusd","U":1,"u":1,"b":[["100","1"]],"a":[["101","1e-8"]]}' });
   sockets[0].fire("message", { data: '{"e":"contractStatus"}' });
   sockets[0].fire("message", { data: '{"e":"requestForQuote","l":[]}' });
+  sockets[0].fire("message", {
+    data: JSON.stringify({
+      e: "requestForQuote",
+      E: 1,
+      r: "rfq-1",
+      l: [{ c: "contract-yes", s: 7, o: "YES" }],
+      S: "OPEN",
+    }),
+  });
 
   assert.equal(trades.malformedFrameCount, 2);
   assert.equal(ticker.malformedFrameCount, 1);
   assert.equal(depth.malformedFrameCount, 1);
   assert.equal(contractStatus.malformedFrameCount, 1);
-  assert.equal(rfqs.malformedFrameCount, 1);
+  assert.equal(rfqs.malformedFrameCount, 2);
   client.close();
 });
 
