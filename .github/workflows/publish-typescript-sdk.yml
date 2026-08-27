@@ -135,10 +135,6 @@ jobs:
             if (!ruleTypes.has(requiredRule)) fail(`tag ruleset is missing the ${requiredRule} rule`);
           }
 
-          // bypass_actors is intentionally not checked here. GitHub can omit
-          // it from read-only responses, and this job has no elevated token.
-          // The native tag ruleset remains authoritative; its approved bypass
-          // actors must be configured and reviewed in GitHub administration.
           const environment = api("repos/gemini/developer-platform/environments/npm");
           const requiredReviewers = environment.protection_rules?.filter(
             ({ type }) => type === "required_reviewers",
