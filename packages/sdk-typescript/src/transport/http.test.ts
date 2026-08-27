@@ -212,7 +212,6 @@ test("private request can send a query while signing the bare request path", asy
     method: "POST",
     path: "/v1/fundingPayment",
     query: { since: 1700000000000n, to: 1700003600000n },
-    queryInRequest: false,
   });
 
   assert.equal(

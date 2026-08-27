@@ -124,12 +124,10 @@ paths:
     operationsConstName: "OPERATIONS",
     operationIdTypeName: "OperationId",
     operationTypesName: "OperationTypes",
-    operationQueryInRequest: { listItems: false },
   });
 
   const operations = readFileSync(join(directory, "operations.ts"), "utf8");
   assert.match(operations, /"listItems": \{"responseMode":"json"[\s\S]*"successStatuses":\[200,201\]/);
-  assert.match(operations, /"listItems": \{"responseMode":"json"[\s\S]*"queryInRequest":false/);
   assert.match(operations, /response: JsonResponse<OpenApiOperations\["listItems"\], 200 \| 201>;/);
 });
 

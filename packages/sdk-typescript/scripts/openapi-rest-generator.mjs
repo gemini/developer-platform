@@ -422,7 +422,6 @@ export function discoverOperations(document, options = {}) {
           responseContentTypes: response.contentTypes,
           responseInt64Paths: responseMode === "json" ? int64Paths(response.schema, resolveRef) : [],
           requestInt64Paths: requestInt64Paths(pathItem, operation, resolveRef),
-          queryInRequest: options.operationQueryInRequest?.[operationId],
           // GET is the generated SDK's explicit safe-read policy; every mutation is false.
           retryable: method === "get",
         };

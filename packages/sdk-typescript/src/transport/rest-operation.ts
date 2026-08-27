@@ -37,7 +37,6 @@ type RestOperation = {
   responseMode: string;
   responseContentTypes: readonly string[];
   responseInt64Paths: readonly Int64Path[];
-  queryInRequest?: boolean;
   requestInt64Paths?: {
     body: readonly RequestInt64Path[];
     path: readonly RequestInt64Path[];

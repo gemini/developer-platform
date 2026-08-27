@@ -129,7 +129,6 @@ type GeneratedOperationMetadata = {
   successStatuses: readonly number[];
   responseContentTypes: readonly string[];
   responseInt64Paths: readonly unknown[];
-  queryInRequest?: boolean;
   requestInt64Paths: {
     body: readonly unknown[];
     path: readonly unknown[];
@@ -464,10 +463,6 @@ test("Margin wrappers shape signed requests without using the network", async ()
 
 test("Perpetuals wrappers shape public, authenticated JSON, and file requests", async () => {
   const { sdk, requests, fileBytes } = testClient();
-
-  assert.equal(PERPETUALS_OPERATIONS.listFundingPayments.queryInRequest, false);
-  assert.equal(PERPETUALS_OPERATIONS.getFundingPaymentReportJson.queryInRequest, true);
-  assert.equal(PERPETUALS_OPERATIONS.getFundingPaymentReportFile.queryInRequest, true);
 
   await sdk.perpetuals.getRiskStats({ symbol: "BTCGUSDPERP" });
   await sdk.perpetuals.getAccountMargin({
