@@ -46,6 +46,8 @@ Select the entry point for the environment that runs the code and stores the cre
 | Backend, bot, or trusted service | `@gemini-markets/sdk/server` | HMAC API keys and OAuth. Confidential OAuth clients are supported. | Public and authenticated streams and request methods. |
 | Browser or edge application | `@gemini-markets/sdk/browser` | Public-client OAuth PKCE for REST. | Public market-data streams only. |
 
+The runtime entry point is intentionally explicit. Do not import from the bare `@gemini-markets/sdk` package; it is not exported. Always use `@gemini-markets/sdk/server` for trusted backend code or `@gemini-markets/sdk/browser` for browser and edge code. This prevents a runtime-ambiguous import from pulling server credential handling into a browser bundle.
+
 Native browser WebSockets cannot send custom `Authorization` or HMAC headers during the upgrade. `BrowserOAuthAuth` can authenticate REST requests only. It cannot authenticate private WebSocket streams or WebSocket request methods. These operations fail before the SDK opens a socket. Use the server entry point or a server-side relay for private WebSocket access. The SDK does not provide an application cookie flow.
 
 Always select `env: "sandbox"` or `env: "production"` explicitly. The SDK does not choose an environment for you, because omitting this choice for an order, transfer, or account operation would be unsafe. Keep HMAC secrets and OAuth confidential-client secrets on a server. Browser OAuth token stores must use application-controlled secure storage; do not put refresh tokens in `localStorage`.
@@ -234,7 +236,7 @@ await gemini.transfers.transferBetweenAccounts({
 ### Exact Decimal Math (`decimal`)
 Use the `decimal` functions for exact decimal calculations. The functions do not require a third-party package:
 ```ts
-import { decimal } from "@gemini-markets/sdk";
+import { decimal } from "@gemini-markets/sdk/server";
 
 const cost = decimal.multiply("1.25", "64500.25");    // "80625.3125"
 const spread = decimal.subtract("100.50", "100.25");  // "0.25"

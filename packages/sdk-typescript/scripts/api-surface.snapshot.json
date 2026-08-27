@@ -1,6 +1,5 @@
 {
   "exports": [
-    ".",
     "./browser",
     "./opentelemetry",
     "./server"
