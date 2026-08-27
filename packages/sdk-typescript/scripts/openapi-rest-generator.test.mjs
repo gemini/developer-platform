@@ -11,9 +11,72 @@ import { generateOpenApiRestTypes, renderRestClient } from "./openapi-rest-gener
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const sdkDir = resolve(scriptDir, "..");
-const restSpecPath = "https://developer.gemini.com/specs/openapi/rest.yaml";
-const predictionMarketsSpecPath = "https://developer.gemini.com/specs/openapi/prediction-markets.yaml";
 const execFile = promisify(execFileCallback);
+
+const REST_GENERATOR_FIXTURE = `openapi: 3.0.3
+info: { title: REST generator fixture, version: 1 }
+paths:
+  /v1/symbols:
+    get:
+      operationId: listSymbols
+      tags: [Market Data]
+      responses:
+        "200": { description: ok, content: { application/json: { schema: { type: array, items: { type: string } } } } }
+  /v1/book/{symbol}:
+    get:
+      operationId: getCurrentOrderBook
+      tags: [Market Data]
+      parameters:
+        - { name: symbol, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: ok, content: { application/json: { schema: { type: object } } } }
+  /v1/ticker/{symbol}:
+    get:
+      operationId: getTicker
+      tags: [Market Data]
+      parameters:
+        - { name: symbol, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: ok, content: { application/json: { schema: { type: object } } } }
+  /v1/ticker-v2/{symbol}:
+    get:
+      operationId: getTickerV2
+      tags: [Market Data]
+      parameters:
+        - { name: symbol, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: ok, content: { application/json: { schema: { type: object } } } }
+  /v1/funding/report:
+    get:
+      operationId: getFundingAmountReportFile
+      tags: [Market Data]
+      responses:
+        "200":
+          description: ok
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet: { schema: { type: string, format: binary } }
+            text/csv: { schema: { type: string, format: binary } }
+`;
+
+const PREDICTION_MARKETS_GENERATOR_FIXTURE = `openapi: 3.0.3
+info: { title: Prediction Markets generator fixture, version: 1 }
+paths:
+  /v1/prediction-markets/events:
+    get:
+      operationId: listEvents
+      tags: [Markets]
+      parameters:
+        - { name: status, in: query, required: false, schema: { type: array, items: { type: string } } }
+        - { name: X-Request-Id, in: header, required: false, schema: { type: string } }
+      responses:
+        "200": { description: ok, content: { application/json: { schema: { type: object } } } }
+`;
+
+function writeFixture(directory, filename, source) {
+  const specPath = join(directory, filename);
+  writeFileSync(specPath, source);
+  return specPath;
+}
 
 function operationIds(source) {
   const registry = source.match(/export const \w+ = \{\n(?<body>[\s\S]*?)\n\} as const;/)?.groups?.body;
@@ -24,9 +87,10 @@ function operationIds(source) {
 test("generator can emit Market Data operations by tag including file downloads", async (t) => {
   const directory = mkdtempSync(join(tmpdir(), "market-data-generator-"));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const specPath = writeFixture(directory, "rest.yaml", REST_GENERATOR_FIXTURE);
 
   await generateOpenApiRestTypes({
-    specPath: restSpecPath,
+    specPath,
     outputDir: directory,
     banner: "// Generated from apis/rest.yaml. Do not edit.\n\n",
     includeTags: ["Market Data"],
@@ -41,9 +105,9 @@ test("generator can emit Market Data operations by tag including file downloads"
   const ids = operationIds(operations);
 
   assert.match(models, /Generated from apis\/rest\.yaml/);
-  assert.equal(ids.length, 16);
+  assert.equal(ids.length, 5);
   assert(ids.includes("getTicker"));
-  assert(ids.includes("listDerivativeCandles"));
+  assert(ids.includes("listSymbols"));
   assert(ids.includes("getFundingAmountReportFile"));
   assert(!ids.includes("createNewOrder"));
   assert.match(operations, /export const MARKET_DATA_OPERATIONS/);
@@ -87,10 +151,11 @@ paths:
 test("generator fails loudly when a requested tag matches no operations", async (t) => {
   const directory = mkdtempSync(join(tmpdir(), "market-data-generator-missing-tag-"));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const specPath = writeFixture(directory, "rest.yaml", REST_GENERATOR_FIXTURE);
 
   await assert.rejects(
     generateOpenApiRestTypes({
-      specPath: restSpecPath,
+      specPath,
       outputDir: directory,
       banner: "// Generated from apis/rest.yaml. Do not edit.\n\n",
       includeTags: ["Market Datas"],
@@ -474,8 +539,9 @@ paths:
 test("Prediction Markets REST wrappers delegate through executeRestOperation", async (t) => {
   const directory = mkdtempSync(join(tmpdir(), "prediction-markets-rest-generator-"));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const specPath = writeFixture(directory, "prediction-markets.yaml", PREDICTION_MARKETS_GENERATOR_FIXTURE);
 
-  await execFile(process.execPath, [join(scriptDir, "generate-prediction-markets.mjs"), predictionMarketsSpecPath, directory]);
+  await execFile(process.execPath, [join(scriptDir, "generate-prediction-markets.mjs"), specPath, directory]);
 
   const rest = readFileSync(join(directory, "rest.ts"), "utf8");
   assert.match(rest, /import \{ executeRestOperation \} from "\.\.\/transport\/rest-operation\.js";/);
@@ -486,15 +552,8 @@ test("Prediction Markets REST wrappers delegate through executeRestOperation", a
 
 test("Prediction Markets REST wrappers forward typed caller-owned headers", async (t) => {
   const directory = mkdtempSync(join(tmpdir(), "prediction-markets-rest-headers-"));
-  const specPath = join(directory, "prediction-markets.yaml");
   t.after(() => rmSync(directory, { recursive: true, force: true }));
-  writeFileSync(
-    specPath,
-    (await (await fetch(predictionMarketsSpecPath)).text()).replace(
-      "      parameters:\n        - name: status",
-      "      parameters:\n        - name: X-Request-Id\n          in: header\n          required: false\n          schema:\n            type: string\n        - name: status",
-    ),
-  );
+  const specPath = writeFixture(directory, "prediction-markets.yaml", PREDICTION_MARKETS_GENERATOR_FIXTURE);
 
   await execFile(process.execPath, [join(scriptDir, "generate-prediction-markets.mjs"), specPath, directory]);
 
@@ -506,9 +565,10 @@ test("Prediction Markets REST wrappers forward typed caller-owned headers", asyn
 test("generic REST client renderer emits callable module methods", async (t) => {
   const directory = mkdtempSync(join(tmpdir(), "market-data-rest-client-"));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const specPath = writeFixture(directory, "rest.yaml", REST_GENERATOR_FIXTURE);
 
   const { operations } = await generateOpenApiRestTypes({
-    specPath: restSpecPath,
+    specPath,
     outputDir: directory,
     banner: "// generated\n",
     includeOperationIds: ["getCurrentOrderBook", "listSymbols"],
@@ -552,9 +612,10 @@ test("generic REST client renderer emits callable module methods", async (t) => 
 test("generic REST client renderer rejects duplicate public method names", async (t) => {
   const directory = mkdtempSync(join(tmpdir(), "market-data-rest-collision-"));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const specPath = writeFixture(directory, "rest.yaml", REST_GENERATOR_FIXTURE);
 
   const { operations } = await generateOpenApiRestTypes({
-    specPath: restSpecPath,
+    specPath,
     outputDir: directory,
     banner: "// generated\n",
     includeOperationIds: ["getTicker", "getTickerV2"],
