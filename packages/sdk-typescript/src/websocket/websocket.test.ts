@@ -1285,7 +1285,7 @@ test("sibling public and private rfq streams do not count each other's valid fra
       E: 1,
       r: "rfq-1",
       x: 123,
-      l: [{ c: "CONTRACT-1", s: "CONTRACT-1-SYMBOL", o: "YES" }],
+      l: [{ c: "CONTRACT-1", o: "YES" }],
       S: "OPEN",
     }),
   });

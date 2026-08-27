@@ -385,7 +385,7 @@ export interface RfqPublicEvent {
 export interface RfqLeg {
   c: string;
   o: AnonymousSchema_148;
-  s: string;
+  s?: string;
 }
 
 export enum AnonymousSchema_148 {
