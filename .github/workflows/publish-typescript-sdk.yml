@@ -1,0 +1,197 @@
+name: Publish TypeScript SDK
+
+on:
+  push:
+    tags:
+      - "typescript-sdk-v*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-typescript-sdk
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: packages/sdk-typescript
+
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22.14.0"
+          cache: npm
+          cache-dependency-path: packages/sdk-typescript/package-lock.json
+
+      - name: Verify release tag
+        run: |
+          tag_version="${GITHUB_REF_NAME#typescript-sdk-v}"
+          package_version="$(node -p "JSON.parse(require('fs').readFileSync('package.json', 'utf8')).version")"
+          test "$tag_version" = "$package_version"
+
+      - name: Verify release commit is on main
+        run: git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+
+      - run: npm ci --ignore-scripts
+      - name: Install required native tools
+        run: npm rebuild esbuild workerd --foreground-scripts
+      - run: npm audit --audit-level=high
+      - run: npm audit --omit=dev --audit-level=high
+      - run: npm test
+      - run: npm run typecheck
+      - run: npm run verify:package
+      - run: npm run verify:runtimes
+
+      - name: Pack verified SDK
+        run: |
+          mkdir -p "$RUNNER_TEMP/sdk-package"
+          npm pack --pack-destination "$RUNNER_TEMP/sdk-package"
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: typescript-sdk-package
+          path: ${{ runner.temp }}/sdk-package/*.tgz
+          if-no-files-found: error
+          retention-days: 7
+
+  preflight:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+
+    steps:
+      # Do not check out the tagged repository here. This job only uses the
+      # trusted workflow and GitHub's read APIs to detect release-control drift.
+      - name: Verify GitHub release controls
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          node <<'NODE'
+          const { execFileSync } = require("node:child_process");
+
+          const repository = process.env.GITHUB_REPOSITORY;
+          if (repository !== "gemini/developer-platform") {
+            throw new Error(`unexpected repository: ${repository}`);
+          }
+
+          const api = (path) => JSON.parse(execFileSync(
+            "gh",
+            ["api", path, "-H", "X-GitHub-Api-Version: 2022-11-28"],
+            { encoding: "utf8" },
+          ));
+          const fail = (message) => {
+            throw new Error(`release preflight failed: ${message}`);
+          };
+
+          const rulesetSummaries = api(
+            "repos/gemini/developer-platform/rulesets?includes_parents=true&targets=tag&per_page=100",
+          );
+          if (!Array.isArray(rulesetSummaries)) fail("ruleset response was not an array");
+
+          const activeTagRulesets = rulesetSummaries.filter((ruleset) => (
+            ruleset.target === "tag" && ruleset.enforcement === "active"
+          ));
+          const rulesetConfigs = activeTagRulesets.map(({ id }) => api(
+            `repos/gemini/developer-platform/rulesets/${id}?includes_parents=true`,
+          ));
+          const matchingRulesets = rulesetConfigs.filter((ruleset) => (
+            ruleset.target === "tag" &&
+            ruleset.enforcement === "active" &&
+            ruleset.conditions?.ref_name?.include?.includes("refs/tags/typescript-sdk-v*")
+          ));
+          if (matchingRulesets.length !== 1) {
+            fail(`expected one active typescript-sdk-v* tag ruleset, found ${matchingRulesets.length}`);
+          }
+
+          const releaseRuleset = matchingRulesets[0];
+          const refName = releaseRuleset.conditions?.ref_name;
+          const sameValues = (actual, expected) => (
+            Array.isArray(actual) &&
+            actual.length === expected.length &&
+            [...actual].sort().every((value, index) => value === expected[index])
+          );
+          if (
+            !sameValues(refName?.include, ["refs/tags/typescript-sdk-v*"]) ||
+            !sameValues(refName?.exclude, [])
+          ) {
+            fail("tag ruleset ref condition is not exactly the SDK release tag condition");
+          }
+
+          const ruleTypes = new Set(releaseRuleset.rules?.map(({ type }) => type));
+          for (const requiredRule of ["creation", "update", "deletion"]) {
+            if (!ruleTypes.has(requiredRule)) fail(`tag ruleset is missing the ${requiredRule} rule`);
+          }
+
+          const environment = api("repos/gemini/developer-platform/environments/npm");
+          const requiredReviewers = environment.protection_rules?.filter(
+            ({ type }) => type === "required_reviewers",
+          ) ?? [];
+          if (
+            requiredReviewers.length !== 1 ||
+            !Array.isArray(requiredReviewers[0].reviewers) ||
+            requiredReviewers[0].reviewers.length === 0
+          ) {
+            fail("npm environment has no required reviewers");
+          }
+          if (requiredReviewers[0].prevent_self_review !== true) {
+            fail("npm environment allows self-approval");
+          }
+
+          console.log("GitHub release-control preflight passed");
+          NODE
+
+  publish:
+    needs: [build, preflight]
+    runs-on: ubuntu-24.04
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Verify protected release environment
+        env:
+          tag_ruleset_ready: ${{ vars.SDK_RELEASE_TAG_RULESET_READY }}
+        run: |
+          test "$tag_ruleset_ready" = "enabled"
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: typescript-sdk-package
+          path: ${{ runner.temp }}/sdk-package
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22.14.0"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Configure npm for Trusted Publishing
+        run: npm install --global --ignore-scripts npm@11.5.1
+
+      - name: Publish verified artifact
+        run: |
+          package_file="$(find "$RUNNER_TEMP/sdk-package" -type f -name '*.tgz' -print -quit)"
+          test -n "$package_file"
+          expected_version="${GITHUB_REF_NAME#typescript-sdk-v}"
+          node - "$package_file" "$expected_version" <<'NODE'
+          const { execFileSync } = require("node:child_process");
+          const [packageFile, expectedVersion] = process.argv.slice(2);
+          const metadata = JSON.parse(execFileSync("tar", ["-xOf", packageFile, "package/package.json"], { encoding: "utf8" }));
+          if (metadata.name !== "@gemini-markets/sdk" || metadata.version !== expectedVersion) {
+            throw new Error(`unexpected package identity: ${metadata.name}@${metadata.version}`);
+          }
+          NODE
+          npm publish "$package_file" --ignore-scripts --provenance
