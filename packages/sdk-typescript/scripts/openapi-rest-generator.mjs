@@ -417,6 +417,7 @@ export function discoverOperations(document, options = {}) {
           headers: operationHeaders(pathItem, operation, dereference),
           requestBody: Boolean(operation.requestBody),
           requestBodyRequired: bodyRequired,
+          ...(options.operationSignQuery?.[operationId] === true ? { signQuery: true } : {}),
           successStatuses: response.statuses,
           responseContentTypes: response.contentTypes,
           responseInt64Paths: responseMode === "json" ? int64Paths(response.schema, resolveRef) : [],
@@ -627,9 +628,9 @@ export async function generateOpenApiRestModule(options) {
       operationId,
       responseMode,
     ])),
-    operationQueryInRequest: Object.fromEntries(ownedOperations.map(({ operationId, queryInRequest }) => [
+    operationSignQuery: Object.fromEntries(ownedOperations.map(({ operationId, signQuery }) => [
       operationId,
-      queryInRequest,
+      signQuery === true,
     ])),
     fileResponseImportPath: options.fileResponseImportPath,
     modelsImportPath: options.modelsImportPath,

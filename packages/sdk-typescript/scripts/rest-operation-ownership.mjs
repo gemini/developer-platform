@@ -234,9 +234,8 @@ export const REST_OPERATION_OWNERSHIP = {
   operationOverrides: {
     "predictionMarkets:acceptPredictionMarketsTerms": { methodName: "acceptTerms" },
     "rest:getFundingAmountReportFile": { responseMode: "file" },
-    "rest:getFundingPaymentReportFile": { responseMode: "file", queryInRequest: true },
-    "rest:getFundingPaymentReportJson": { queryInRequest: true },
-    "rest:listFundingPayments": { queryInRequest: false },
+    "rest:getFundingPaymentReportFile": { responseMode: "file", signQuery: true },
+    "rest:getFundingPaymentReportJson": { signQuery: true },
   },
 };
 
@@ -272,13 +271,6 @@ function responseModeFor(key, operation, override = {}) {
   return undefined;
 }
 
-function queryInRequestFor(key, override = {}) {
-  if (override.queryInRequest !== undefined && typeof override.queryInRequest !== "boolean") {
-    throw new Error(`${key} queryInRequest must be a boolean`);
-  }
-  return override.queryInRequest;
-}
-
 function moduleOwnsOperation(module, operation) {
   if (module.specs && !module.specs.includes(operation.spec)) return false;
   const matchesTag = module.tags?.some((tag) => operation.tags.includes(tag)) ?? false;
@@ -307,7 +299,6 @@ export function validateRestOperationOwnership(operations, manifest = REST_OPERA
     if (!operationsByKey.has(key)) throw new Error(`REST operation not found: ${key}`);
     const override = manifest.operationOverrides[key];
     responseModeFor(key, operationsByKey.get(key), override);
-    queryInRequestFor(key, override);
   }
 
   for (const operation of operations) {
@@ -317,11 +308,16 @@ export function validateRestOperationOwnership(operations, manifest = REST_OPERA
     if (modules.length > 1) throw new Error(`Duplicate REST operation ownership: ${key}`);
     const override = manifest.operationOverrides?.[key] ?? {};
     const responseMode = responseModeFor(key, operation, override);
-    const queryInRequest = queryInRequestFor(key, override);
     if (!responseMode) {
       throw new Error(`${key} must have exactly one 2xx application/json response or an explicit file override`);
     }
-    owned.push({ ...operation, module: modules[0].id, methodName: override.methodName ?? operation.operationId, responseMode, queryInRequest });
+    owned.push({
+      ...operation,
+      module: modules[0].id,
+      methodName: override.methodName ?? operation.operationId,
+      responseMode,
+      signQuery: override.signQuery === true,
+    });
   }
 
   const methodNames = new Set();
@@ -342,9 +338,14 @@ export function ownedOperationsForModule(operations, { module, spec }, manifest 
     const key = operationKey(operation);
     const override = manifest.operationOverrides?.[key] ?? {};
     const responseMode = responseModeFor(key, operation, override);
-    const queryInRequest = queryInRequestFor(key, override);
     if (responseMode) {
-      owned.push({ ...operation, module, methodName: override.methodName ?? operation.operationId, responseMode, queryInRequest });
+      owned.push({
+        ...operation,
+        module,
+        methodName: override.methodName ?? operation.operationId,
+        responseMode,
+        signQuery: override.signQuery === true,
+      });
     }
   }
   return owned;

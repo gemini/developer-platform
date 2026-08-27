@@ -135,6 +135,7 @@ type GeneratedOperationMetadata = {
     path: readonly unknown[];
     query: readonly unknown[];
   };
+  signQuery?: boolean;
   retryable: boolean;
 };
 
@@ -174,10 +175,10 @@ function assertModuleMetadata(
   assert.equal(entries.length, expectedCount);
   assert.equal(new Set(entries.map(([operationId]) => operationId)).size, expectedCount);
   for (const [, operation] of entries) {
-    const expectedKeys = operation.queryInRequest === undefined
-      ? metadataKeys
-      : [...metadataKeys, "queryInRequest"].sort();
-    assert.deepEqual(Object.keys(operation).sort(), expectedKeys);
+    assert.deepEqual(Object.keys(operation).sort(), [
+      ...metadataKeys,
+      ...(operation.signQuery === true ? ["signQuery"] : []),
+    ].sort());
     assert.equal(operation.successStatuses.length > 0, true);
     assert.equal(operation.responseContentTypes.length > 0, true);
   }
@@ -272,6 +273,9 @@ test("generated REST operation metadata covers the new module surfaces", () => {
   assert.equal(PERPETUALS_OPERATIONS.getFundingPaymentReportFile.method, "get");
   assert.equal(PERPETUALS_OPERATIONS.getFundingPaymentReportFile.requestBodyRequired, false);
   assert.equal(PERPETUALS_OPERATIONS.getFundingPaymentReportFile.responseMode, "file");
+  assert.equal(PERPETUALS_OPERATIONS.getFundingPaymentReportFile.signQuery, true);
+  assert.equal(PERPETUALS_OPERATIONS.getFundingPaymentReportJson.signQuery, true);
+  assert.equal(Object.hasOwn(PERPETUALS_OPERATIONS.listFundingPayments, "signQuery"), false);
   assert.equal(STAKING_OPERATIONS.listStakingRates.access, "public");
   assert.equal(TRANSFERS_OPERATIONS.withdrawCryptoFunds.path, "/v2/withdraw/{network}/{ticker}");
   assert.equal(CLEARING_OPERATIONS.createNewClearingOrder.path, "/v1/clearing/new");

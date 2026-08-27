@@ -180,7 +180,7 @@ test("declared query serialization preserves array and object wire formats", asy
   );
 });
 
-test("private request signs the same canonical query path that it sends", async () => {
+test("private request signs a declared query path when the endpoint requires it", async () => {
   const { fetchImpl, last } = recordingFetch({ status: 200, body: "{}" });
   const client = new HttpTransport({ env: "sandbox", auth: stubAuth, fetchImpl });
 
@@ -193,6 +193,7 @@ test("private request signs the same canonical query path that it sends", async 
       { name: "toDate", in: "query", required: false, style: "form", explode: true },
       { name: "numRows", in: "query", required: false, style: "form", explode: true },
     ],
+    signQuery: true,
   });
 
   const requestPath = "/v1/report?fromDate=2026-01-01&toDate=2026-01-31&numRows=10";
@@ -1250,7 +1251,7 @@ test("paginate sends public offsets as query parameters without requiring auth",
   ]);
 });
 
-test("paginate can send private offsets in the URL while signing the canonical query path", async () => {
+test("paginate can send private offsets in the URL while signing the base path", async () => {
   const urls: string[] = [];
   const payloads: Array<BoundaryRecord> = [];
   const pages = [
@@ -1287,11 +1288,11 @@ test("paginate can send private offsets in the URL while signing the canonical q
   ]);
   assert.deepEqual(payloads, [
     {
-      request: "/v1/prediction-markets/maker-rebate/payouts?limit=100&offset=0",
+      request: "/v1/prediction-markets/maker-rebate/payouts",
       nonce: 1700000000000,
     },
     {
-      request: "/v1/prediction-markets/maker-rebate/payouts?limit=100&offset=100",
+      request: "/v1/prediction-markets/maker-rebate/payouts",
       nonce: 1700000000000,
     },
   ]);

@@ -593,10 +593,10 @@ void test("T5f wrappers authenticate exact reward methods, paths, and query stri
     parseBoundaryRecord(fromBase64(init.headers["X-GEMINI-PAYLOAD"]!))
   );
   assert.deepEqual(payloads, [
-    { request: "/v1/prediction-markets/maker-rebate/payouts?limit=100&offset=200", nonce: 1000 },
+    { request: "/v1/prediction-markets/maker-rebate/payouts", nonce: 1000 },
     { request: "/v1/prediction-markets/maker-rebate/summary/total", nonce: 1001 },
-    { request: "/v1/prediction-markets/liquidity-rewards/summary/daily?dateFrom=2026-05-01&dateTo=2026-05-07", nonce: 1002 },
-    { request: "/v1/prediction-markets/liquidity-rewards/summary/total?dateFrom=2026-04-01&dateTo=2026-05-01", nonce: 1003 },
+    { request: "/v1/prediction-markets/liquidity-rewards/summary/daily", nonce: 1002 },
+    { request: "/v1/prediction-markets/liquidity-rewards/summary/total", nonce: 1003 },
   ]);
   for (const { init } of requests) {
     const payload = init.headers["X-GEMINI-PAYLOAD"]!;

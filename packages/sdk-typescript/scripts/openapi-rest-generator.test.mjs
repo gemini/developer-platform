@@ -205,10 +205,12 @@ paths:
     operationsConstName: "OPERATIONS",
     operationIdTypeName: "OperationId",
     operationTypesName: "OperationTypes",
+    operationSignQuery: { updateItem: true },
   });
 
   const operations = readFileSync(join(directory, "operations.ts"), "utf8");
   assert.match(operations, /requestInt64Paths/);
+  assert.match(operations, /"signQuery":true/);
   assert.match(operations, /"body":\[\{"path":\["legacyId"\],"allowString":true\},\{"path":\["orderId"\],"unsigned":true\}\]/);
   assert.match(operations, /"path":\[\{"path":\["itemId"\]\}\]/);
   assert.match(operations, /"query":\[\{"path":\["since"\]\}\]/);
