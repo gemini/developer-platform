@@ -66,6 +66,14 @@ import { HmacAuth, createClient as createServerClient } from "@gemini-markets/sd
 import { trace } from "@opentelemetry/api";
 import { createOpenTelemetryHooks } from "@gemini-markets/sdk/opentelemetry";
 
+let bareImportRejected = false;
+try {
+  await import("@gemini-markets/sdk");
+} catch (error) {
+  bareImportRejected = error?.code === "ERR_PACKAGE_PATH_NOT_EXPORTED";
+}
+if (!bareImportRejected) throw new Error("bare package import must require an explicit runtime entry point");
+
 const client = await createClient({ env: "sandbox" });
 if (!client.marketData || !client.trading || !client.margin || !client.perpetuals || !client.account || !client.staking || !client.transfers || !client.clearing || !client.instant || !client.predictions || !client.websocket) {
   throw new Error("missing client domain surfaces");

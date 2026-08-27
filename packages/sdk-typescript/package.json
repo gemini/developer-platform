@@ -3,7 +3,6 @@
   "version": "0.1.0",
   "description": "Gemini exchange TypeScript SDK — browser and server entry points with HMAC, OAuth (PKCE), REST, and WebSocket support.",
   "type": "module",
-  "types": "./dist/server/index.d.ts",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
@@ -33,10 +32,6 @@
   },
   "sideEffects": false,
   "exports": {
-    ".": {
-      "types": "./dist/server/index.d.ts",
-      "import": "./dist/server/index.js"
-    },
     "./browser": {
       "types": "./dist/browser/index.d.ts",
       "import": "./dist/browser/index.js"
