@@ -724,7 +724,7 @@
       {
         "kind": "InterfaceDeclaration",
         "name": "RfqLeg",
-        "declaration": "export interface RfqLeg { c: string; o: AnonymousSchema_148; s?: string; }"
+        "declaration": "export interface RfqLeg { c: string; o: AnonymousSchema_148; s: string; }"
       },
       {
         "kind": "EnumDeclaration",
@@ -1731,7 +1731,7 @@
       {
         "kind": "InterfaceDeclaration",
         "name": "RfqLeg",
-        "declaration": "export interface RfqLeg { c: string; o: AnonymousSchema_148; s?: string; }"
+        "declaration": "export interface RfqLeg { c: string; o: AnonymousSchema_148; s: string; }"
       },
       {
         "kind": "EnumDeclaration",

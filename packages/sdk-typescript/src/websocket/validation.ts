@@ -48,5 +48,5 @@ export function isOneOfOptional(value: BoundaryValue, allowed: readonly string[]
 export function isRfqLeg(value: BoundaryValue): boolean {
   const leg = record(value);
   return !!leg && isNonEmptyString(leg.c) &&
-    isOptionalNonEmptyString(leg.s) && isOneOf(leg.o, ["YES", "NO"]);
+    isNonEmptyString(leg.s) && isOneOf(leg.o, ["YES", "NO"]);
 }

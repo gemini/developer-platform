@@ -147,10 +147,9 @@ function refineKnownMethodLiterals(source) {
 }
 
 // Compatibility extension: live RFQ broadcasts include the underlying
-// contract symbol on each leg. Keep this additive field in the generated
-// public type while accepting older frames where it is omitted. Apply the
-// extension after Modelina generation so unrelated anonymous schema names do
-// not shift when the upstream schema changes.
+// contract symbol on each leg. Apply the extension after Modelina generation
+// so unrelated anonymous schema names do not shift when the upstream schema
+// changes.
 function refineRfqLegSymbol(source) {
   const marker = "export interface RfqLeg {\n";
   const start = source.indexOf(marker);
@@ -162,8 +161,8 @@ function refineRfqLegSymbol(source) {
     throw new Error("generate-ws-types: RfqLeg interface is unterminated.");
   }
   const block = source.slice(start, end);
-  if (/^\s*s\??:\s*string;/m.test(block)) return source;
-  return `${source.slice(0, end)}\n  s?: string;${source.slice(end)}`;
+  if (/^\s*s:\s*string;/m.test(block)) return source;
+  return `${source.slice(0, end)}\n  s: string;${source.slice(end)}`;
 }
 
 // Modelina's library output doesn't prefix declarations with `export`; add it
