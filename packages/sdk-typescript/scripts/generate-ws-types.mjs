@@ -145,13 +145,36 @@ function refineKnownMethodLiterals(source) {
       '$1"LIST_SUBSCRIPTIONS" | "list_subscriptions"$2',
     );
 }
+
+// Compatibility extension: live RFQ broadcasts include the underlying
+// contract symbol on each leg. Keep this additive field in the generated
+// public type while accepting older frames where it is omitted. Apply the
+// extension after Modelina generation so unrelated anonymous schema names do
+// not shift when the upstream schema changes.
+function refineRfqLegSymbol(source) {
+  const marker = "export interface RfqLeg {\n";
+  const start = source.indexOf(marker);
+  if (start === -1) {
+    throw new Error("generate-ws-types: RfqLeg interface is missing.");
+  }
+  const end = source.indexOf("\n}", start);
+  if (end === -1) {
+    throw new Error("generate-ws-types: RfqLeg interface is unterminated.");
+  }
+  const block = source.slice(start, end);
+  if (/^\s*s\??:\s*string;/m.test(block)) return source;
+  return `${source.slice(0, end)}\n  s?: string;${source.slice(end)}`;
+}
+
 // Modelina's library output doesn't prefix declarations with `export`; add it
 // so the barrel file exports every type.
-const body = refineKnownMethodLiterals(
-  models
-    .map((m) => m.result)
-    .join("\n\n")
-    .replace(/^(interface |enum |type )/gm, "export $1"),
+const body = refineRfqLegSymbol(
+  refineKnownMethodLiterals(
+    models
+      .map((m) => m.result)
+      .join("\n\n")
+      .replace(/^(interface |enum |type )/gm, "export $1"),
+  ),
 );
 
 if (/\bany\b/.test(body)) {
