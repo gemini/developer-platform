@@ -32,6 +32,11 @@ The Gemini TypeScript SDK provides access to Gemini trading platforms. It suppor
 npm install @gemini-markets/sdk
 ```
 
+For browser or edge applications, use the browser entry point:
+```ts
+import { createClient } from "@gemini-markets/sdk/browser";
+```
+
 Install `ws` when a Node.js application needs authenticated WebSockets with custom upgrade headers:
 ```bash
 npm install ws
