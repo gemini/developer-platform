@@ -28,14 +28,17 @@ The Gemini TypeScript SDK provides access to Gemini trading platforms. It suppor
 
 ## Installation
 
+Install the package from npm:
 ```bash
 npm install @gemini-markets/sdk
 ```
 
-For browser or edge applications, use the browser entry point:
+`@gemini-markets/sdk/browser` is an import entry point, not a separate npm package. For browser or edge applications, import it explicitly:
 ```ts
 import { createClient } from "@gemini-markets/sdk/browser";
 ```
+
+Do not import from the bare `@gemini-markets/sdk` package. It is intentionally not exported; choose `/browser` or `/server` based on the runtime.
 
 Install `ws` when a Node.js application needs authenticated WebSockets with custom upgrade headers:
 ```bash
@@ -51,7 +54,7 @@ Select the entry point for the environment that runs the code and stores the cre
 | Backend, bot, or trusted service | `@gemini-markets/sdk/server` | HMAC API keys and OAuth. Confidential OAuth clients are supported. | Public and authenticated streams and request methods. |
 | Browser or edge application | `@gemini-markets/sdk/browser` | Public-client OAuth PKCE for REST. | Public market-data streams only. |
 
-The runtime entry point is intentionally explicit. Do not import from the bare `@gemini-markets/sdk` package; it is not exported. Always use `@gemini-markets/sdk/server` for trusted backend code or `@gemini-markets/sdk/browser` for browser and edge code. This prevents a runtime-ambiguous import from pulling server credential handling into a browser bundle.
+The runtime entry point is intentionally explicit. Always use `@gemini-markets/sdk/server` for trusted backend code or `@gemini-markets/sdk/browser` for browser and edge code. This prevents a runtime-ambiguous import from pulling server credential handling into a browser bundle.
 
 Native browser WebSockets cannot send custom `Authorization` or HMAC headers during the upgrade. `BrowserOAuthAuth` can authenticate REST requests only. It cannot authenticate private WebSocket streams or WebSocket request methods. These operations fail before the SDK opens a socket. Use the server entry point or a server-side relay for private WebSocket access. The SDK does not provide an application cookie flow.
 
