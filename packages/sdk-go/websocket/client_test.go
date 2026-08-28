@@ -815,10 +815,22 @@ func TestClient_GenericPrivateMethodsRequireAuthentication(t *testing.T) {
 	client := websocket.NewPublicClient("wss://ws.gemini.com", websocket.WithDialer(dialer))
 	defer client.Close()
 
-	for _, method := range []string{"order.place", "order.cancel", "order.cancel_all", "rfq.submit_quote", "rfq.confirm_quote"} {
-		t.Run(method, func(t *testing.T) {
-			if _, err := client.Request(context.Background(), method, nil); !errors.Is(err, websocket.ErrAuthenticationRequired) {
-				t.Fatalf("Request(%q) error = %v, want ErrAuthenticationRequired", method, err)
+	tests := []struct {
+		method string
+		params any
+	}{
+		{method: "order.place"},
+		{method: "order.cancel"},
+		{method: "order.cancel_all"},
+		{method: "rfq.submit_quote"},
+		{method: "rfq.confirm_quote"},
+		{method: "SUBSCRIBE", params: []string{"orders@account"}},
+		{method: "UNSUBSCRIBE", params: []string{"balances@account@1s"}},
+	}
+	for _, test := range tests {
+		t.Run(test.method, func(t *testing.T) {
+			if _, err := client.Request(context.Background(), test.method, test.params); !errors.Is(err, websocket.ErrAuthenticationRequired) {
+				t.Fatalf("Request(%q) error = %v, want ErrAuthenticationRequired", test.method, err)
 			}
 		})
 	}

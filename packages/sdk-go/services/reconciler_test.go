@@ -42,7 +42,7 @@ func TestQuoteReconciler_StateDiff(t *testing.T) {
 	var mu sync.Mutex
 	var orderCounter int64 = 1000
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 
 		switch r.URL.Path {
@@ -160,7 +160,7 @@ func TestQuoteReconciler_PreservesNewerEventDuringCancellation(t *testing.T) {
 	releaseCancel := make(chan struct{})
 	var cancelOnce sync.Once
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/order/cancel" {
 			http.NotFound(w, r)
 			return
@@ -238,7 +238,7 @@ func TestQuoteReconciler_PreservesNewerEventDuringCancellation(t *testing.T) {
 }
 
 func TestQuoteReconciler_SyncPrefersOldestDuplicateOrder(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if r.URL.Path != "/v1/order/cancel" {
 			http.NotFound(w, r)
@@ -370,7 +370,7 @@ func TestQuoteReconciler_ApplyOrderEvent(t *testing.T) {
 
 func TestQuoteReconciler_UppercaseSides(t *testing.T) {
 	var placeCalls int32
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if r.URL.Path == "/v1/order/new" {
 			atomic.AddInt32(&placeCalls, 1)
@@ -408,7 +408,7 @@ func TestQuoteReconciler_UppercaseSides(t *testing.T) {
 
 func TestQuoteReconciler_PreservesWebSocketStateOnPlacement(t *testing.T) {
 	var reconciler *services.QuoteReconciler
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if r.URL.Path == "/v1/order/new" {
 			sym := "BTCUSD"
@@ -497,7 +497,7 @@ func TestQuoteReconciler_ConcurrentSyncSerialized(t *testing.T) {
 	var placeCount atomic.Int64
 	var orderCounter atomic.Int64
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if r.URL.Path == "/v1/order/new" {
 			placeCount.Add(1)
@@ -539,7 +539,7 @@ func TestQuoteReconciler_ConcurrentSyncSerialized(t *testing.T) {
 
 func TestQuoteReconciler_DoesNotPlaceAfterCancellationFailure(t *testing.T) {
 	var placeCalls atomic.Int32
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/v1/order/cancel":
 			w.WriteHeader(http.StatusBadRequest)
@@ -572,7 +572,7 @@ func TestQuoteReconciler_DoesNotPlaceAfterCancellationFailure(t *testing.T) {
 
 func TestQuoteReconciler_RejectsLiveCancellationResponse(t *testing.T) {
 	var placeCalls atomic.Int32
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/v1/order/cancel":
 			_ = json.NewEncoder(w).Encode(trading.CancelOrderResponse{
@@ -612,7 +612,7 @@ func TestQuoteReconciler_RejectsLiveCancellationResponse(t *testing.T) {
 }
 
 func TestQuoteReconciler_RejectsNonLiveMakerOrCancelResponse(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/order/new" {
 			http.NotFound(w, r)
 			return
@@ -639,7 +639,7 @@ func ptrBool(v bool) *bool { return &v }
 
 func TestQuoteReconciler_CancelAllClearsOnlyAfterSuccess(t *testing.T) {
 	var fail atomic.Bool
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/order/cancel" {
 			http.NotFound(w, r)
 			return
@@ -690,7 +690,7 @@ func TestQuoteReconciler_StartStreamingConfigurationAndHydrationErrors(t *testin
 		t.Fatal("expected StartStreaming to reject a missing WebSocket client")
 	}
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		_, _ = w.Write([]byte(`{"result":"error","reason":"ServiceUnavailable"}`))
 	}))
@@ -713,7 +713,7 @@ func TestQuoteReconciler_StartStreamingConfigurationAndHydrationErrors(t *testin
 func TestQuoteReconciler_MasterAccountIsPropagated(t *testing.T) {
 	var mu sync.Mutex
 	requests := make(map[string]map[string]any)
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var payload map[string]any
 		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)

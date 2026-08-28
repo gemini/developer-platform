@@ -15,7 +15,7 @@ import (
 )
 
 func TestPredictionsServiceLessUsedMethods(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
 		case "/v1/prediction-markets/events/EVENT-1/strike":
@@ -95,7 +95,7 @@ func TestPredictionsServiceLessUsedMethods(t *testing.T) {
 
 func TestPredictionsServiceOrderHistoryIterator(t *testing.T) {
 	var offsets []int
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var body predictions.GetOrderHistoryJSONBody
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			t.Errorf("decode order history body: %v", err)

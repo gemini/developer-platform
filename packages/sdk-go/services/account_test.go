@@ -16,7 +16,7 @@ import (
 func TestAccountService_Methods(t *testing.T) {
 	var capturedPath string
 	requestPayloads := make(map[string]map[string]any)
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		capturedPath = r.URL.Path
 		if r.Method != http.MethodPost {
 			t.Errorf("expected POST for %s, got %s", r.URL.Path, r.Method)

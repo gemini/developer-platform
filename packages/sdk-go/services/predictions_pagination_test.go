@@ -14,7 +14,7 @@ import (
 
 func TestIterateOrderHistoryRejectsTimeBoundedOffsetPagination(t *testing.T) {
 	var requests int
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requests++
 		_, _ = w.Write([]byte(`{"orders":[]}`))
 	}))

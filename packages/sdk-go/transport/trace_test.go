@@ -11,7 +11,7 @@ import (
 )
 
 func TestTraceHook_LatencyBreakdown(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(10 * time.Millisecond)
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"status":"ok"}`))
@@ -27,6 +27,7 @@ func TestTraceHook_LatencyBreakdown(t *testing.T) {
 	})
 
 	client := transport.NewClient(
+		transport.WithHTTPClient(ts.Client()),
 		transport.WithHooks(traceHook),
 	)
 

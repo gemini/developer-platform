@@ -207,6 +207,25 @@ func TestLoginRejectsInvalidCallbackStateAndThenAcceptsValidCallback(t *testing.
 	}
 }
 
+func TestListenLoopbackBindsOnlyLoopbackAddresses(t *testing.T) {
+	listeners, err := listenLoopback("localhost", fmt.Sprintf("%d", freeLoopbackPort(t)))
+	if err != nil {
+		t.Fatalf("listenLoopback() error = %v", err)
+	}
+	for _, listener := range listeners {
+		listener := listener
+		t.Cleanup(func() { _ = listener.Close() })
+		host, _, err := net.SplitHostPort(listener.Addr().String())
+		if err != nil {
+			t.Fatalf("split listener address %q: %v", listener.Addr(), err)
+		}
+		ip := net.ParseIP(host)
+		if ip == nil || !ip.IsLoopback() {
+			t.Fatalf("listener bound to non-loopback address %q", listener.Addr())
+		}
+	}
+}
+
 func TestLoginRequiresLoopbackCallbackAndBrowserOpener(t *testing.T) {
 	cfg := validConfig("https://exchange.example")
 	if _, err := cfg.Login(context.Background(), nil); !errors.Is(err, ErrBrowserOpenerRequired) {

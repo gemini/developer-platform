@@ -14,7 +14,7 @@ import (
 func TestMarketDataService_Methods(t *testing.T) {
 	var capturedPath string
 	var capturedQuery string
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		capturedPath = r.URL.Path
 		capturedQuery = r.URL.RawQuery
 		w.Header().Set("Content-Type", "application/json")

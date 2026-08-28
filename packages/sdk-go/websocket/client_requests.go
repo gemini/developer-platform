@@ -89,13 +89,27 @@ func (c *Client) Send(ctx context.Context, payload any) error {
 // response. The params value is encoded as the wire-level params field and may
 // be nil when the method has no parameters.
 func (c *Client) Request(ctx context.Context, method string, params any) (ResponseFrame, error) {
+	return c.request(ctx, method, params)
+}
+
+// RequestAuthenticated sends a JSON WebSocket method request that is required
+// to use the configured authentication strategy. Use this for private methods
+// when the method name is supplied dynamically.
+func (c *Client) RequestAuthenticated(ctx context.Context, method string, params any) (ResponseFrame, error) {
+	if c.auth == nil {
+		return ResponseFrame{}, ErrAuthenticationRequired
+	}
+	return c.request(ctx, method, params)
+}
+
+func (c *Client) request(ctx context.Context, method string, params any) (ResponseFrame, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
 	if strings.TrimSpace(method) == "" {
 		return ResponseFrame{}, errors.New("gemini websocket: request method is empty")
 	}
-	if requiresAuthentication(method) && c.auth == nil {
+	if requiresAuthentication(method, params) && c.auth == nil {
 		return ResponseFrame{}, ErrAuthenticationRequired
 	}
 	if err := c.Connect(ctx); err != nil {
@@ -104,9 +118,45 @@ func (c *Client) Request(ctx context.Context, method string, params any) (Respon
 	return c.requestConnected(ctx, method, params)
 }
 
-func requiresAuthentication(method string) bool {
+func requiresAuthentication(method string, params any) bool {
 	method = strings.ToLower(strings.TrimSpace(method))
-	return strings.HasPrefix(method, "order.") || strings.HasPrefix(method, "rfq.")
+	if strings.HasPrefix(method, "order.") || strings.HasPrefix(method, "rfq.") {
+		return true
+	}
+	if method != "subscribe" && method != "unsubscribe" {
+		return false
+	}
+
+	// The protocol uses SUBSCRIBE/UNSUBSCRIBE for both public and private
+	// feeds. Decode the params shape used by the wire protocol so a caller
+	// cannot accidentally send an authenticated feed request through a public
+	// client using the generic Request method.
+	encoded, err := json.Marshal(params)
+	if err != nil {
+		// A malformed subscription payload must not become a way to bypass the
+		// public/private boundary. The server will reject it anyway, so fail
+		// closed before anything is sent on a public connection.
+		return true
+	}
+	var streams []string
+	if err := json.Unmarshal(encoded, &streams); err != nil {
+		return true
+	}
+	for _, stream := range streams {
+		stream = strings.ToLower(strings.TrimSpace(stream))
+		for _, privatePrefix := range []string{
+			"orders@",
+			"balances@",
+			"positions@",
+			"settlements@",
+			"requestforquote@",
+		} {
+			if strings.HasPrefix(stream, privatePrefix) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // requestConnected sends a request without attempting to establish a

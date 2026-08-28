@@ -18,7 +18,7 @@ func TestTradingService_FluentOrderHelpers(t *testing.T) {
 	var capturedBody []byte
 	var capturedPath string
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		capturedPath = r.URL.Path
 		buf := make([]byte, r.ContentLength)
 		_, _ = r.Body.Read(buf)
@@ -120,7 +120,7 @@ func TestTradingService_FluentOrderHelpers(t *testing.T) {
 
 func TestTradingService_ValidatesStopLimitOrders(t *testing.T) {
 	var requests int
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requests++
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{}`))
@@ -189,7 +189,7 @@ func TestTradingService_ValidatesStopLimitOrders(t *testing.T) {
 }
 
 func TestTradingService_Methods(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		orderID := "123456"
 		symbol := "btcusd"
@@ -267,7 +267,7 @@ func TestTradingService_Methods(t *testing.T) {
 
 func TestTradingService_CancelAllRequiresExplicitConfirmation(t *testing.T) {
 	var requests int
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requests++
 		w.WriteHeader(http.StatusInternalServerError)
 	}))

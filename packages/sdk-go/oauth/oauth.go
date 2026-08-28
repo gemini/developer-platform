@@ -644,15 +644,10 @@ func (c Config) loopbackCallback(ctx context.Context, authURL string, openBrowse
 		return "", "", err
 	}
 	listenHost := parsed.Hostname()
-	if strings.EqualFold(listenHost, "localhost") {
-		listenHost = "127.0.0.1"
-	}
-	listenAddress := net.JoinHostPort(listenHost, parsed.Port())
-	listener, err := net.Listen("tcp", listenAddress)
+	listeners, err := listenLoopback(listenHost, parsed.Port())
 	if err != nil {
 		return "", "", fmt.Errorf("listen for OAuth callback: %w", err)
 	}
-	defer listener.Close()
 
 	resultCh := make(chan callbackResult, 1)
 	var delivered atomic.Bool
@@ -692,13 +687,21 @@ func (c Config) loopbackCallback(ctx context.Context, authURL string, openBrowse
 	})
 
 	server := &http.Server{Handler: mux, ReadHeaderTimeout: 5 * time.Second}
-	serveErr := make(chan error, 1)
-	go func() {
-		if err := server.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			serveErr <- err
-		}
+	serveErr := make(chan error, len(listeners))
+	for _, listener := range listeners {
+		go func(listener net.Listener) {
+			if err := server.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				serveErr <- err
+			}
+		}(listener)
+	}
+	defer func() {
+		_ = server.Close()
 	}()
-	defer server.Close()
+
+	if len(listeners) == 0 {
+		return "", "", errors.New("no loopback callback listeners available")
+	}
 
 	if err := openBrowser(authURL); err != nil {
 		return "", "", fmt.Errorf("open OAuth authorization URL: %w", err)
@@ -712,6 +715,50 @@ func (c Config) loopbackCallback(ctx context.Context, authURL string, openBrowse
 	case <-ctx.Done():
 		return "", "", ctx.Err()
 	}
+}
+
+func listenLoopback(host, port string) ([]net.Listener, error) {
+	type listenTarget struct {
+		network string
+		address string
+	}
+
+	var targets []listenTarget
+	switch {
+	case strings.EqualFold(host, "localhost"):
+		// Browsers may resolve localhost to either loopback family. Bind both
+		// exact loopback addresses when the platform permits it; neither target
+		// exposes the callback server on a non-loopback interface.
+		targets = []listenTarget{
+			{network: "tcp4", address: net.JoinHostPort("127.0.0.1", port)},
+			{network: "tcp6", address: net.JoinHostPort("::1", port)},
+		}
+	default:
+		ip := net.ParseIP(host)
+		if ip == nil || !ip.IsLoopback() {
+			return nil, fmt.Errorf("callback host %q is not loopback", host)
+		}
+		network := "tcp6"
+		if ip.To4() != nil {
+			network = "tcp4"
+		}
+		targets = []listenTarget{{network: network, address: net.JoinHostPort(host, port)}}
+	}
+
+	listeners := make([]net.Listener, 0, len(targets))
+	var errs []error
+	for _, target := range targets {
+		listener, err := net.Listen(target.network, target.address)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("%s %s: %w", target.network, target.address, err))
+			continue
+		}
+		listeners = append(listeners, listener)
+	}
+	if len(listeners) == 0 {
+		return nil, errors.Join(errs...)
+	}
+	return listeners, nil
 }
 
 type callbackResult struct {
@@ -741,5 +788,5 @@ func writeCallbackResponse(writer http.ResponseWriter, status int, message strin
 	writer.Header().Set("Cache-Control", "no-store")
 	writer.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	writer.WriteHeader(status)
-	_, _ = io.WriteString(writer, message)
+	_, _ = writer.Write([]byte(message))
 }

@@ -124,17 +124,18 @@ func (c *Client) ListSubscriptions(ctx context.Context) ([]string, error) {
 }
 
 // SubscribeStreams subscribes to one or more raw stream names using the
-// documented WebSocket control-plane method. Raw subscriptions are not
-// represented in the typed subscription registry and are not replayed after a
-// reconnect; use a typed Subscribe* method when automatic feed resumption is
-// required.
+// documented WebSocket control-plane method. Private stream names require an
+// authenticated client. Raw subscriptions are not represented in the typed
+// subscription registry and are not replayed after a reconnect; use a typed
+// Subscribe* method when automatic feed resumption is required.
 func (c *Client) SubscribeStreams(ctx context.Context, streams ...string) error {
 	return c.updateStreams(ctx, string(OpSubscribe), streams)
 }
 
 // UnsubscribeStreams unsubscribes from one or more raw stream names using the
-// documented WebSocket control-plane method. It only affects the server-side
-// subscription and does not alter the typed subscription registry.
+// documented WebSocket control-plane method. Private stream names require an
+// authenticated client. It only affects the server-side subscription and does
+// not alter the typed subscription registry.
 func (c *Client) UnsubscribeStreams(ctx context.Context, streams ...string) error {
 	return c.updateStreams(ctx, string(OpUnsubscribe), streams)
 }
@@ -199,10 +200,7 @@ func (c *Client) cancelAll(ctx context.Context, method RequestOp, options Cancel
 }
 
 func (c *Client) authenticatedRequest(ctx context.Context, method string, params any) (ResponseFrame, error) {
-	if c.auth == nil {
-		return ResponseFrame{}, ErrAuthenticationRequired
-	}
-	return c.Request(ctx, method, params)
+	return c.RequestAuthenticated(ctx, method, params)
 }
 
 func decodeObjectResult(response ResponseFrame, method string) (JSONObject, error) {

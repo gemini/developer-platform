@@ -17,7 +17,7 @@ func TestHeartbeatSession_LifecycleAndErrors(t *testing.T) {
 	var failMode atomic.Bool
 	beats := make(chan struct{}, 16)
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/heartbeat" {
 			http.NotFound(w, r)
 			return

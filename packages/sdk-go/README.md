@@ -72,9 +72,9 @@ defer client.Close()
 Custom REST endpoints must use `https`; custom WebSocket endpoints must use the
 `wss` scheme. Endpoints may include a path prefix but cannot include userinfo,
 a query string, or a fragment. `NewClientWithError` validates both before
-returning a client. Authenticated low-level transport requests also require an
-`https` URL; unauthenticated adapters remain protocol agnostic so they can be
-used with isolated HTTP test fixtures.
+returning a client. The low-level HTTP transport also rejects every non-HTTPS
+request, including public requests; use a TLS test server or in-memory
+`RoundTripper` for isolated tests.
 
 ---
 
@@ -441,8 +441,10 @@ use `ConnInfo`, `Time`, `ListSubscriptions`, `SubscribeStreams`, and
 `UnsubscribeStreams` for protocol control requests, and `PlaceOrder`,
 `CancelOrder`, `CancelAllOrders`, and `CancelSessionOrders` for trading
 requests. Raw `SubscribeStreams` calls are direct protocol operations and are
-not replayed automatically after reconnect; use the typed feed subscription
-methods when feed resumption is required. `PlaceOrder` accepts `LIMIT` and `MARKET`. A stop-limit order uses
+not replayed automatically after reconnect; private stream names fail closed
+on a public client. Use `RequestAuthenticated` for dynamically named private
+methods, and use the typed feed subscription methods when feed resumption is
+required. `PlaceOrder` accepts `LIMIT` and `MARKET`. A stop-limit order uses
 `Type: "LIMIT"` with both `Price` and `StopPrice`; Gemini reports the resulting
 order as `STOP_LIMIT` on the order-event stream. `stopPrice` is not valid with
 `MARKET`. The WebSocket contract allows `stopPrice == Price`; the legacy REST

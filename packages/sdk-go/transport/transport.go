@@ -193,7 +193,10 @@ func (c *Client) Execute(ctx context.Context, req *http.Request, payloadJSON []b
 	if req.URL == nil {
 		return nil, nil, errors.New("gemini transport: request URL is nil")
 	}
-	if c.auth != nil && !strings.EqualFold(req.URL.Scheme, "https") {
+	// Keep the transport boundary HTTPS-only even for public requests. Public
+	// data must not silently downgrade when a caller supplies a custom endpoint;
+	// test servers should use TLS or an in-memory RoundTripper instead.
+	if !strings.EqualFold(req.URL.Scheme, "https") {
 		return nil, nil, ErrHTTPSRequired
 	}
 	if req.Header == nil {

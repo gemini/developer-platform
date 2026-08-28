@@ -85,7 +85,7 @@ func (d *reconcilerStreamDialer) latest() *reconcilerStreamConn {
 }
 
 func TestQuoteReconciler_StartStreamingHydratesAndAppliesEvents(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/orders" {
 			http.NotFound(w, r)
 			return
@@ -144,7 +144,7 @@ func TestQuoteReconciler_StartStreamingHydratesAndAppliesEvents(t *testing.T) {
 
 func TestQuoteReconciler_RehydratesAfterOrdinaryReconnect(t *testing.T) {
 	var orderRequests atomic.Int32
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/orders" {
 			http.NotFound(w, r)
 			return
@@ -213,7 +213,7 @@ func TestQuoteReconciler_SerializesInitialAndReconnectHydration(t *testing.T) {
 	releaseFirstRequest := make(chan struct{})
 	var releaseOnce sync.Once
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/orders" {
 			http.NotFound(w, r)
 			return
@@ -320,7 +320,7 @@ func TestQuoteReconciler_SerializesInitialAndReconnectHydration(t *testing.T) {
 func TestQuoteReconciler_StartStreamingBuffersEventsDuringHydration(t *testing.T) {
 	hydrationStarted := make(chan struct{})
 	releaseHydration := make(chan struct{})
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/orders" {
 			http.NotFound(w, r)
 			return
@@ -395,7 +395,7 @@ func TestQuoteReconciler_StartStreamingBuffersEventsDuringHydration(t *testing.T
 }
 
 func TestQuoteReconciler_StartStreamingDoesNotUnsubscribeOtherOrderSubscribers(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/orders" {
 			http.NotFound(w, r)
 			return
@@ -448,7 +448,7 @@ func TestQuoteReconciler_StartStreamingDoesNotUnsubscribeOtherOrderSubscribers(t
 }
 
 func TestQuoteReconciler_StartStreamingRejectsDuplicateStream(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/orders" {
 			http.NotFound(w, r)
 			return

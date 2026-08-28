@@ -16,7 +16,7 @@ import (
 )
 
 func TestPredictionsServicePriorityEndpoints(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
 		case "/v1/prediction-markets/order/batch":
@@ -198,7 +198,7 @@ func TestPredictionsServicePriorityEndpoints(t *testing.T) {
 
 func TestPredictionsServiceIteratePositions(t *testing.T) {
 	var offsets []string
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		offsets = append(offsets, r.URL.Query().Get("offset"))
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Query().Get("offset") {

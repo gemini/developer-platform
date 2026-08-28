@@ -138,7 +138,7 @@ func TestTransport_ErrorHelperEdges(t *testing.T) {
 }
 
 func TestTransport_CustomUserAgentAndCloseIdleConnections(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if got := r.UserAgent(); got != "coverage-test-agent" {
 			t.Errorf("expected custom user agent, got %q", got)
 		}

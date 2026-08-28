@@ -13,7 +13,11 @@ import (
 
 func TestTypedUtilityAndSubscriptionRequests(t *testing.T) {
 	dialer := &mockDrainDialer{responseResult: json.RawMessage(`{"serverTime":123}`)}
-	client := websocket.NewPublicClient("wss://ws.gemini.com", websocket.WithDialer(dialer))
+	client := websocket.NewPrivateClient(
+		"wss://ws.gemini.com",
+		auth.NewHMAC("key", "secret"),
+		websocket.WithDialer(dialer),
+	)
 	defer client.Close()
 
 	info, err := client.ConnInfo(context.Background())

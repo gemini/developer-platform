@@ -84,9 +84,33 @@ func TestTransport_AuthenticatedRequestsRequireHTTPS(t *testing.T) {
 	}
 }
 
+func TestTransport_PublicRequestsRequireHTTPS(t *testing.T) {
+	var roundTrips atomic.Int32
+	client := NewClient(WithHTTPClient(&http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		roundTrips.Add(1)
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     make(http.Header),
+			Body:       io.NopCloser(strings.NewReader(`{"result":"unexpected"}`)),
+			Request:    req,
+		}, nil
+	})}))
+
+	req, err := http.NewRequest(http.MethodGet, "http://api.gemini.com/v1/symbols", nil)
+	if err != nil {
+		t.Fatalf("creating request: %v", err)
+	}
+	if _, _, err := client.Execute(context.Background(), req, nil); !errors.Is(err, ErrHTTPSRequired) {
+		t.Fatalf("Execute error = %v, want ErrHTTPSRequired", err)
+	}
+	if got := roundTrips.Load(); got != 0 {
+		t.Fatalf("insecure public request reached RoundTripper %d times", got)
+	}
+}
+
 func TestTransport_SafeGetRetry(t *testing.T) {
 	var attempts int32
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		current := atomic.AddInt32(&attempts, 1)
 		if current < 3 {
 			w.Header().Set("Retry-After", "0")
@@ -131,7 +155,7 @@ func TestTransport_SafeGetRetry(t *testing.T) {
 
 func TestTransport_SafeGetRetryReplaysRequestBody(t *testing.T) {
 	var bodies []string
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
 			t.Errorf("read request body: %v", err)
@@ -213,18 +237,18 @@ func TestTransport_BearerReauthenticatesSafeGetRetry(t *testing.T) {
 
 func TestTransport_DefaultClientDoesNotFollowRedirects(t *testing.T) {
 	var targetHits atomic.Int32
-	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	target := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		targetHits.Add(1)
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer target.Close()
 
-	redirect := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	redirect := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, target.URL, http.StatusFound)
 	}))
 	defer redirect.Close()
 
-	client := NewClient()
+	client := NewClient(WithHTTPClient(redirect.Client()))
 	err := client.Request(context.Background(), http.MethodGet, redirect.URL, nil, nil)
 	if err == nil {
 		t.Fatal("expected redirect response to be returned as an error")
@@ -236,19 +260,18 @@ func TestTransport_DefaultClientDoesNotFollowRedirects(t *testing.T) {
 
 func TestTransport_CustomClientDoesNotFollowRedirects(t *testing.T) {
 	var targetHits atomic.Int32
-	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	target := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		targetHits.Add(1)
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer target.Close()
 
-	redirect := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	redirect := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, target.URL, http.StatusFound)
 	}))
 	defer redirect.Close()
 
-	custom := &http.Client{Transport: http.DefaultTransport}
-	client := NewClient(WithHTTPClient(custom))
+	client := NewClient(WithHTTPClient(redirect.Client()))
 	if err := client.Request(context.Background(), http.MethodGet, redirect.URL, nil, nil); err == nil {
 		t.Fatal("expected redirect response to be returned as an error")
 	}
@@ -260,7 +283,7 @@ func TestTransport_CustomClientDoesNotFollowRedirects(t *testing.T) {
 func TestTransport_BearerCredentialsAreNotForwardedAcrossRedirects(t *testing.T) {
 	var redirectAuth string
 	var targetHits atomic.Int32
-	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	target := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		targetHits.Add(1)
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -297,10 +320,11 @@ func TestTransport_NilInputsAreHandledWithoutPanic(t *testing.T) {
 		t.Fatal("expected nil request URL error")
 	}
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer server.Close()
+	client = NewClient(WithHTTPClient(server.Client()))
 	if err := client.Request(nilContext, http.MethodGet, server.URL, nil, nil); err != nil {
 		t.Fatalf("expected nil context to use a background context, got %v", err)
 	}
@@ -337,7 +361,7 @@ func TestTransport_DropsPartialResponseWhenRoundTripReturnsError(t *testing.T) {
 
 func TestTransport_MutatingPostNeverRetried(t *testing.T) {
 	var attempts int32
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		atomic.AddInt32(&attempts, 1)
 		w.WriteHeader(http.StatusTooManyRequests)
 		_, _ = w.Write([]byte(`{"result":"error","reason":"RateLimit","message":"rate limited on order creation"}`))
@@ -495,7 +519,7 @@ func TestTransport_SerializesAuthenticatedRequestsThroughRetries(t *testing.T) {
 }
 
 func TestTransport_DeadlineErrorsUnwrapToSentinel(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(100 * time.Millisecond)
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -560,7 +584,7 @@ func (m *mockRateLimitHook) OnRateLimit(ctx context.Context, req *http.Request, 
 }
 
 func TestTransport_RateLimitWithRetryAfter(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Retry-After", "3")
 		w.WriteHeader(http.StatusTooManyRequests)
 		_, _ = w.Write([]byte(`{"result":"error","reason":"RateLimit","message":"exceeded 100 rps limit"}`))
@@ -644,7 +668,7 @@ func TestTransport_ErrorUnwrap(t *testing.T) {
 }
 
 func TestTransport_ContextCancellation(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"result":"ok"}`))
 	}))
@@ -710,7 +734,7 @@ func TestTransport_APIErrorPayloadParsing(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(tc.status)
 				_, _ = w.Write([]byte(tc.body))
@@ -733,7 +757,7 @@ func TestTransport_TelemetryHeaders(t *testing.T) {
 	var capturedUserAgent string
 	var capturedClientTelemetry string
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		capturedUserAgent = r.Header.Get("User-Agent")
 		capturedClientTelemetry = r.Header.Get("X-Gemini-Client-User-Agent")
 		w.Header().Set("Content-Type", "application/json")
@@ -765,7 +789,7 @@ func TestTransport_TelemetryHeaders(t *testing.T) {
 }
 
 func TestTransport_RequestIDExtraction(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-GEMINI-REQUEST-ID", "req_abc123xyz")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
@@ -812,7 +836,7 @@ func TestTransport_HTTPStatusTaxonomy(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(http.StatusText(tc.statusCode), func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(tc.statusCode)
 				_, _ = w.Write([]byte(`{"error":"raw server message"}`))
 			}))
@@ -831,7 +855,7 @@ func TestTransport_HTTPStatusTaxonomy(t *testing.T) {
 }
 
 func TestTransport_BoundedResponseBody(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/octet-stream")
 		w.WriteHeader(http.StatusOK)
 		// Stream 33 MB of zeroes (exceeds 32 MB limit)
@@ -899,7 +923,7 @@ func TestError_AsAndIsTaxonomy(t *testing.T) {
 }
 
 func BenchmarkTransport_Request(b *testing.B) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"result":"ok","order_id":"12345"}`))
