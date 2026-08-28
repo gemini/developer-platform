@@ -34,8 +34,10 @@ func TestCalculateFee(t *testing.T) {
 	if got := types.CalculateFee(notional, math.NaN()); !got.IsZero() {
 		t.Fatalf("expected NaN fee rate to produce zero, got %s", got)
 	}
-	if got := types.CalculateFee(notional, -1); !got.IsZero() {
-		t.Fatalf("expected negative fee rate to produce zero, got %s", got)
+	// Negative bps represents a maker rebate and must produce a negative
+	// (credited) fee rather than being silently zeroed out.
+	if got := types.CalculateFee(notional, -10.0); got.String() != "-100" {
+		t.Fatalf("expected negative fee rate to produce a -100 rebate, got %s", got)
 	}
 }
 
@@ -84,6 +86,20 @@ func TestCalculateLiquidationPrice(t *testing.T) {
 	}
 	if liqShort.String() != "54750" {
 		t.Fatalf("expected short liquidation price 54750, got %s", liqShort.String())
+	}
+}
+
+func TestCalculateLiquidationPriceFloorsShortPositionAtZero(t *testing.T) {
+	entry := types.MustParseDecimal("50000")
+	// leverage=1, mmr=3.0 pass validation individually but drive the short
+	// factor (1 + 1/leverage - mmr) negative; the price must floor at zero
+	// like the long side already does, not go negative.
+	liqShort, err := types.CalculateLiquidationPrice(entry, 1, 3.0, false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !liqShort.IsZero() {
+		t.Fatalf("expected short liquidation price to floor at zero, got %s", liqShort)
 	}
 }
 

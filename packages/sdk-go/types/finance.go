@@ -27,7 +27,7 @@ func CalculateNotional(price, quantity Decimal) Decimal {
 
 // CalculateFee computes the transaction fee in quote currency: Notional * (feeBps / 10000).
 func CalculateFee(notional Decimal, feeBps float64) Decimal {
-	if feeBps == 0 || notional.IsZero() || math.IsNaN(feeBps) || math.IsInf(feeBps, 0) || feeBps < 0 {
+	if feeBps == 0 || notional.IsZero() || math.IsNaN(feeBps) || math.IsInf(feeBps, 0) {
 		return Zero()
 	}
 	bpsDec, err := ParseDecimal(strconv.FormatFloat(feeBps, 'f', -1, 64))
@@ -93,6 +93,9 @@ func CalculateLiquidationPrice(entryPrice Decimal, leverage float64, maintenance
 		return Decimal{}, err
 	}
 	factor := one.Add(inverse).Sub(rateDec)
+	if factor.IsNegative() {
+		factor = Zero()
+	}
 	if isLong {
 		factor = one.Sub(inverse).Add(rateDec)
 		if factor.IsNegative() {
