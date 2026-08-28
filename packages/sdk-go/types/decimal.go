@@ -47,14 +47,17 @@ var (
 )
 
 // maxDecimalDigits bounds parser work for untrusted JSON numbers while still
-// allowing the precision used by exchange prices, quantities, and fees.
-const maxDecimalDigits = 1_000_000
+// allowing the precision used by exchange prices, quantities, and fees. It is
+// capped at maxDecimalOperationDigits so that scale differences produced by
+// parsing can never exceed what arithmetic (including scale-aligning
+// comparisons and additions, not just Div) can safely exponentiate.
+const maxDecimalDigits = 1_000
 
 const maxDecimalScale = int32(maxDecimalDigits)
 
-// maxDecimalOperationDigits is intentionally much smaller than the parser
-// bound. Arithmetic can allocate powers of ten, so accepting million-digit
-// precision would still allow avoidable local resource exhaustion.
+// maxDecimalOperationDigits bounds the scale difference any single
+// arithmetic operation will exponentiate via bigExp10. Accepting
+// higher-digit precision would allow avoidable local resource exhaustion.
 const maxDecimalOperationDigits = int32(1_000)
 
 func init() {

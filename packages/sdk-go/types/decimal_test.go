@@ -136,6 +136,23 @@ func TestDecimal_DivisionRejectsUnsafePrecision(t *testing.T) {
 	}
 }
 
+func TestDecimal_RejectsUnsafeScaleBeforeComparison(t *testing.T) {
+	// A scale this large would previously parse successfully and force
+	// alignScale to exponentiate an unbounded power of ten on every Cmp/Add,
+	// letting one adversarial price field turn a comparison loop into a
+	// CPU/memory exhaustion vector. It must now be rejected at parse time.
+	_, err := types.ParseDecimal("1e-1000001")
+	if !errors.Is(err, types.ErrInvalidDecimal) {
+		t.Fatalf("ParseDecimal with scale 1_000_001 error = %v, want ErrInvalidDecimal", err)
+	}
+
+	huge := types.MustParseDecimal("1e-1000")
+	small := types.MustParseDecimal("1")
+	if huge.Cmp(small) >= 0 {
+		t.Errorf("expected %s < %s", huge, small)
+	}
+}
+
 func TestDecimal_InvalidStrings(t *testing.T) {
 	invalidInputs := []string{
 		"",
