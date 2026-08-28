@@ -1,6 +1,6 @@
 module generate-tools
 
-go 1.24.3
+go 1.25.13
 
 require (
 	github.com/getkin/kin-openapi v0.135.0
