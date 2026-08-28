@@ -194,7 +194,7 @@ func newClientFromConfig(cfg *clientConfig) *Client {
 		cfg.auth,
 		websocket.WithDialer(cfg.wsDialer),
 		websocket.WithClientLogger(cfg.logger),
-		websocket.WithConfigurationError(cfg.configErr),
+		websocket.WithConfigurationError(privateConfigErr),
 	)
 
 	return &Client{
