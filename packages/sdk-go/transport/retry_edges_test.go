@@ -47,6 +47,29 @@ func TestParseRetryAfter(t *testing.T) {
 	}
 }
 
+func TestIsSafeMethod(t *testing.T) {
+	tests := []struct {
+		method string
+		want   bool
+	}{
+		// net/http treats an empty Request.Method as GET on the wire (a
+		// struct literal built without http.NewRequest leaves it empty), so
+		// it must be treated as safe like an explicit GET.
+		{method: "", want: true},
+		{method: http.MethodGet, want: true},
+		{method: "get", want: true},
+		{method: http.MethodHead, want: true},
+		{method: http.MethodPost, want: false},
+		{method: http.MethodPut, want: false},
+		{method: http.MethodDelete, want: false},
+	}
+	for _, tt := range tests {
+		if got := IsSafeMethod(tt.method); got != tt.want {
+			t.Errorf("IsSafeMethod(%q) = %v, want %v", tt.method, got, tt.want)
+		}
+	}
+}
+
 func TestRetryPolicyCalculateBackoffEdges(t *testing.T) {
 	policy := RetryPolicy{
 		BaseDelay:  10 * time.Millisecond,

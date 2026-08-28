@@ -36,6 +36,10 @@ func DefaultRetryPolicy() RetryPolicy {
 
 // IsSafeMethod returns true only for idempotent/safe HTTP methods (GET, HEAD).
 func IsSafeMethod(method string) bool {
+	// net/http treats an empty Request.Method as GET on the wire.
+	if method == "" {
+		return true
+	}
 	upper := strings.ToUpper(method)
 	return upper == http.MethodGet || upper == http.MethodHead
 }
