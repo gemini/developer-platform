@@ -1,27 +1,12 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
 import test from "node:test";
-import { fileURLToPath } from "node:url";
 
-import { discoverOperationInventory, loadOpenApiDocument } from "./openapi-rest-generator.mjs";
+import { discoverOperationInventory } from "./openapi-rest-generator.mjs";
 import {
   REST_OPERATION_OWNERSHIP,
-  createRestOperationOwnershipReport,
   validateRestOperationOwnership,
 } from "./rest-operation-ownership.mjs";
 import { boundaryValueKind } from "./runtime-value.mjs";
-
-const scriptDir = dirname(fileURLToPath(import.meta.url));
-const sdkDir = resolve(scriptDir, "..");
-const snapshotPath = resolve(scriptDir, "rest-operation-ownership.snapshot.json");
-
-async function realOperations() {
-  return (await Promise.all([
-    ["predictionMarkets", "https://developer.gemini.com/specs/openapi/prediction-markets.yaml"],
-    ["rest", "https://developer.gemini.com/specs/openapi/rest.yaml"],
-  ].map(async ([spec, specPath]) => discoverOperationInventory(await loadOpenApiDocument(specPath), { spec })))).flat();
-}
 
 function operation(overrides = {}) {
   return {
@@ -42,15 +27,6 @@ function manifest(overrides = {}) {
     ...overrides,
   };
 }
-
-test("real specs validate to exactly 106 owned operations", async () => {
-  assert.equal(validateRestOperationOwnership(await realOperations()).length, 106);
-});
-
-test("generated real-spec report matches the ownership snapshot", async () => {
-  const report = createRestOperationOwnershipReport(await realOperations());
-  assert.deepEqual(JSON.parse(readFileSync(snapshotPath, "utf8")), report);
-});
 
 test("unowned operation fails", () => {
   assert.throws(

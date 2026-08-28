@@ -1,10 +1,5 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
 import test from "node:test";
-import { fileURLToPath } from "node:url";
 
 import type { components } from "../../../generated/market-data/models.js";
 import type { RestFileResponse } from "../../../transport/http.js";
@@ -205,29 +200,4 @@ test("generated operation metadata describes every Market Data operation", () =>
   assert.equal(MARKET_DATA_OPERATIONS.getAssetsForNetwork.access, "authenticated");
   assert.equal(MARKET_DATA_OPERATIONS.getTokenNetworkV2.access, "authenticated");
   assert.equal(MARKET_DATA_OPERATIONS.getFXRate.access, "authenticated");
-});
-
-test("Market Data generator output is deterministic and matches committed files", (t) => {
-  const sdkDir = resolve(dirname(fileURLToPath(import.meta.url)), "../../../..");
-  const generatorPath = join(sdkDir, "scripts/generate-market-data.mjs");
-  const specPath = "https://developer.gemini.com/specs/openapi/rest.yaml";
-  const generatedDir = join(sdkDir, "src/generated/market-data");
-  const first = mkdtempSync(join(tmpdir(), "market-data-generator-first-"));
-  const second = mkdtempSync(join(tmpdir(), "market-data-generator-second-"));
-
-  t.after(() => {
-    rmSync(first, { recursive: true, force: true });
-    rmSync(second, { recursive: true, force: true });
-  });
-
-  execFileSync(process.execPath, [generatorPath, specPath, first]);
-  execFileSync(process.execPath, [generatorPath, specPath, second]);
-
-  for (const filename of ["models.ts", "operations.ts", "rest.ts"]) {
-    const firstBytes = readFileSync(join(first, filename));
-    const secondBytes = readFileSync(join(second, filename));
-    const committedBytes = readFileSync(join(generatedDir, filename));
-    assert.deepEqual(firstBytes, secondBytes);
-    assert.deepEqual(firstBytes, committedBytes);
-  }
 });

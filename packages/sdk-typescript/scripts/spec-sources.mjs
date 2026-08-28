@@ -13,9 +13,13 @@ const PUBLISHED_SPEC_SHA256 = Object.freeze({
   [PUBLISHED_SPECS.websocket]: "72910c6993db03ada3aaf7de4f6c0c3bb56d74148c77407e9a96a121ab333feb",
 });
 
+const ALLOWED_PUBLISHED_SPEC_URLS = new Set(Object.values(PUBLISHED_SPECS));
+
 export async function loadPublishedSpecText(specUrl) {
   const expectedHash = PUBLISHED_SPEC_SHA256[specUrl];
-  if (!expectedHash) throw new Error(`Unallowlisted published specification URL: ${specUrl}`);
+  if (!expectedHash || !ALLOWED_PUBLISHED_SPEC_URLS.has(specUrl)) {
+    throw new Error(`Unallowlisted published specification URL: ${specUrl}`);
+  }
   const response = await fetch(specUrl);
   if (!response.ok) throw new Error(`Failed to fetch spec: ${response.status}`);
   const bytes = Buffer.from(await response.arrayBuffer());

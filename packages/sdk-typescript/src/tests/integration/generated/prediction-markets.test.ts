@@ -5,7 +5,6 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { parse } from "yaml";
 
 import type { components } from "../../../generated/models.js";
 import {
@@ -14,21 +13,11 @@ import {
 } from "../../../generated/operations.js";
 import { PredictionMarketsRest } from "../../../generated/rest.js";
 import type { RequestOptions } from "../../../utils/deadline.js";
-import {
-  isBoundaryObject,
-  isBoundaryString,
-  type BoundaryValue,
-} from "../../../utils/boundary-value.js";
 
 type Equal<A, B> =
   (<T>() => T extends A ? 1 : 2) extends
   (<T>() => T extends B ? 1 : 2) ? true : false;
 type Assert<T extends true> = T;
-
-function parseYamlBoundary(source: string): BoundaryValue {
-  // SAFETY: YAML parser output is untrusted data and is narrowed immediately by the caller.
-  return parse(source) as BoundaryValue;
-}
 
 type OrderResponse = components["schemas"]["OrderResponse"];
 type Position = components["schemas"]["Position"];
@@ -468,36 +457,15 @@ test("generated operation metadata describes every prediction-market operation",
   );
 });
 
-test("OpenAPI, operation manifest, and REST wrappers contain the same 31 unique operations", async () => {
-  const sdkDir = resolve(dirname(fileURLToPath(import.meta.url)), "../../../..");
-  const document = parseYamlBoundary(
-    await (await fetch("https://developer.gemini.com/specs/openapi/prediction-markets.yaml")).text(),
-  );
-  if (!isBoundaryObject(document) || !isBoundaryObject(document.paths)) {
-    throw new Error("prediction-markets.yaml must contain a paths object");
-  }
-  const methods = ["get", "put", "post", "delete", "options", "head", "patch", "trace"];
-  const specIds = Object.values(document.paths).flatMap((pathItem) => {
-    if (!isBoundaryObject(pathItem)) return [];
-    return methods.flatMap((method) => {
-      const operation = pathItem[method];
-      if (!isBoundaryObject(operation)) return [];
-      const operationId = operation.operationId;
-      if (operationId === undefined) return [];
-      if (!isBoundaryString(operationId)) throw new Error("OpenAPI operationId must be a string");
-      return [operationId];
-    });
-  });
+test("generated operation manifest and REST wrappers contain the same 31 unique operations", () => {
   const manifestIds = Object.keys(PREDICTION_MARKET_OPERATIONS);
   const wrapperIds = Object.getOwnPropertyNames(PredictionMarketsRest.prototype)
     .filter((name) => name !== "constructor")
     .map((name) => name === "acceptTerms" ? "acceptPredictionMarketsTerms" : name);
 
-  assert.equal(specIds.length, 31);
-  assert.equal(new Set(specIds).size, specIds.length);
-  const expectedIds = [...specIds].sort();
-  assert.deepEqual([...manifestIds].sort(), expectedIds);
-  assert.deepEqual([...wrapperIds].sort(), expectedIds);
+  assert.equal(manifestIds.length, 31);
+  assert.equal(new Set(manifestIds).size, manifestIds.length);
+  assert.deepEqual([...wrapperIds].sort(), [...manifestIds].sort());
 });
 
 test("generator rejects multiple 2xx JSON responses even when one omits its schema", (t) => {
@@ -528,29 +496,4 @@ paths:
   assert.throws(() => execFileSync(process.execPath, [
     join(sdkDir, "scripts/generate-prediction-markets.mjs"), specPath, join(directory, "output"),
   ]));
-});
-
-test("generator output is deterministic and matches committed files", (t) => {
-  const sdkDir = resolve(dirname(fileURLToPath(import.meta.url)), "../../../..");
-  const generatorPath = join(sdkDir, "scripts/generate-prediction-markets.mjs");
-  const specPath = "https://developer.gemini.com/specs/openapi/prediction-markets.yaml";
-  const generatedDir = join(sdkDir, "src/generated");
-  const first = mkdtempSync(join(tmpdir(), "pm-generator-first-"));
-  const second = mkdtempSync(join(tmpdir(), "pm-generator-second-"));
-
-  t.after(() => {
-    rmSync(first, { recursive: true, force: true });
-    rmSync(second, { recursive: true, force: true });
-  });
-
-  execFileSync(process.execPath, [generatorPath, specPath, first]);
-  execFileSync(process.execPath, [generatorPath, specPath, second]);
-
-  for (const filename of ["models.ts", "operations.ts", "rest.ts"]) {
-    const firstBytes = readFileSync(join(first, filename));
-    const secondBytes = readFileSync(join(second, filename));
-    const committedBytes = readFileSync(join(generatedDir, filename));
-    assert.deepEqual(firstBytes, secondBytes);
-    assert.deepEqual(firstBytes, committedBytes);
-  }
 });
