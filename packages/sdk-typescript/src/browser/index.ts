@@ -20,8 +20,11 @@ export type {
 } from "../transport/http.js";
 export type { RestPromise } from "../transport/rest-promise.js";
 
-// Auth. OAuth only. No HMAC or confidential clients.
+// Auth. OAuth and static Bearer only. No HMAC or confidential clients.
 
+import { BearerAuth, type BearerAuthOptions } from "../auth/bearer.js";
+export { BearerAuth, type BearerAuthOptions };
+export { createPkceCodeChallenge, generatePkceCodeVerifier, type RandomBytes } from "../auth/pkce.js";
 import {
   OAuthAuth as _OAuthAuth,
   DEFAULT_OAUTH_ENDPOINTS,
@@ -31,6 +34,7 @@ import {
   type OAuthEndpoints,
   type OAuthTokens,
   type OAuthTokenStore,
+  type OAuthAuthorizationTransactionStore,
 } from "../auth/oauth.js";
 import { SdkError } from "../errors.js";
 
@@ -67,6 +71,7 @@ export type {
   OAuthAuthorizationTransaction,
   OAuthTokens,
   OAuthTokenStore,
+  OAuthAuthorizationTransactionStore,
   OAuthEndpoints,
 };
 export { DEFAULT_OAUTH_ENDPOINTS };
@@ -176,10 +181,10 @@ export {
 /**
  * Browser client options.
  * This entry point does not accept confidential or HMAC auth.
- * Browser OAuth authenticates REST requests only.
+ * Browser OAuth and static Bearer auth authenticate REST requests only.
  */
 export type BrowserClientOptions = Omit<GeminiMarketsOptions, "auth"> & {
-  auth?: BrowserOAuthAuth;
+  auth?: BrowserOAuthAuth | import("../auth/bearer.js").BearerAuth;
 };
 
 /** Browser WebSocket surface. It contains only the public connection namespace. */
@@ -206,7 +211,7 @@ export type BrowserGeminiMarkets = BrowserGeminiMarketsImpl;
  * const client = createClient({ env: "sandbox", auth });
  * ```
  *
- * Browser OAuth does not authenticate private WebSocket streams or request methods.
+ * Browser OAuth and Bearer auth do not authenticate private WebSocket streams or request methods.
  * Browser clients expose only `websocket.public`; private operations are not bundled.
  * Use the server entry point or a server-side relay for those operations.
  * Public WebSocket streams do not require authentication.
@@ -214,8 +219,9 @@ export type BrowserGeminiMarkets = BrowserGeminiMarketsImpl;
 export function createClient(options: BrowserClientOptions): BrowserGeminiMarkets {
   if (!options?.env) throw new SdkError("env is required; choose \"sandbox\" or \"production\"");
   if (options.auth !== undefined &&
-    (!(options.auth instanceof BrowserOAuthAuth) || options.auth.authCapability !== "browser")) {
-    throw new SdkError("Browser clients accept only BrowserOAuthAuth strategies");
+    (!((options.auth instanceof BrowserOAuthAuth && options.auth.authCapability === "browser") ||
+      options.auth instanceof BearerAuth))) {
+    throw new SdkError("Browser clients accept only BrowserOAuthAuth strategies or BearerAuth");
   }
   return new BrowserGeminiMarketsImpl(options);
 }

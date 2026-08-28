@@ -60,7 +60,7 @@ try {
   writeFileSync(join(temp, "package.json"), `{"type":"module","dependencies":{"@gemini-markets/sdk":"file:./${packed.filename}","@opentelemetry/api":"^1.9.0"}}`);
   execFileSync("npm", ["install", "--ignore-scripts", "--no-package-lock", "--cache", join(temp, ".npm")], { cwd: temp, stdio: "inherit" });
   writeFileSync(join(temp, "consumer.mjs"), `
-import { createClient, MARKET_DATA_OPERATIONS, MARGIN_OPERATIONS, TRADING_OPERATIONS, PERPETUALS_OPERATIONS, ACCOUNT_OPERATIONS, STAKING_OPERATIONS, TRANSFERS_OPERATIONS, CLEARING_OPERATIONS, INSTANT_OPERATIONS } from "@gemini-markets/sdk/browser";
+import { createClient, BrowserOAuthAuth, BearerAuth, createPkceCodeChallenge, generatePkceCodeVerifier, MARKET_DATA_OPERATIONS, MARGIN_OPERATIONS, TRADING_OPERATIONS, PERPETUALS_OPERATIONS, ACCOUNT_OPERATIONS, STAKING_OPERATIONS, TRANSFERS_OPERATIONS, CLEARING_OPERATIONS, INSTANT_OPERATIONS } from "@gemini-markets/sdk/browser";
 import * as browserExports from "@gemini-markets/sdk/browser";
 import { HmacAuth, createClient as createServerClient } from "@gemini-markets/sdk/server";
 import { trace } from "@opentelemetry/api";
@@ -73,6 +73,12 @@ try {
   bareImportRejected = error?.code === "ERR_PACKAGE_PATH_NOT_EXPORTED";
 }
 if (!bareImportRejected) throw new Error("bare package import must require an explicit runtime entry point");
+
+const packedVerifier = generatePkceCodeVerifier((size) => new Uint8Array(size).fill(7));
+if (!(await createPkceCodeChallenge(packedVerifier)).match(/^[A-Za-z0-9_-]{43}$/)) throw new Error("packed PKCE helpers are unavailable or invalid");
+const packedBearer = new BearerAuth({ accessToken: "packed-token" });
+if ((await packedBearer.credentialHeaders("")).Authorization !== "Bearer packed-token") throw new Error("packed Bearer auth is unavailable or invalid");
+new BrowserOAuthAuth({ env: "sandbox", client: { type: "public", clientId: "packed-client", redirectUri: "https://app.example.com/callback" } });
 
 const client = await createClient({ env: "sandbox" });
 if (!client.marketData || !client.trading || !client.margin || !client.perpetuals || !client.account || !client.staking || !client.transfers || !client.clearing || !client.instant || !client.predictions || !client.websocket) {

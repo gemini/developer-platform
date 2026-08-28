@@ -10,6 +10,7 @@ import {
   SdkError,
   serializeError,
   type FetchLike,
+  type OAuthAuthorizationTransactionStore,
   type OAuthTokenStore,
   type OAuthTokens,
 } from "../server/index.js";
@@ -90,6 +91,20 @@ class NonReentrantTokenStore extends MemoryTokenStore {
   }
 }
 
+class MemoryAuthorizationTransactionStore implements OAuthAuthorizationTransactionStore {
+  readonly records = new Map<string, { state: string; codeVerifier?: string }>();
+
+  async save(transaction: { state: string; codeVerifier?: string }): Promise<void> {
+    this.records.set(transaction.state, { ...transaction });
+  }
+
+  async consume(state: string): Promise<{ state: string; codeVerifier?: string } | undefined> {
+    const transaction = this.records.get(state);
+    this.records.delete(state);
+    return transaction;
+  }
+}
+
 const validTokens = (overrides: Partial<OAuthTokens> = {}): OAuthTokens => ({
   accessToken: "access-1",
   refreshToken: "refresh-1",
@@ -99,7 +114,7 @@ const validTokens = (overrides: Partial<OAuthTokens> = {}): OAuthTokens => ({
   ...overrides,
 });
 
-const publicOptions = (store: OAuthTokenStore, extra: BoundaryRecord = {}) => ({
+const publicOptions = (store: OAuthTokenStore | undefined, extra: BoundaryRecord = {}) => ({
   env: "sandbox" as const,
   client: {
     type: "public" as const,
@@ -138,6 +153,131 @@ void test("public authorization request generates state and S256 PKCE", async ()
   assert.match(transaction.codeVerifier ?? "", /^[A-Za-z0-9._~-]{43,128}$/);
   assert.match(parsed.searchParams.get("code_challenge") ?? "", /^[A-Za-z0-9_-]{43}$/);
   assert.doesNotMatch(parsed.searchParams.get("code_challenge") ?? "", /=/);
+});
+
+void test("authorization URL and code exchange can run without token persistence", async () => {
+  let saved = false;
+  const auth = new OAuthAuth({
+    ...publicOptions(undefined),
+    tokenStore: undefined,
+    fetchImpl: async () => {
+      saved = true;
+      return jsonResponse(200, {
+        access_token: "access-2",
+        refresh_token: "refresh-2",
+        token_type: "bearer",
+        scope: "orders:read",
+        expires_in: 3600,
+      });
+    },
+  });
+  const { transaction } = await auth.beginAuthorization(["orders:read"]);
+  const callback = new URL("http://127.0.0.1:51234/callback");
+  callback.searchParams.set("code", "authorization-code");
+  callback.searchParams.set("state", transaction.state);
+
+  const tokens = await auth.completeAuthorization(callback, transaction);
+
+  assert(saved);
+  assert.equal(tokens.accessToken, "access-2");
+  await assert.rejects(
+    auth.credentialHeaders("ignored"),
+    /tokenStore is required for authenticated client requests/,
+  );
+});
+
+void test("protocol-only authorization rejects a transaction that was never begun", async () => {
+  const auth = new OAuthAuth({
+    ...publicOptions(undefined),
+    tokenStore: undefined,
+  });
+  const callback = new URL("http://127.0.0.1:51234/callback");
+  callback.searchParams.set("code", "authorization-code");
+  callback.searchParams.set("state", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
+
+  await assert.rejects(
+    auth.completeAuthorization(callback, {
+      state: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      codeVerifier: "A".repeat(43),
+    }),
+    /already been used/,
+  );
+});
+
+void test("authorization transactions can be stored separately from OAuth tokens", async () => {
+  const transactionStore = new MemoryAuthorizationTransactionStore();
+  const tokenStore = new MemoryTokenStore();
+  const auth = new OAuthAuth(publicOptions(tokenStore, {
+    authorizationTransactionStore: transactionStore,
+    fetchImpl: async () => jsonResponse(200, {
+      access_token: "access-2",
+      refresh_token: "refresh-2",
+      token_type: "bearer",
+      scope: "orders:read",
+      expires_in: 3600,
+    }),
+  }));
+  const request = await auth.beginAuthorization(["orders:read"]);
+  assert.deepEqual(transactionStore.records.get(request.transaction.state), request.transaction);
+
+  const callback = new URL("http://127.0.0.1:51234/callback");
+  callback.searchParams.set("code", "authorization-code");
+  callback.searchParams.set("state", request.transaction.state);
+  const tokens = await auth.completeAuthorization(callback);
+
+  assert.equal(tokens.accessToken, "access-2");
+  assert.equal(transactionStore.records.has(request.transaction.state), false);
+  assert.equal(tokenStore.record?.accessToken, "access-2");
+  await assert.rejects(auth.completeAuthorization(callback), OAuthStateError);
+});
+
+void test("authorization transaction storage takes precedence over the legacy token-store state hook", async () => {
+  const transactionStore = new MemoryAuthorizationTransactionStore();
+  const tokenStore = new MemoryTokenStore();
+  const auth = new OAuthAuth(publicOptions(tokenStore, {
+    authorizationTransactionStore: transactionStore,
+    fetchImpl: async () => jsonResponse(200, {
+      access_token: "access-2",
+      refresh_token: "refresh-2",
+      token_type: "bearer",
+      scope: "orders:read",
+      expires_in: 3600,
+    }),
+  }));
+  const request = await auth.beginAuthorization(["orders:read"]);
+  const callback = new URL("http://127.0.0.1:51234/callback");
+  callback.searchParams.set("code", "authorization-code");
+  callback.searchParams.set("state", request.transaction.state);
+
+  await auth.completeAuthorization(callback, request.transaction);
+  await assert.rejects(auth.completeAuthorization(callback), OAuthStateError);
+  assert.equal(transactionStore.records.has(request.transaction.state), false);
+});
+
+void test("durable authorization storage is authoritative for the PKCE verifier", async () => {
+  const transactionStore = new MemoryAuthorizationTransactionStore();
+  let exchanges = 0;
+  const auth = new OAuthAuth(publicOptions(new MemoryTokenStore(), {
+    authorizationTransactionStore: transactionStore,
+    fetchImpl: async () => {
+      exchanges++;
+      return jsonResponse(200, {});
+    },
+  }));
+  const request = await auth.beginAuthorization(["orders:read"]);
+  const callback = new URL("http://127.0.0.1:51234/callback");
+  callback.searchParams.set("code", "authorization-code");
+  callback.searchParams.set("state", request.transaction.state);
+
+  await assert.rejects(
+    auth.completeAuthorization(callback, {
+      state: request.transaction.state,
+      codeVerifier: "A".repeat(43),
+    }),
+    (error: BoundaryValue) => error instanceof OAuthStateError && /does not match the stored transaction/.test(error.message),
+  );
+  assert.equal(exchanges, 0);
+  assert.equal(transactionStore.records.has(request.transaction.state), false);
 });
 
 void test("OAuth rejects non-string scopes at runtime", async () => {
@@ -248,6 +388,38 @@ void test("OAuth callback rejects custom-scheme component and query mismatches",
       (error: BoundaryValue) => error instanceof OAuthStateError && /does not match/.test(error.message),
     );
   }
+});
+
+void test("OAuth callback rejects duplicate response parameters", async () => {
+  let exchanges = 0;
+  const auth = new OAuthAuth(publicOptions(new MemoryTokenStore(), {
+    fetchImpl: async () => {
+      exchanges++;
+      return jsonResponse(200, {});
+    },
+  }));
+  const { transaction } = await auth.beginAuthorization(["orders:read"]);
+  const callback = new URL("http://127.0.0.1:51234/callback");
+  callback.searchParams.set("code", "authorization-code");
+  callback.searchParams.set("state", transaction.state);
+  callback.searchParams.append("state", transaction.state);
+
+  await assert.rejects(auth.completeAuthorization(callback, transaction), OAuthStateError);
+  assert.equal(exchanges, 0);
+});
+
+void test("OAuth callback rejects a response containing both code and error", async () => {
+  const auth = new OAuthAuth(publicOptions(new MemoryTokenStore()));
+  const { transaction } = await auth.beginAuthorization(["orders:read"]);
+  const callback = new URL("http://127.0.0.1:51234/callback");
+  callback.searchParams.set("code", "authorization-code");
+  callback.searchParams.set("error", "access_denied");
+  callback.searchParams.set("state", transaction.state);
+
+  await assert.rejects(
+    auth.completeAuthorization(callback, transaction),
+    (error: BoundaryValue) => error instanceof OAuthAuthorizationError && error.error === "invalid_response",
+  );
 });
 
 void test("sandbox OAuth uses sandbox authorization, exchange, and refresh endpoints", async () => {
@@ -653,6 +825,42 @@ void test("OAuth rejects malformed redirect URIs and authorization transactions"
   );
 });
 
+void test("OAuth maps malformed callback URLs to OAuthStateError", async () => {
+  const auth = new OAuthAuth(publicOptions(new MemoryTokenStore()));
+
+  await assert.rejects(
+    auth.completeAuthorization("not a URL"),
+    (error: BoundaryValue) => error instanceof OAuthStateError && /valid URL/.test(error.message),
+  );
+});
+
+void test("OAuth rejects unsafe redirect and endpoint URLs", () => {
+  for (const redirectUri of [
+    "javascript:alert(1)",
+    "https://user:password@example.com/callback",
+    "http://app.example/callback",
+  ]) {
+    assert.throws(
+      () => new OAuthAuth(publicOptions(new MemoryTokenStore(), {
+        client: { type: "public", clientId: "client", redirectUri },
+      })),
+      SdkError,
+    );
+  }
+  assert.throws(
+    () => new OAuthAuth(publicOptions(new MemoryTokenStore(), { env: "invalid" })),
+    (error: BoundaryValue) => error instanceof SdkError && /sandbox|production/.test(error.message),
+  );
+  for (const name of ["api", "authorization", "token"] as const) {
+    assert.throws(
+      () => new OAuthAuth(publicOptions(new MemoryTokenStore(), {
+        endpoints: { [name]: "http://localhost/oauth" },
+      })),
+      (error: BoundaryValue) => error instanceof SdkError && /HTTPS/.test(error.message),
+    );
+  }
+});
+
 void test("OAuthAuth supplies Bearer auth through HttpTransport without HMAC or nonce", async () => {
   let captured: Parameters<FetchLike>[1] | undefined;
   const auth = new OAuthAuth(publicOptions(new MemoryTokenStore(validTokens())));
@@ -871,9 +1079,41 @@ void test("revocation uses the current token and clears tokens only after succes
 
   await auth.revoke();
 
-  assert.equal(request?.[0], "https://api.sandbox.gemini.com/v1/oauth/revokeByToken");
-  assert.equal(request?.[1].headers.Authorization, "Bearer access-1");
+  assert.equal(request?.[0], "https://exchange.sandbox.gemini.com/auth/token/revoke");
+  assert.deepEqual(JSON.parse(request?.[1].body ?? "{}"), {
+    client_id: "public-client",
+    token: "access-1",
+  });
+  assert.equal(request?.[1].headers.Authorization, undefined);
   assert.equal(request?.[1].redirect, "manual");
+  assert.equal(store.record, undefined);
+});
+
+void test("confidential revocation authenticates with the client secret", async () => {
+  const store = new MemoryTokenStore(validTokens());
+  let body: BoundaryRecord = {};
+  const auth = new OAuthAuth({
+    env: "sandbox",
+    client: {
+      type: "confidential",
+      clientId: "server-client",
+      clientSecret: "server-secret",
+      redirectUri: "https://client.example/callback",
+    },
+    tokenStore: store,
+    fetchImpl: async (_url, init) => {
+      body = JSON.parse(init.body ?? "{}");
+      return jsonResponse(200, {});
+    },
+  });
+
+  await auth.revoke();
+
+  assert.deepEqual(body, {
+    client_id: "server-client",
+    client_secret: "server-secret",
+    token: "access-1",
+  });
   assert.equal(store.record, undefined);
 });
 
@@ -927,7 +1167,10 @@ void test("revocation uses the stored token without refreshing it", async () => 
     fetchImpl: async (_url: string, init: Parameters<FetchLike>[1]) => {
       refreshCalls++;
       revokeCalls++;
-      assert.equal(init.headers.Authorization, "Bearer short-access");
+      assert.deepEqual(JSON.parse(init.body ?? "{}"), {
+        client_id: "public-client",
+        token: "short-access",
+      });
       return jsonResponse(200, {});
     },
   }));
@@ -943,7 +1186,10 @@ void test("revocation does not re-enter the token-store lock when the clock cros
   const store = new NonReentrantTokenStore(validTokens({ expiresAt: 1_700_000_000_001 }));
   const auth = new OAuthAuth(publicOptions(store, {
     fetchImpl: async (_url: string, init: Parameters<FetchLike>[1]) => {
-      assert.equal(init.headers.Authorization, "Bearer access-1");
+      assert.deepEqual(JSON.parse(init.body ?? "{}"), {
+        client_id: "public-client",
+        token: "access-1",
+      });
       return jsonResponse(200, {});
     },
   }));
@@ -1027,6 +1273,8 @@ void test("malformed persisted tokens fail as SdkError before any network reques
     [],
     validTokens({ accessToken: "" }),
     validTokens({ refreshToken: "" }),
+    validTokens({ accessToken: "access-token\r\nX-Evil: injected" }),
+    validTokens({ refreshToken: "refresh-token\n" }),
     { ...validTokens(), tokenType: "basic" },
     { ...validTokens(), scope: 7 },
     validTokens({ expiresAt: -1 }),
