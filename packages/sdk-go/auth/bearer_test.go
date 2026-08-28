@@ -275,6 +275,16 @@ func TestBearerToken_Redaction(t *testing.T) {
 	}
 }
 
+func TestAPIKey_ShortAndMediumLengthKeysAreFullyRedacted(t *testing.T) {
+	// A prefix+suffix reveal is only safe when it's a minority of the key.
+	// At 10 characters, revealing 4+4 would expose 80% of the key.
+	for _, key := range []auth.APIKey{"abcdefghij", "exactly-twenty-chars"} {
+		if got := key.String(); got != "[REDACTED_KEY]" {
+			t.Errorf("APIKey(%q).String() = %q, want fully redacted", string(key), got)
+		}
+	}
+}
+
 func TestCredentials_FullRedactionCoverage(t *testing.T) {
 	key := auth.APIKey("my-long-test-api-key-12345")
 	secret := auth.APISecret("super-secret-hmac-key")

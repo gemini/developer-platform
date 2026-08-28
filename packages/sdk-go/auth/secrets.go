@@ -8,10 +8,13 @@ import (
 // APIKey represents a Gemini API Key identifier.
 type APIKey string
 
-// String masks the API key for safe terminal/log output.
+// String masks the API key for safe terminal/log output. It only reveals an
+// 8-character prefix+suffix fingerprint when the key is long enough that the
+// reveal is a minority of the key (at most ~40%); shorter keys are fully
+// redacted so a short-to-medium key can't have most of itself exposed.
 func (k APIKey) String() string {
 	raw := string(k)
-	if len(raw) <= 8 {
+	if len(raw) <= 20 {
 		return "[REDACTED_KEY]"
 	}
 	return fmt.Sprintf("%s...%s", raw[:4], raw[len(raw)-4:])
