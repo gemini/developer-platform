@@ -1,0 +1,677 @@
+# Gemini Go SDK
+
+Official Go library for the Gemini Exchange REST and WebSocket APIs.
+
+[![Go Version](https://img.shields.io/badge/go-1.23%2B-blue.svg)](https://golang.org)
+[![Dependencies](https://img.shields.io/badge/core%20dependencies-zero-brightgreen.svg)](#installation)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
+
+---
+
+## Features
+
+- **Zero Core Dependencies**: The REST, authentication, decimal, and order-book packages use only the Go standard library. The optional Gorilla adapter is a separate module.
+- **Predictable Concurrency**: Authenticated requests are nonce-serialized, WebSocket feeds apply backpressure, and order-book updates are atomic.
+- **Accurate Financial Math**: Fixed-precision decimal arithmetic without floating-point errors.
+- **Safe Retries**: Automatic backoff for idempotent requests with `Retry-After` header support.
+- **Self-Healing WebSockets**: Automatic reconnection with exponential backoff and feed resumption.
+- **Smart Quote Reconciler**: Preserves queue priority and minimizes exchange round-trips.
+- **Secret Redaction**: Credentials never leak in `fmt.Printf`, `%#v`, `slog`, or JSON output.
+
+---
+
+## Performance Benchmarks
+
+Benchmark numbers depend on the Go version, compiler, CPU, operating system,
+and workload. Run the suite on the target environment instead of relying on
+fixed measurements in documentation:
+
+```bash
+go test -bench=. -benchmem ./...
+```
+
+The repository includes benchmarks for authentication, transport, decimal
+arithmetic, WebSocket dispatch, and order-book operations.
+
+---
+
+## Installation
+
+Install the core library:
+
+```bash
+go get github.com/gemini/gemini-go
+```
+
+Optional: Install the Gorilla WebSocket adapter:
+
+```bash
+go get github.com/gemini/gemini-go/websocket/gorilla
+```
+
+This repository is a monorepo, but `packages/sdk-go` is the published Go
+module root. Release automation must publish that directory at the module tag;
+the `release-smoke` target stages the package as a standalone module and
+compiles the documented import paths, generated packages, service facade,
+demo, and optional Gorilla module.
+
+Use `Production` or `Sandbox` explicitly when selecting an environment. For
+applications that must reject invalid configuration during startup, use the
+error-returning constructor:
+
+```go
+client, err := gemini.NewClientWithError(
+    gemini.WithEnvironment(gemini.Sandbox),
+)
+if err != nil {
+    log.Fatal(err)
+}
+defer client.Close()
+```
+
+Custom REST endpoints must use `https`; custom WebSocket endpoints must use the
+`wss` scheme. Endpoints may include a path prefix but cannot include userinfo,
+a query string, or a fragment. `NewClientWithError` validates both before
+returning a client. The lower-level transport adapters remain protocol
+agnostic so they can be used with isolated test fixtures.
+
+---
+
+## Authentication
+
+The library supports two authentication modes.
+
+### 1. API Keys (HMAC-SHA384)
+
+```go
+client := gemini.NewClient(
+    gemini.WithAPIKey("your-api-key", "your-api-secret"),
+)
+```
+
+For startup validation, `NewClientWithError` rejects blank API keys or secrets
+with `gemini.ErrInvalidHMACCredentials`.
+
+### 2. OAuth 2.0 Bearer Tokens
+
+Static token:
+
+```go
+client := gemini.NewClient(
+    gemini.WithBearerToken("oauth-access-token"),
+)
+```
+
+Dynamic token refresh with a `TokenSource`:
+
+```go
+tokenSource := auth.TokenFunc(func(ctx context.Context) (string, error) {
+    return tokenManager.GetValidToken(ctx)
+})
+
+client := gemini.NewClient(
+    gemini.WithTokenSource(tokenSource),
+)
+```
+
+The token source is application-owned. It must be safe for concurrent calls,
+honor the request context, and return a current non-expired access token. The
+SDK calls it for each authenticated HTTP attempt and each WebSocket connection
+or reconnect; it does not perform the OAuth authorization-code exchange, cache
+tokens, or force-refresh after a `401` response. Use `gemini.EndpointsFor` to
+look up the authorization and token endpoints for `Production` or `Sandbox`.
+If a token source fails during an automatic WebSocket reconnect, the SDK stops
+that reconnect loop, reports the underlying error through connection events,
+and leaves the client disconnected so the source can be repaired before a
+caller explicitly reconnects.
+
+For applications that need startup validation, `NewClientWithError` rejects a
+nil or empty bearer configuration with `gemini.ErrInvalidTokenSource`.
+
+For private REST calls, the SDK encodes the request path and endpoint
+parameters in Gemini's `X-GEMINI-PAYLOAD` header and sends no request body, as
+required by Gemini OAuth. Callers only provide the generated request model.
+Private REST methods fail locally with `gemini.ErrAuthenticationRequired` when
+the client has no authentication strategy; no unauthenticated private request
+is sent to the network.
+
+To revoke the active OAuth token, configure bearer authentication and call
+`client.Account.RevokeOAuthToken(ctx)`. The endpoint revokes the token used by
+that request; it is not available through API-key authentication.
+
+OAuth tokens can also authenticate private WebSocket streams and RFQ quote
+methods. Gemini enforces the token's account capabilities server-side, so the
+token must be authorized for the requested feed or operation.
+
+### OAuth Sandbox Integration Test
+
+An opt-in integration test validates one bearer REST request and one private
+WebSocket handshake against the selected Gemini environment. It is skipped
+when no token is supplied and never runs as part of the default test target:
+
+```bash
+cd websocket/gorilla && \
+GEMINI_OAUTH_ACCESS_TOKEN="..." \
+GEMINI_OAUTH_ENVIRONMENT=sandbox \
+go test -tags=integration ./...
+```
+
+### 3. Webhook Signature Verification
+
+Verify incoming Gemini HMAC-SHA384 webhook signatures in constant time:
+
+```go
+isValid := gemini.VerifySignature(secret, b64Payload, signatureHeader)
+if !isValid {
+    http.Error(w, "invalid signature", http.StatusUnauthorized)
+    return
+}
+```
+
+---
+
+## Quick Start
+
+### Fetch Market Ticker
+
+```go
+package main
+
+import (
+	"context"
+	"fmt"
+	"log"
+
+	"github.com/gemini/gemini-go"
+)
+
+func main() {
+	client := gemini.NewClient()
+	ctx := context.Background()
+
+	ticker, err := client.MarketData.GetTicker(ctx, "BTCUSD")
+	if err != nil {
+		log.Fatalf("failed to fetch ticker: %v", err)
+	}
+
+	fmt.Printf("BTC/USD Bid: %s, Ask: %s, Last: %s\n", gemini.Val(ticker.Bid), gemini.Val(ticker.Ask), gemini.Val(ticker.Last))
+}
+```
+
+---
+
+### Place Orders
+
+Place maker post-only or limit orders with exact decimals:
+
+```go
+amount := gemini.MustDecimal("0.05")
+price := gemini.MustDecimal("65000.00")
+
+// Guaranteed Maker (Post-Only)
+order, err := client.Trading.PostOnlyBid(ctx, "BTCUSD", amount, price)
+
+// Standard Limit Buy
+order, err := client.Trading.LimitBuy(ctx, "BTCUSD", amount, price)
+
+// Immediate-or-Cancel Sell
+order, err := client.Trading.ImmediateOrCancelSell(ctx, "BTCUSD", amount, price)
+```
+
+---
+
+### Account Management, Staking, and Transfers
+
+```go
+// Import the generated request models used by typed service methods:
+// "github.com/gemini/gemini-go/generated/account"
+
+// 1. Account balances and subaccounts
+balances, err := client.Account.GetBalances(ctx, &account.GetAvailableBalancesJSONBody{Account: "primary"})
+accounts, err := client.Account.ListAccounts(ctx, nil)
+
+// 2. Staking lifecycle (provider ID is required by the API)
+stkBalances, err := client.Staking.GetStakingBalances(ctx, nil)
+stakeTx, err := client.Staking.Stake(ctx, &account.StakeCryptoFundsJSONBody{ProviderId: "provider-id", Currency: "ETH", Amount: "1.5"})
+unstakeRes, err := client.Staking.Unstake(ctx, &account.UnstakeCryptoFundsJSONBody{ProviderId: "provider-id", Currency: "ETH", Amount: "0.5"})
+
+// 3. Multichain transfers and fee estimates
+feeEst, err := client.Transfers.GetWithdrawalFeeEstimateV2(ctx, "solana", "sol", "address", "10.0")
+withdrawRes, err := client.Transfers.WithdrawCryptoV2(ctx, "solana", "sol", "address", "10.0")
+// Pass a generated *account.ListPastTransfersJSONBody for typed filters;
+// nil requests the endpoint defaults.
+pastTransfers, err := client.Transfers.GetTransfers(ctx, nil)
+```
+
+---
+
+### Declarative Quote Reconciler
+
+Synchronize a market-making ladder. The reconciler diffs your desired orders against open orders, keeps matching orders in the exchange queue, and sends only required cancels and new orders:
+
+```go
+// Create reconciler with a 0.5 bps tolerance band
+reconciler := client.NewQuoteReconciler("BTCUSD",
+    gemini.WithToleranceBps(0.5),
+    gemini.WithQuantization(gemini.MustDecimal("0.01"), gemini.MustDecimal("0.0001")),
+)
+
+// StartStreaming subscribes before the initial REST hydration and replays
+// order events received during that handoff.
+errChan, err := reconciler.StartStreaming(ctx)
+if err != nil {
+    log.Fatalf("stream error: %v", err)
+}
+
+// Define target quotes and sync
+mid := gemini.MustDecimal("65000")
+size := gemini.MustDecimal("0.05")
+desired := []gemini.DesiredQuote{
+    {Side: "buy",  Price: mid.SubBps(5.0), Amount: size},
+    {Side: "sell", Price: mid.AddBps(5.0), Amount: size},
+}
+
+result, err := reconciler.Sync(ctx, desired)
+if err != nil {
+    log.Fatalf("reconciliation could not start: %v", err)
+}
+if err := result.Err(); err != nil {
+    log.Printf("reconciliation completed with partial failures: %v", err)
+}
+log.Printf("Sync: Kept=%d, Cancelled=%d, Placed=%d",
+    result.Kept, result.Cancelled, result.Placed)
+```
+
+Each reconciler supports one active stream; cancel its context before starting
+another stream. Reconciler cleanup removes only its own WebSocket order-event
+subscription, so other subscribers on the same private WebSocket remain active.
+
+---
+
+### REST service surface
+
+The `generated` packages are regenerated from Gemini's deployed REST contracts
+and contain request and response models for every documented REST operation.
+The hand-written `services` facade intentionally exposes a smaller, curated
+set of core trading, market-data, account, transfer, staking, margin,
+perpetuals, clearing, and prediction-market operations. The supported subset
+is tracked by an operation-to-method coverage test in `scripts/`; a spec change
+cannot silently add an unclassified endpoint.
+
+For operations not yet surfaced by a high-level service, use the generated
+models with `transport.Client.Request` or wait for a typed service method. The
+prediction-market facade includes typed batch order/cancel, order history,
+positions, settled positions, combos, volume metrics, maker-rebate, and
+liquidity-rewards operations. Native Go iterators are available for the
+paginated event, order, position, combo, and liquidity-rewards collections.
+Some less common REST and clearing/reporting operations remain available through
+the generated models and transport client.
+
+Prediction-market event responses preserve the complete sports metadata model:
+`Event.SportsMarket` includes sport, market type, subject, scope, and metric,
+and `PredictionsService.GetEvents` accepts all corresponding repeated filters.
+For higher-level sports discovery, `services.ClusterSportsEvents` groups raw
+events by contest root and `services.ResolveSportsContest` resolves a contest
+from an already-fetched event set without adding network behavior to the REST
+client.
+
+---
+
+### Public and Private WebSocket Connections
+
+The SDK keeps public and private WebSocket traffic on separate client
+instances and separate connections:
+
+- `client.PublicWebSocket()` is unauthenticated and is for public market data
+  such as depth, trades, book ticker, and contract status.
+- `client.PrivateWebSocket()` is the authenticated connection for order,
+  balance, position, and settlement feeds. Configure `WithAPIKey`,
+  `WithBearerToken`, or another auth option first.
+
+```go
+client := gemini.NewClient(
+    gemini.WithEnvironment(gemini.Sandbox),
+    gemini.WithAPIKey("your-api-key", "your-api-secret"),
+)
+defer client.Close()
+
+publicWS := client.PublicWebSocket()
+depth, err := publicWS.SubscribeDepth(ctx, "BTCUSD")
+if err != nil {
+    log.Fatal(err)
+}
+
+privateWS := client.PrivateWebSocket()
+orders, err := privateWS.SubscribeOrderEvents(ctx)
+if err != nil {
+    log.Fatal(err)
+}
+
+// UnsubscribeOrderEvents removes every order-event subscriber. To remove only
+// this subscriber, use UnsubscribeOrderEventsChannel(ctx, orders).
+
+go func() {
+    for update := range depth {
+        log.Printf("public depth update: %d", update.LastUpdateID)
+    }
+}()
+go func() {
+    for update := range orders {
+        log.Printf("private order %d: %s", update.OrderID, update.OrderStatus)
+    }
+}()
+```
+
+Typed stream options mirror the supported AsyncAPI variants. Use
+`SubscribeDepthWithOptions` for the 100ms differential stream,
+`SubscribePartialDepth` with `DepthLevel5`, `DepthLevel10`, or `DepthLevel20`
+for top-of-book snapshots, `SubscribeOrderEventsWithScope` for account versus
+session orders, and `SubscribeBalancesWithOptions` or
+`SubscribePositionsWithOptions` with `Interval: time.Second` for throttled
+snapshots. Settlements currently have only the documented account stream;
+the SDK does not invent a session variant that is absent from the spec.
+
+The WebSocket control plane and authenticated order methods are typed as well:
+use `ConnInfo`, `Time`, `ListSubscriptions`, `SubscribeStreams`, and
+`UnsubscribeStreams` for protocol control requests, and `PlaceOrder`,
+`CancelOrder`, `CancelAllOrders`, and `CancelSessionOrders` for trading
+requests. Raw `SubscribeStreams` calls are direct protocol operations and are
+not replayed automatically after reconnect; use the typed feed subscription
+methods when feed resumption is required. `PlaceOrder` accepts `LIMIT` and `MARKET`. A stop-limit order uses
+`Type: "LIMIT"` with both `Price` and `StopPrice`; Gemini reports the resulting
+order as `STOP_LIMIT` on the order-event stream. `stopPrice` is not valid with
+`MARKET`. The WebSocket contract allows `stopPrice == Price`; the legacy REST
+`TradingService.NewOrder` contract requires a strict inequality (`stopPrice <
+Price` for buys and `stopPrice > Price` for sells). Account-wide cancellation requires
+`CancelAllOptions{Confirm: true}` so a destructive request cannot be issued by
+omitting a parameter accidentally.
+
+Partial-depth subscriptions use one underlying connection per symbol because
+their snapshot envelope may not include a symbol. Differential depth
+subscriptions remain multiplexed because their snapshots include the market
+symbol. The root SDK configures this behavior automatically. Low-level clients
+that need the same behavior can use
+`websocket.WithIsolatedPartialSnapshots()`; the older
+`websocket.WithIsolatedSnapshots()` remains available when both feed types
+must be isolated.
+
+An unauthenticated client still exposes `PrivateWebSocket()` so applications
+can construct clients uniformly, but private subscriptions fail immediately
+with `gemini.ErrAuthenticationRequired`; no unauthenticated connection is
+silently upgraded or reused. The low-level `websocket.NewPublicClient` and
+`websocket.NewPrivateClient` constructors provide the same separation when the
+root `gemini.Client` facade is not used.
+
+The Go SDK exposes the public `requestForQuote` discovery stream, authenticated
+`requestForQuote@account`/`@session` delivery streams, and typed
+`SubmitRFQQuote`, `WithdrawRFQQuote`, and `ConfirmRFQQuote` methods. RFQ
+deliveries are at-least-once; deduplicate them by `DeliveryID` before applying
+lifecycle transitions. Quote methods require an authenticated WebSocket
+client and preserve the API's explicit `Confirm` boolean—no action is taken on
+the caller's behalf. Each `RFQLeg` includes its contract ID and outcome, plus
+the optional leg-specific `InstrumentSymbol`; this is distinct from the
+combo-level `RFQPublicEvent.Symbol`.
+
+```go
+rfqs, err := client.PublicWebSocket().SubscribeRFQEvents(ctx)
+if err != nil {
+    return err
+}
+for rfq := range rfqs {
+    if rfq.State != websocket.RFQStateOpen {
+        continue
+    }
+    // Insert application-specific pricing here. The SDK does not choose a
+    // price or submit a quote automatically.
+    quote, err := client.PrivateWebSocket().SubmitRFQQuote(ctx, websocket.RFQSubmitQuoteParams{
+        RFQID: rfq.RFQID, Price: "0.55", Quantity: "100",
+    })
+    if err != nil {
+        return err
+    }
+    _ = quote.QuoteID
+}
+```
+
+The public and private WebSocket clients are intentionally separate. Use the
+private client for RFQ quote methods and authenticated delivery streams; it
+must be created with the same account credentials used for the relevant
+capabilities.
+
+Inbound WebSocket messages are limited to 1 MiB by default. Configure a
+different limit with `websocket.WithMaxMessageSize`, or pass a non-positive
+value only when the transport is trusted and an unbounded payload is required.
+Malformed JSON frames are reported through `ConnectionEvent.Err` as
+`websocket.ErrMalformedFrame`; the connection remains alive so callers can
+continue receiving valid frames. For unattended processes, opt into
+application-level liveness checks with
+`websocket.WithLiveness(interval, timeout)`. A failed check is reported as
+`websocket.ErrLivenessFailed` and follows the normal reconnect policy.
+
+### Real-Time Order Book and BBO Callbacks
+
+This example uses the optional `github.com/gemini/gemini-go/websocket/orderbook`
+package. Always drain subscription channels; the client applies backpressure
+to preserve every update. Feed channels are bounded. If a consumer falls
+behind far enough to fill the client's inbound dispatch queue, the client
+reports `websocket.ErrSlowConsumer` through its lifecycle event channel and
+reconnects when automatic reconnect is enabled. Treat that event as a data
+recovery boundary: rebuild order-book state from a snapshot and reconcile
+private order state with REST before continuing.
+
+```go
+liveBook := orderbook.NewLiveOrderBook("BTCUSD")
+
+// Book returns a read-only view. Apply snapshots and diffs through liveBook
+// so sequence and recovery state remains synchronized.
+bookView := liveBook.Book()
+_ = bookView.LastUpdateID()
+
+// Callback triggers only when the Top-of-Book changes
+liveBook.OnBBOChanged(func(bbo orderbook.BBO) {
+    fmt.Printf("Bid: %s | Ask: %s | Mid: %.2f | Spread: %.2f bps\n",
+        bbo.BestBid, bbo.BestAsk, bbo.Mid, bbo.SpreadBps)
+})
+
+depthStream, err := client.PublicWebSocket().SubscribeDepth(ctx, "BTCUSD")
+if err != nil {
+    log.Fatalf("subscribe error: %v", err)
+}
+
+for diff := range depthStream {
+    if err := liveBook.IngestDiff(diff); err != nil {
+        log.Printf("Sequence gap detected, resyncing: %v", err)
+        break
+    }
+}
+```
+
+The top-level SDK requests a full order-book snapshot when it connects the
+public WebSocket. The first snapshot frame is marked internally and can be
+passed directly to `IngestDiff`; subsequent frames are differential updates.
+The live book intentionally does not infer snapshot state from `U == u`, since
+that is also valid for a normal differential update. If you construct a
+low-level WebSocket client directly, opt into the same behavior with
+`websocket.WithSnapshot(-1)`.
+
+### Prediction Market Terms
+
+Prediction-market orders are sent to Gemini immediately. If the backend
+returns `gemini.ErrAcceptTermsRequired`, explicitly call
+`client.Predictions.AcceptTerms(ctx)` and retry the order. The SDK never checks
+terms in advance or accepts them on the caller's behalf.
+
+---
+
+### Concurrency and Recovery Guarantees
+
+- Private REST requests using HMAC authentication are serialized per client so
+  retries cannot send a lower nonce after a later request.
+- Call `client.Close()` when the SDK client is no longer needed to stop WebSocket
+  pumps and release idle connections from the SDK-owned HTTP transport. A
+  caller-provided `WithHTTPClient` remains caller-owned.
+- WebSocket `Request` and `Ping` calls wait for their correlated server response;
+  subscription methods return protocol errors instead of treating a write as
+  success. Use `errors.Is(err, websocket.ErrRequestFailed)` to classify a
+  rejected request.
+- WebSocket lifecycle events are buffered and coalesced if the consumer falls
+  behind; use `State()` as the authoritative current state.
+- WebSocket subscription channels are flow-controlled. If a consumer fills the
+  bounded inbound queue, the client closes feed channels and emits
+  `websocket.ErrSlowConsumer`; applications must resync state before
+  subscribing again.
+- Order-book snapshots and diffs reject malformed or negative levels without
+  partially mutating the book. Sequence gaps return `gemini.ErrResyncRequired`.
+- `LiveOrderBook.Reset` clears both sequence state and price levels. Call it
+  before applying a fresh snapshot after a disconnect or sequence gap.
+
+---
+
+### Validation
+
+From this directory, the package checks are:
+
+```bash
+gofmt -l .
+go test ./...
+go test -race ./...
+go vet ./...
+```
+
+The `scripts` module fetches the allowlisted deployed OpenAPI/AsyncAPI contracts,
+verifies their SHA-256 hashes, and contains contract-drift tests:
+
+```bash
+(cd scripts && go test ./...)
+```
+
+---
+
+### Managed Heartbeat (Dead-Man's Switch)
+
+Keep an active trading session alive in the background:
+
+```go
+session := client.Heartbeat.Start(ctx, 5*time.Second)
+defer session.Stop()
+
+go func() {
+    for err := range session.Errors() {
+        log.Printf("Heartbeat error: %v", err)
+    }
+}()
+```
+
+---
+
+### Fixed-Precision Decimals and Basis Points Math
+
+`types.Decimal` preserves the quoted-string representation used by string
+decimal fields. Generated models for OpenAPI numeric decimal fields use
+`types.DecimalNumber`, which accepts either quoted or numeric input but emits
+an exact JSON number without converting through `float64`.
+
+```go
+price := gemini.MustDecimal("65000.00")
+
+// Add and subtract basis points
+ask := price.AddBps(10.0) // 65065.00
+bid := price.SubBps(10.0) // 64935.00
+
+// Measure difference in basis points
+diffBps := ask.BpsDiff(bid) // 20.0 bps
+
+// Quantize to market tick and lot rules
+tickSize := gemini.MustDecimal("0.50")
+lotSize := gemini.MustDecimal("0.001")
+
+quantizedPrice := gemini.MustDecimal("65000.37").QuantizePrice(tickSize) // 65000.00
+quantizedQty := gemini.MustDecimal("0.1237").QuantizeAmount(lotSize)     // 0.123
+```
+
+---
+
+### Error Handling
+
+All errors returned by the SDK seamlessly unwrap to typed sentinels. You can inspect errors using standard `errors.Is()` or the top-level helper functions in a single flat `switch`:
+
+#### 1. Flat Top-Level Error Inspection (Recommended)
+
+```go
+order, err := client.Trading.PostOnlyBid(ctx, "BTCUSD", amount, price)
+if err != nil {
+    // Optional: Extract request ID for Gemini Support logs
+    if reqID := gemini.RequestIDFromError(err); reqID != "" {
+        log.Printf("Gemini Request ID: %s", reqID)
+    }
+
+    switch {
+    case gemini.IsInsufficientFunds(err):
+        log.Println("Domain: Insufficient balance to place order")
+
+    case gemini.IsMarketClosed(err):
+        log.Println("Domain: Market or trading pair is halted")
+
+    case gemini.IsRateLimit(err):
+        log.Println("API: Rate limit exceeded (automatic backoff engaged)")
+
+    case gemini.IsSelfCrossPrevented(err):
+        log.Println("Domain: Self-trade prevention triggered")
+
+    case gemini.IsAuthError(err):
+        log.Fatalf("Auth: Invalid keys, signature, or nonce")
+
+    case gemini.IsNotFound(err):
+        log.Println("API: Order or symbol not found")
+
+    case gemini.IsResyncRequired(err):
+        log.Println("Stream: Sequence gap detected; resyncing book...")
+
+    default:
+        log.Printf("Unhandled error: %v", err)
+    }
+}
+```
+
+#### 2. Broad Category Inspection (For Middleware, Routing, & Alerting)
+
+```go
+switch {
+case gemini.IsDomainError(err):
+    // Exchange matching engine business rejections (do not retry)
+    log.Printf("Business logic rejection: %v", err)
+
+case gemini.IsAPIError(err):
+    // Gateway / HTTP 4xx / 5xx responses
+    if apiErr, ok := gemini.AsAPIError(err); ok {
+        log.Printf("HTTP %d (%s): %s", apiErr.StatusCode, apiErr.Reason, apiErr.Message)
+    }
+
+case gemini.IsTimeout(err):
+    // Client-side deadline exceeded
+    log.Println("Request timed out")
+}
+```
+
+---
+
+### Testing with `geminitest`
+
+Use the local mock server for testing without network requests:
+
+```go
+server := geminitest.NewMockServer("test-key", "test-secret")
+defer server.Close()
+
+client := gemini.NewClient(
+    gemini.WithCustomRESTURL(server.URL()),
+    gemini.WithAPIKey("test-key", "test-secret"),
+)
+```
+
+---
+
+## License
+
+Apache 2.0. See the [Apache 2.0 license](https://www.apache.org/licenses/LICENSE-2.0)
+for details.
