@@ -2,11 +2,15 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"log/slog"
 	"net/http"
 	"os"
+	"os/exec"
+	"runtime"
+	"strings"
 	"time"
 
 	"github.com/gemini/gemini-go"
@@ -14,9 +18,16 @@ import (
 	"github.com/gemini/gemini-go/geminitest"
 	"github.com/gemini/gemini-go/generated/account"
 	"github.com/gemini/gemini-go/generated/predictions"
+	geminioauth "github.com/gemini/gemini-go/oauth"
 	"github.com/gemini/gemini-go/transport"
+	"github.com/gemini/gemini-go/websocket"
 	"github.com/gemini/gemini-go/websocket/gorilla"
 	"github.com/gemini/gemini-go/websocket/orderbook"
+)
+
+const (
+	demoRFQSubmitConfirmation = "I_UNDERSTAND_THIS_SUBMITS_A_LIVE_RFQ_QUOTE"
+	demoCLIClientID           = "6a03a47b-1bb4-491a-b0a7-35ad17473e71"
 )
 
 func main() {
@@ -31,7 +42,7 @@ func main() {
 	defer cancel()
 
 	// 1. Initialize Client against Production endpoints with pluggable Gorilla dialer and latency tracing
-	client := gemini.NewClient(
+	clientOptions := []gemini.Option{
 		gemini.WithEnvironment(gemini.Production),
 		gemini.WithWebSocketDialer(gorilla.NewDialer()),
 		gemini.WithLogger(logger),
@@ -42,7 +53,63 @@ func main() {
 				fmt.Printf(" [Trace: %v (New Socket, TLS: %v, TTFB: %v)]\n", trace.TotalDuration.Round(time.Microsecond), trace.TLSHandshake.Round(time.Microsecond), trace.TimeToFirstByte.Round(time.Microsecond))
 			}
 		}),
-	)
+	}
+	bearerToken := strings.TrimSpace(os.Getenv("GEMINI_ACCESS_TOKEN"))
+	oauthLoginEnabled := os.Getenv("GEMINI_DEMO_OAUTH_LOGIN") == "1"
+	rfqSubmitEnabled := os.Getenv("GEMINI_DEMO_RFQ_SUBMIT") == "1"
+	rfqPrice := strings.TrimSpace(os.Getenv("GEMINI_DEMO_RFQ_PRICE"))
+	rfqQuantity := strings.TrimSpace(os.Getenv("GEMINI_DEMO_RFQ_QUANTITY"))
+	if bearerToken != "" && oauthLoginEnabled {
+		log.Fatal("set only one of GEMINI_ACCESS_TOKEN or GEMINI_DEMO_OAUTH_LOGIN=1")
+	}
+	if rfqSubmitEnabled {
+		if os.Getenv("GEMINI_DEMO_RFQ_CONFIRM") != demoRFQSubmitConfirmation {
+			log.Fatalf("RFQ submit mode requires GEMINI_DEMO_RFQ_CONFIRM=%s", demoRFQSubmitConfirmation)
+		}
+		if rfqPrice == "" || rfqQuantity == "" {
+			log.Fatal("RFQ submit mode requires GEMINI_DEMO_RFQ_PRICE and GEMINI_DEMO_RFQ_QUANTITY")
+		}
+		fmt.Printf("⚠️ [RFQ] Submit mode armed for price=%s quantity=%s; it will submit at most one live quote\n", rfqPrice, rfqQuantity)
+	}
+	authConfigured := bearerToken != ""
+	if bearerToken != "" {
+		clientOptions = append(clientOptions, gemini.WithBearerToken(bearerToken))
+		fmt.Println("🔑 [OAuth 2.0] Production bearer token configured for private WebSocket validation")
+	}
+	if oauthLoginEnabled {
+		clientID := strings.TrimSpace(os.Getenv("GEMINI_OAUTH_CLIENT_ID"))
+		if clientID == "" {
+			clientID = demoCLIClientID
+		}
+		oauthConfig := geminioauth.Config{
+			ClientID:     clientID,
+			ClientSecret: strings.TrimSpace(os.Getenv("GEMINI_OAUTH_CLIENT_SECRET")),
+			Endpoint: geminioauth.Endpoint{
+				AuthURL:  "https://exchange.gemini.com/auth",
+				TokenURL: "https://exchange.gemini.com/auth/token",
+			},
+			RedirectURL: "http://localhost:8787/callback",
+			Scopes:      demoOAuthScopes(rfqSubmitEnabled),
+		}
+		fmt.Println("🔐 [OAuth 2.0] Starting CLI-compatible PKCE login (credentials remain in memory)...")
+		token, err := oauthConfig.Login(ctx, openBrowser)
+		if err != nil {
+			log.Fatalf("OAuth PKCE login failed: %v\n", err)
+		}
+		source, err := geminioauth.NewTokenSource(oauthConfig, *token)
+		if err != nil {
+			log.Fatalf("OAuth token source setup failed: %v\n", err)
+		}
+		clientOptions = append(clientOptions, gemini.WithTokenSource(source))
+		authConfigured = true
+		fmt.Println("   ✅ OAuth PKCE authorization completed; bearer token source configured")
+	}
+	if rfqSubmitEnabled {
+		if !authConfigured {
+			log.Fatal("RFQ submit mode requires GEMINI_ACCESS_TOKEN or GEMINI_DEMO_OAUTH_LOGIN=1")
+		}
+	}
+	client := gemini.NewClient(clientOptions...)
 
 	// 2. REST API: GetSymbols
 	fmt.Print("📡 [REST] Fetching active market symbols...")
@@ -180,8 +247,16 @@ func main() {
 
 	// 9a. Private WebSocket Guardrails: Unauthenticated calls fail safely
 	privateWS := client.PrivateWebSocket()
-	if _, err := privateWS.SubscribeOrderEvents(ctx); err == gemini.ErrAuthenticationRequired {
-		fmt.Println("   🛡️ Private WebSocket correctly enforces authentication guard (ErrAuthenticationRequired)")
+	if !authConfigured {
+		if _, err := privateWS.SubscribeOrderEvents(ctx); err == gemini.ErrAuthenticationRequired {
+			fmt.Println("   🛡️ Private WebSocket correctly enforces authentication guard (ErrAuthenticationRequired)")
+		}
+	} else {
+		fmt.Println("   🔐 Connecting authenticated Private WebSocket (bearer token not displayed)...")
+		if err := privateWS.Connect(ctx); err != nil {
+			log.Fatalf("Authenticated Private WebSocket connection failed: %v\n", err)
+		}
+		fmt.Println("   ✅ OAuth bearer private WebSocket handshake established")
 	}
 
 	// 9b. Public WebSocket: High-throughput unauthenticated market data stream
@@ -193,6 +268,13 @@ func main() {
 		log.Fatalf("Public WebSocket connection failed: %v\n", err)
 	}
 	fmt.Println("   ✅ Public Handshake Established (101 Switching Protocols)")
+
+	fmt.Println("   📡 Subscribing to public RFQ discovery stream (requestForQuote)...")
+	rfqCh, err := ws.SubscribeRFQEvents(ctx)
+	if err != nil {
+		log.Fatalf("SubscribeRFQEvents failed: %v\n", err)
+	}
+	fmt.Println("   ✅ RFQ discovery subscription established")
 
 	fmt.Println("   📡 Subscribing to BTCUSD Depth Feed (btcusd@depth)...")
 	depthCh, err := ws.SubscribeDepth(ctx, "BTCUSD")
@@ -217,10 +299,43 @@ func main() {
 	fmt.Println("\n📥 Streaming real-time market updates & synchronizing L2 Order Book...")
 	receivedDepth := 0
 	receivedTicker := 0
+	rfqObserved := false
+	rfqQuoteSubmitted := false
+	rfqWaitCompleted := false
+	var rfqEvents <-chan *websocket.RFQPublicEvent = rfqCh
+	rfqTimer := time.NewTimer(5 * time.Second)
+	defer rfqTimer.Stop()
+	var rfqWait <-chan time.Time = rfqTimer.C
 
 	deadline := time.After(20 * time.Second)
 	for receivedDepth < 4 || receivedTicker < 2 {
 		select {
+		case rfq, ok := <-rfqEvents:
+			if !ok {
+				fmt.Println("   ℹ️ RFQ discovery stream closed before an event was observed")
+				rfqEvents = nil
+				rfqWait = nil
+				rfqWaitCompleted = true
+				continue
+			}
+			if !rfqObserved {
+				printRFQEvent(rfq)
+				rfqObserved = true
+				rfqEvents = nil
+				rfqWait = nil
+
+				if rfqSubmitEnabled && rfq != nil && rfq.State == websocket.RFQStateOpen {
+					quote, err := privateWS.SubmitRFQQuote(ctx, websocket.RFQSubmitQuoteParams{
+						RFQID: rfq.RFQID, Price: rfqPrice, Quantity: rfqQuantity,
+					})
+					if err != nil {
+						log.Fatalf("SubmitRFQQuote failed: %v\n", err)
+					}
+					rfqQuoteSubmitted = true
+					fmt.Printf("   ✅ Submitted one live RFQ quote (RFQ ID: %s, Quote ID: %s)\n", quote.RFQID, quote.QuoteID)
+				}
+			}
+
 		case depth, ok := <-depthCh:
 			if !ok {
 				log.Fatal("Depth channel closed unexpectedly")
@@ -254,12 +369,62 @@ func main() {
 			fmt.Printf("   🔵 [BookTicker Event %d] %s | Bid: $%s (%s BTC) | Ask: $%s (%s BTC)\n",
 				receivedTicker, bt.Symbol, bt.BidPrice, bt.BidQty, bt.AskPrice, bt.AskQty)
 
+		case <-rfqWait:
+			rfqWaitCompleted = true
+			rfqEvents = nil
+			rfqWait = nil
+			fmt.Println("   ℹ️ No RFQ event was published during the 5-second observation window")
+
 		case <-deadline:
 			log.Fatalf("Timed out after 20s (received %d depth, %d ticker updates)\n", receivedDepth, receivedTicker)
 		}
+	}
+	if rfqObserved {
+		fmt.Println("   ✅ RFQ discovery stream delivered a live event")
+	} else if !rfqWaitCompleted {
+		fmt.Println("   ℹ️ RFQ discovery subscription was active; no event arrived during the bounded validation window")
+	}
+	if rfqSubmitEnabled && !rfqQuoteSubmitted {
+		fmt.Println("   ℹ️ RFQ submit mode was armed, but no open RFQ was observed; no quote was submitted")
 	}
 
 	fmt.Println("\n==================================================")
 	fmt.Println("🎉 ALL REAL LIVE ORDER BOOK & STREAM CHECKS PASSED!")
 	fmt.Println("==================================================")
+}
+
+func openBrowser(rawURL string) error {
+	switch runtime.GOOS {
+	case "darwin":
+		return exec.Command("open", rawURL).Start()
+	case "linux":
+		return exec.Command("xdg-open", rawURL).Start()
+	case "windows":
+		return exec.Command("rundll32", "url.dll,FileProtocolHandler", rawURL).Start()
+	default:
+		return fmt.Errorf("unsupported operating system %q; open the authorization URL manually", runtime.GOOS)
+	}
+}
+
+// demoOAuthScopes returns the minimum scopes needed by the selected demo mode.
+func demoOAuthScopes(rfqSubmitEnabled bool) []string {
+	scopes := []string{"account:read", "balances:read", "orders:read", "history:read"}
+	if rfqSubmitEnabled {
+		scopes = append(scopes, "orders:create")
+	}
+	return scopes
+}
+
+func printRFQEvent(event *websocket.RFQPublicEvent) {
+	if event == nil {
+		fmt.Println("   ⚠️ RFQ discovery stream returned an empty event")
+		return
+	}
+
+	payload, err := json.MarshalIndent(event, "      ", "  ")
+	if err != nil {
+		fmt.Printf("   ⚠️ Could not render RFQ event: %v\n", err)
+		return
+	}
+	fmt.Printf("   ✅ Received live RFQ event:\n%s\n", payload)
 }

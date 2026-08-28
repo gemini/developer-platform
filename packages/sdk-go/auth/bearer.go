@@ -14,8 +14,9 @@ import (
 // Token is called for each authenticated HTTP attempt, including retries, and
 // for each WebSocket connection or reconnect. Implementations should return a
 // currently valid token, honor context cancellation, and be safe for concurrent
-// calls. The SDK does not cache tokens or perform the OAuth authorization-code
-// exchange itself.
+// calls. The low-level auth package does not persist tokens or perform an
+// interactive OAuth authorization-code exchange; the optional oauth package
+// provides those protocol helpers.
 type TokenSource interface {
 	// Token returns an active, non-expired access token or an error if renewal fails.
 	Token(ctx context.Context) (string, error)

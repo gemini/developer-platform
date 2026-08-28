@@ -118,9 +118,45 @@ client := gemini.NewClient(
 The token source is application-owned. It must be safe for concurrent calls,
 honor the request context, and return a current non-expired access token. The
 SDK calls it for each authenticated HTTP attempt and each WebSocket connection
-or reconnect; it does not perform the OAuth authorization-code exchange, cache
-tokens, or force-refresh after a `401` response. Use `gemini.EndpointsFor` to
-look up the authorization and token endpoints for `Production` or `Sandbox`.
+or reconnect; it does not force-refresh after a `401` response. The optional
+`github.com/gemini/gemini-go/oauth` package provides PKCE authorization-code
+and refresh-token helpers without making interactive login part of the core
+client.
+
+The OAuth package keeps token persistence application-owned. Its
+`Config.Login` convenience uses a fixed loopback callback such as
+`http://localhost:8787/callback`; that is the only HTTP URL permitted by the
+package. Authorization and token endpoints must use HTTPS. Applications that
+already have their own browser flow can use `Config.AuthCodeURL` and
+`Config.Exchange` directly, then pass the result to `oauth.NewTokenSource`:
+
+```go
+oauthConfig := oauth.Config{
+    ClientID: os.Getenv("GEMINI_OAUTH_CLIENT_ID"),
+    Endpoint: oauth.Endpoint{
+        AuthURL:  "https://exchange.gemini.com/auth",
+        TokenURL: "https://exchange.gemini.com/auth/token",
+    },
+    RedirectURL: "http://localhost:8787/callback",
+    Scopes:     []string{"account:read", "orders:create"},
+}
+
+token, err := oauthConfig.Login(ctx, openBrowser)
+if err != nil {
+    log.Fatal(err)
+}
+source, err := oauth.NewTokenSource(oauthConfig, *token)
+if err != nil {
+    log.Fatal(err)
+}
+client := gemini.NewClient(gemini.WithTokenSource(source))
+```
+
+`oauth.Source` refreshes once for concurrent callers, honors cancellation
+while waiting for another refresh, and preserves a refresh token when the
+provider omits it from a rotation response. It does not write credentials to
+disk or a keychain; callers may load and persist tokens through their own
+secure storage.
 If a token source fails during an automatic WebSocket reconnect, the SDK stops
 that reconnect loop, reports the underlying error through connection events,
 and leaves the client disconnected so the source can be repaired before a
@@ -156,6 +192,34 @@ GEMINI_OAUTH_ACCESS_TOKEN="..." \
 GEMINI_OAUTH_ENVIRONMENT=sandbox \
 go test -tags=integration ./...
 ```
+
+### Local OAuth and RFQ Demo
+
+The live demo uses the Markets CLI's public OAuth client ID by default, opens
+the production consent page, and keeps the resulting tokens in memory only:
+
+```bash
+cd cmd/demo
+GEMINI_DEMO_OAUTH_LOGIN=1 go run .
+```
+
+To arm one live RFQ quote submission, also provide an explicit confirmation and
+the quote parameters. The demo submits at most one quote, and only for an open
+RFQ observed during its bounded window:
+
+```bash
+GEMINI_DEMO_OAUTH_LOGIN=1 \
+GEMINI_DEMO_RFQ_SUBMIT=1 \
+GEMINI_DEMO_RFQ_CONFIRM=I_UNDERSTAND_THIS_SUBMITS_A_LIVE_RFQ_QUOTE \
+GEMINI_DEMO_RFQ_PRICE="0.55" \
+GEMINI_DEMO_RFQ_QUANTITY="100" \
+go run .
+```
+
+Use `GEMINI_OAUTH_CLIENT_ID` to override the default client ID and
+`GEMINI_OAUTH_CLIENT_SECRET` only when the OAuth application requires one.
+The loopback callback is HTTP on localhost by OAuth convention; all Gemini
+authorization and token endpoints remain HTTPS.
 
 ### 3. Webhook Signature Verification
 
