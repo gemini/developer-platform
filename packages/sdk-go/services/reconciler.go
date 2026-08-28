@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -255,8 +256,17 @@ func (r *QuoteReconciler) Sync(ctx context.Context, targets []DesiredQuote) (*Re
 	matchedResting := make(map[string]bool)
 	matchedTargets := make(map[int]bool)
 
+	// Map iteration order is randomized, so scanning r.resting directly would
+	// make it nondeterministic which duplicate order (e.g. two resting orders
+	// left with identical side/price/amount after a partial fill) gets kept
+	// vs. cancelled-and-replaced. Gemini order IDs are assigned as a
+	// monotonically increasing uint64, so sorting ascending by OrderID and
+	// matching in that order always prefers the oldest, best-queued order.
+	restingByAge := restingOrdersByAge(r.resting)
+
 	for tIdx, target := range cleanTargets {
-		for ordID, ord := range r.resting {
+		for _, ord := range restingByAge {
+			ordID := ord.OrderID
 			if matchedResting[ordID] {
 				continue
 			}
@@ -568,6 +578,30 @@ func (r *QuoteReconciler) CancelAll(ctx context.Context) error {
 		return errors.Join(failures...)
 	}
 	return nil
+}
+
+// restingOrdersByAge returns resting orders sorted oldest-first by their
+// exchange-assigned OrderID, which Gemini issues as a monotonically
+// increasing uint64. Orders whose ID isn't a valid uint64 sort after all
+// numeric IDs, ordered lexicographically among themselves, rather than
+// panicking or reordering unpredictably.
+func restingOrdersByAge(resting map[string]RestingOrder) []RestingOrder {
+	ordered := make([]RestingOrder, 0, len(resting))
+	for _, o := range resting {
+		ordered = append(ordered, o)
+	}
+	sort.Slice(ordered, func(i, j int) bool {
+		iID, iErr := strconv.ParseUint(ordered[i].OrderID, 10, 64)
+		jID, jErr := strconv.ParseUint(ordered[j].OrderID, 10, 64)
+		if iErr == nil && jErr == nil {
+			return iID < jID
+		}
+		if iErr == nil || jErr == nil {
+			return iErr == nil
+		}
+		return ordered[i].OrderID < ordered[j].OrderID
+	})
+	return ordered
 }
 
 // deleteRestingIfUnchanged removes an order only when the ledger still holds

@@ -237,6 +237,74 @@ func TestQuoteReconciler_PreservesNewerEventDuringCancellation(t *testing.T) {
 	}
 }
 
+func TestQuoteReconciler_SyncPrefersOldestDuplicateOrder(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path != "/v1/order/cancel" {
+			http.NotFound(w, r)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(trading.CancelOrderResponse{IsCancelled: ptrBool(true), IsLive: ptrBool(false)})
+	}))
+	defer server.Close()
+
+	reconciler := services.NewQuoteReconciler(
+		services.NewTradingService(
+			transport.NewClient(transport.WithHTTPClient(server.Client())),
+			server.URL,
+		),
+		nil,
+		"BTCUSD",
+	)
+
+	// Two resting orders left with identical side/price/quantity, as can
+	// happen after a partial fill. Order 101 was queued first; the reconciler
+	// must deterministically keep it and cancel the newer duplicate (102)
+	// rather than depending on Go's randomized map iteration order.
+	for _, id := range []int64{101, 102} {
+		reconciler.ApplyOrderEvent(&websocket.OrderEvent{
+			EventType:   "order",
+			Symbol:      "BTCUSD",
+			OrderID:     id,
+			Side:        "BUY",
+			Price:       "100",
+			Quantity:    "1",
+			OrderStatus: "NEW",
+		})
+	}
+
+	target := []services.DesiredQuote{
+		{Side: "buy", Price: types.MustParseDecimal("100"), Amount: types.MustParseDecimal("1")},
+	}
+
+	for i := 0; i < 20; i++ {
+		result, err := reconciler.Sync(context.Background(), target)
+		if err != nil {
+			t.Fatalf("Sync failed: %v", err)
+		}
+		if result.Kept != 1 || result.Cancelled != 1 {
+			t.Fatalf("run %d: unexpected reconcile result: %+v", i, result)
+		}
+
+		active := reconciler.ActiveOrders()
+		if len(active) != 1 || active[0].OrderID != "101" {
+			t.Fatalf("run %d: expected oldest order 101 to be kept, got %+v", i, active)
+		}
+
+		// Restore order 102 for the next iteration so repeated runs keep
+		// exercising the same duplicate-matching decision.
+		reconciler.ApplyOrderEvent(&websocket.OrderEvent{
+			EventType:   "order",
+			Symbol:      "BTCUSD",
+			OrderID:     102,
+			Side:        "BUY",
+			Price:       "100",
+			Quantity:    "1",
+			OrderStatus: "NEW",
+		})
+	}
+}
+
 func TestQuoteReconciler_ApplyOrderEvent(t *testing.T) {
 	reconciler := services.NewQuoteReconciler(nil, nil, "BTCUSD")
 
