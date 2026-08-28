@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -191,6 +192,9 @@ func (c *Client) Execute(ctx context.Context, req *http.Request, payloadJSON []b
 	}
 	if req.URL == nil {
 		return nil, nil, errors.New("gemini transport: request URL is nil")
+	}
+	if c.auth != nil && !strings.EqualFold(req.URL.Scheme, "https") {
+		return nil, nil, ErrHTTPSRequired
 	}
 	if req.Header == nil {
 		req.Header = make(http.Header)

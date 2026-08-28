@@ -3,6 +3,7 @@ package websocket_test
 import (
 	"context"
 	"encoding/json"
+	"math"
 	"testing"
 	"time"
 
@@ -212,6 +213,21 @@ func TestTypedOrderRequestsAcceptFloat64OrderID(t *testing.T) {
 
 	if _, err := client.CancelOrder(context.Background(), websocket.OrderCancelParams{OrderID: float64(7)}); err != nil {
 		t.Fatalf("expected float64 order ID to pass validation, got: %v", err)
+	}
+}
+
+func TestTypedOrderRequestsRejectUnsafeFloat64OrderIDs(t *testing.T) {
+	client := websocket.NewPrivateClient(
+		"wss://ws.gemini.com",
+		auth.NewHMAC("key", "secret"),
+		websocket.WithDialer(&mockDrainDialer{}),
+	)
+	defer client.Close()
+
+	for _, orderID := range []float64{0, -1, 1.5, math.NaN(), math.Inf(1), float64(1 << 53)} {
+		if _, err := client.CancelOrder(context.Background(), websocket.OrderCancelParams{OrderID: orderID}); err == nil {
+			t.Fatalf("expected float64 order ID %v to fail validation", orderID)
+		}
 	}
 }
 

@@ -810,6 +810,23 @@ func TestClient_PublicAndPrivateSeparation(t *testing.T) {
 	_ = orderCh
 }
 
+func TestClient_GenericPrivateMethodsRequireAuthentication(t *testing.T) {
+	dialer := &mockDrainDialer{}
+	client := websocket.NewPublicClient("wss://ws.gemini.com", websocket.WithDialer(dialer))
+	defer client.Close()
+
+	for _, method := range []string{"order.place", "order.cancel", "order.cancel_all", "rfq.submit_quote", "rfq.confirm_quote"} {
+		t.Run(method, func(t *testing.T) {
+			if _, err := client.Request(context.Background(), method, nil); !errors.Is(err, websocket.ErrAuthenticationRequired) {
+				t.Fatalf("Request(%q) error = %v, want ErrAuthenticationRequired", method, err)
+			}
+		})
+	}
+	if got := dialer.connCount(); got != 0 {
+		t.Fatalf("unauthenticated private methods opened %d WebSocket connections", got)
+	}
+}
+
 func TestClient_IndependentPublicPrivateLifecycles(t *testing.T) {
 	dialer := &mockDrainDialer{}
 	apiKey := "lifecycle-key"

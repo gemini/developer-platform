@@ -72,8 +72,9 @@ defer client.Close()
 Custom REST endpoints must use `https`; custom WebSocket endpoints must use the
 `wss` scheme. Endpoints may include a path prefix but cannot include userinfo,
 a query string, or a fragment. `NewClientWithError` validates both before
-returning a client. The lower-level transport adapters remain protocol
-agnostic so they can be used with isolated test fixtures.
+returning a client. Authenticated low-level transport requests also require an
+`https` URL; unauthenticated adapters remain protocol agnostic so they can be
+used with isolated HTTP test fixtures.
 
 ---
 
@@ -383,8 +384,9 @@ order as `STOP_LIMIT` on the order-event stream. `stopPrice` is not valid with
 `MARKET`. The WebSocket contract allows `stopPrice == Price`; the legacy REST
 `TradingService.NewOrder` contract requires a strict inequality (`stopPrice <
 Price` for buys and `stopPrice > Price` for sells). Account-wide cancellation requires
-`CancelAllOptions{Confirm: true}` so a destructive request cannot be issued by
-omitting a parameter accidentally.
+`CancelAllOptions{Confirm: true}` over WebSocket or
+`CancelAllOrdersOptions{Confirm: true}` through `TradingService` so a
+destructive request cannot be issued by omitting a parameter accidentally.
 
 Partial-depth subscriptions use one underlying connection per symbol because
 their snapshot envelope may not include a symbol. Differential depth

@@ -52,6 +52,10 @@ var (
 	// attempted without an authentication strategy.
 	ErrAuthenticationRequired = transport.ErrAuthenticationRequired
 
+	// ErrHTTPSRequired indicates that an authenticated request used an insecure
+	// URL scheme.
+	ErrHTTPSRequired = transport.ErrHTTPSRequired
+
 	// ErrInvalidEnvironment indicates that a client was configured with an
 	// environment that is not one of the SDK's known deployment targets.
 	ErrInvalidEnvironment = errors.New("gemini: invalid environment")

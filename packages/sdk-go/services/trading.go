@@ -15,6 +15,13 @@ type TradingService struct {
 	baseService
 }
 
+// CancelAllOrdersOptions controls the destructive account-wide cancellation
+// endpoint. Callers must explicitly set Confirm to true before a request is
+// sent.
+type CancelAllOrdersOptions struct {
+	Confirm bool
+}
+
 // NewTradingService creates a new TradingService.
 func NewTradingService(client *transport.Client, baseURL string) *TradingService {
 	return &TradingService{
@@ -168,8 +175,13 @@ func (s *TradingService) CancelOrder(ctx context.Context, req *trading.CancelOrd
 	return &res, nil
 }
 
-// CancelAllOrders cancels all active orders for the authenticated account/session.
-func (s *TradingService) CancelAllOrders(ctx context.Context, req *trading.CancelAllOrdersRequest) (*trading.CancelAllResult, error) {
+// CancelAllOrders cancels all active orders for the authenticated account/session
+// after explicit confirmation. The variadic form preserves source compatibility
+// for existing callers, but omitting confirmation now fails closed.
+func (s *TradingService) CancelAllOrders(ctx context.Context, req *trading.CancelAllOrdersRequest, options ...CancelAllOrdersOptions) (*trading.CancelAllResult, error) {
+	if len(options) != 1 || !options[0].Confirm {
+		return nil, transport.ErrCancelConfirmationRequired
+	}
 	if req == nil {
 		req = &trading.CancelAllOrdersRequest{}
 	}

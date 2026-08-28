@@ -63,7 +63,7 @@ func TestPerpetualsService_FundingEndpoints(t *testing.T) {
 		})
 	})
 
-	server := httptest.NewServer(mux)
+	server := httptest.NewTLSServer(mux)
 	defer server.Close()
 
 	tr := transport.NewClient(

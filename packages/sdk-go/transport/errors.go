@@ -64,6 +64,14 @@ var (
 	// attempted without an authentication strategy.
 	ErrAuthenticationRequired = errors.New("gemini client: authentication strategy required")
 
+	// ErrHTTPSRequired indicates that an authenticated HTTP request used an
+	// insecure URL scheme.
+	ErrHTTPSRequired = errors.New("gemini client: authenticated requests require HTTPS")
+
+	// ErrCancelConfirmationRequired indicates that a destructive cancel-all
+	// operation was not explicitly confirmed by the caller.
+	ErrCancelConfirmationRequired = errors.New("gemini client: cancel-all operation requires explicit confirmation")
+
 	ErrConnectionClosed = errors.New("gemini client: connection closed")
 	ErrDeadlineExceeded = errors.New("gemini client: request deadline exceeded")
 	ErrResyncRequired   = errors.New("gemini client: orderbook sequence gap detected; resync required")

@@ -62,6 +62,10 @@ type (
 	// QuoteReconciler manages declarative target order diffing and execution.
 	QuoteReconciler = services.QuoteReconciler
 
+	// CancelAllOrdersOptions protects the REST account-wide cancellation method
+	// from accidental invocation.
+	CancelAllOrdersOptions = services.CancelAllOrdersOptions
+
 	// OrderOption configures an outgoing order request.
 	OrderOption = services.OrderOption
 
@@ -142,7 +146,7 @@ func NewPaginator[T any](ctx context.Context, initialOffset, pageSize int, fetch
 
 // Re-exported helper functions and options.
 var (
-	// ErrCancelConfirmationRequired indicates that a destructive WebSocket cancellation was not confirmed.
+	// ErrCancelConfirmationRequired indicates that a destructive cancel-all operation was not confirmed.
 	ErrCancelConfirmationRequired = websocket.ErrCancelConfirmationRequired
 
 	// ErrNoDialerConfigured indicates that no WebSocket transport adapter was configured.

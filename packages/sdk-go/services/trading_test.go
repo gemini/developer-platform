@@ -3,6 +3,7 @@ package services_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -258,8 +259,25 @@ func TestTradingService_Methods(t *testing.T) {
 	}
 
 	// 5. CancelAllOrders
-	cancelAllRes, err := svc.CancelAllOrders(ctx, nil)
+	cancelAllRes, err := svc.CancelAllOrders(ctx, nil, services.CancelAllOrdersOptions{Confirm: true})
 	if err != nil || cancelAllRes.Details == nil {
 		t.Fatalf("CancelAllOrders failed: %v, %+v", err, cancelAllRes)
+	}
+}
+
+func TestTradingService_CancelAllRequiresExplicitConfirmation(t *testing.T) {
+	var requests int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer server.Close()
+
+	svc := services.NewTradingService(transport.NewClient(transport.WithHTTPClient(server.Client())), server.URL)
+	if _, err := svc.CancelAllOrders(context.Background(), nil); !errors.Is(err, transport.ErrCancelConfirmationRequired) {
+		t.Fatalf("unconfirmed CancelAllOrders error = %v, want ErrCancelConfirmationRequired", err)
+	}
+	if requests != 0 {
+		t.Fatalf("unconfirmed CancelAllOrders reached the server %d times", requests)
 	}
 }

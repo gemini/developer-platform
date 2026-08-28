@@ -294,6 +294,13 @@ func TestVerifySignature(t *testing.T) {
 	if VerifySignature(secret, "tampered-payload", validSig) {
 		t.Fatal("expected tampered payload to fail verification")
 	}
+
+	if VerifySignature("", b64Payload, NewHMAC("any-key", "").Sign([]byte(b64Payload))) {
+		t.Fatal("expected an empty HMAC secret to fail closed")
+	}
+	if VerifySignature(secret, b64Payload, strings.Repeat("g", 96)) {
+		t.Fatal("expected malformed hexadecimal signature to fail verification")
+	}
 }
 
 func TestHMAC_BuildPayload_NoDuplicateEnvelopeKeys(t *testing.T) {

@@ -95,10 +95,18 @@ func (c *Client) Request(ctx context.Context, method string, params any) (Respon
 	if strings.TrimSpace(method) == "" {
 		return ResponseFrame{}, errors.New("gemini websocket: request method is empty")
 	}
+	if requiresAuthentication(method) && c.auth == nil {
+		return ResponseFrame{}, ErrAuthenticationRequired
+	}
 	if err := c.Connect(ctx); err != nil {
 		return ResponseFrame{}, err
 	}
 	return c.requestConnected(ctx, method, params)
+}
+
+func requiresAuthentication(method string) bool {
+	method = strings.ToLower(strings.TrimSpace(method))
+	return strings.HasPrefix(method, "order.") || strings.HasPrefix(method, "rfq.")
 }
 
 // requestConnected sends a request without attempting to establish a

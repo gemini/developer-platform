@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/hmac"
 	"crypto/sha512"
-	"crypto/subtle"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -315,8 +314,15 @@ func (h *HMAC) AuthenticateWebSocket(ctx context.Context, req *http.Request) err
 
 // VerifySignature verifies an incoming Gemini HMAC-SHA384 signature in constant time against a Base64-encoded payload.
 func VerifySignature(secret APISecret, b64Payload, signature string) bool {
+	if strings.TrimSpace(string(secret)) == "" || len(signature) != hex.EncodedLen(sha512.Size384) {
+		return false
+	}
+	provided, err := hex.DecodeString(signature)
+	if err != nil {
+		return false
+	}
+
 	hasher := hmac.New(sha512.New384, []byte(secret))
 	_, _ = io.WriteString(hasher, b64Payload)
-	sig := hashToHex(hasher)
-	return subtle.ConstantTimeCompare([]byte(strings.ToLower(sig)), []byte(strings.ToLower(signature))) == 1
+	return hmac.Equal(hasher.Sum(nil), provided)
 }

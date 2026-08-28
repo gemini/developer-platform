@@ -57,6 +57,33 @@ func TestTransport_ExecuteReturnsReadableResponseBody(t *testing.T) {
 	}
 }
 
+func TestTransport_AuthenticatedRequestsRequireHTTPS(t *testing.T) {
+	var roundTrips atomic.Int32
+	client := NewClient(
+		WithHTTPClient(&http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			roundTrips.Add(1)
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     make(http.Header),
+				Body:       io.NopCloser(strings.NewReader(`{"result":"unexpected"}`)),
+				Request:    req,
+			}, nil
+		})}),
+		WithAuth(auth.NewBearer(auth.BearerToken("test-token"))),
+	)
+
+	req, err := http.NewRequest(http.MethodGet, "http://api.gemini.com/v1/test", nil)
+	if err != nil {
+		t.Fatalf("creating request: %v", err)
+	}
+	if _, _, err := client.Execute(context.Background(), req, nil); !errors.Is(err, ErrHTTPSRequired) {
+		t.Fatalf("Execute error = %v, want ErrHTTPSRequired", err)
+	}
+	if got := roundTrips.Load(); got != 0 {
+		t.Fatalf("insecure authenticated request reached RoundTripper %d times", got)
+	}
+}
+
 func TestTransport_SafeGetRetry(t *testing.T) {
 	var attempts int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -141,7 +168,7 @@ func TestTransport_BearerReauthenticatesSafeGetRetry(t *testing.T) {
 	var attempts atomic.Int32
 	var sourceCalls atomic.Int32
 	var authHeaders []string
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		authHeaders = append(authHeaders, r.Header.Get("Authorization"))
 		if attempts.Add(1) == 1 {
 			w.WriteHeader(http.StatusServiceUnavailable)
@@ -239,7 +266,7 @@ func TestTransport_BearerCredentialsAreNotForwardedAcrossRedirects(t *testing.T)
 	}))
 	defer target.Close()
 
-	redirect := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	redirect := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		redirectAuth = r.Header.Get("Authorization")
 		http.Redirect(w, r, target.URL, http.StatusFound)
 	}))
@@ -342,7 +369,7 @@ func TestTransport_MutatingPostNeverRetried(t *testing.T) {
 func TestTransport_BearerPostNeverRetried(t *testing.T) {
 	var attempts atomic.Int32
 	var sourceCalls atomic.Int32
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts.Add(1)
 		w.WriteHeader(http.StatusTooManyRequests)
 		_, _ = w.Write([]byte(`{"result":"error","reason":"RateLimit","message":"oauth operation rate limited"}`))
@@ -374,7 +401,7 @@ func TestTransport_ClockSkewCalibration(t *testing.T) {
 	// Server clock is 2 hours in the future
 	futureServerTime := time.Now().Add(2 * time.Hour).UTC().Truncate(time.Second)
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Date", futureServerTime.Format(http.TimeFormat))
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"result":"ok"}`))
@@ -417,7 +444,7 @@ func TestTransport_SerializesAuthenticatedRequestsThroughRetries(t *testing.T) {
 	firstRequestStarted := make(chan struct{})
 	releaseFirstRequest := make(chan struct{})
 	var firstRequest sync.Once
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		current := active.Add(1)
 		for {
 			previous := maxActive.Load()

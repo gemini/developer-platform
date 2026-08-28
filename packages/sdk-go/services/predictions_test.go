@@ -17,7 +17,7 @@ import (
 
 func TestPredictionsService_TermsGating(t *testing.T) {
 	termsAccepted := false
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
 		case "/v1/prediction-markets/terms/accept":

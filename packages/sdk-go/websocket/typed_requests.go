@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 
+	"github.com/gemini/gemini-go/transport"
 	"github.com/gemini/gemini-go/types"
 )
 
@@ -82,7 +84,7 @@ type CancelAllOptions struct {
 
 // ErrCancelConfirmationRequired indicates that a destructive cancel-all
 // request was not explicitly confirmed by the caller.
-var ErrCancelConfirmationRequired = errors.New("gemini websocket: cancel-all operation requires explicit confirmation")
+var ErrCancelConfirmationRequired = transport.ErrCancelConfirmationRequired
 
 // ConnInfo returns the open-ended result of conninfo.
 func (c *Client) ConnInfo(ctx context.Context) (JSONObject, error) {
@@ -309,7 +311,8 @@ func validOrderID(value any) bool {
 	case uint64:
 		return id > 0
 	case float64:
-		return id > 0
+		const maxSafeJSONInteger = 1<<53 - 1
+		return id > 0 && id <= maxSafeJSONInteger && math.Trunc(id) == id && !math.IsNaN(id) && !math.IsInf(id, 0)
 	default:
 		return false
 	}
