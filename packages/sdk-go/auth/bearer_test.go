@@ -237,6 +237,7 @@ func TestBearer_Validate(t *testing.T) {
 		wantErr  bool
 	}{
 		{name: "nil source", strategy: auth.NewBearerWithSource(nil), wantErr: true},
+		{name: "nil token func", strategy: auth.NewBearerWithSource(auth.TokenFunc(nil)), wantErr: true},
 		{name: "empty static token", strategy: auth.NewBearer(""), wantErr: true},
 		{name: "dynamic source", strategy: auth.NewBearerWithSource(auth.TokenFunc(func(context.Context) (string, error) {
 			return "token", nil

@@ -73,6 +73,9 @@ func (b *Bearer) Validate() error {
 	if b == nil || b.tokenSource == nil {
 		return ErrInvalidTokenSource
 	}
+	if tf, ok := b.tokenSource.(TokenFunc); ok && tf == nil {
+		return fmt.Errorf("%w: token function is nil", ErrInvalidTokenSource)
+	}
 	if source, ok := b.tokenSource.(staticTokenSource); ok && source.token == "" {
 		return fmt.Errorf("%w: static token is empty", ErrInvalidTokenSource)
 	}
