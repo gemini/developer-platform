@@ -77,6 +77,11 @@ func (c *Client) Send(ctx context.Context, payload any) error {
 		return errors.New("gemini websocket: not connected")
 	}
 	c.mu.RUnlock()
+	// Close is documented (see the Conn interface) as safe to call
+	// concurrently with an in-flight WriteMessage, and gorilla/websocket
+	// itself guarantees this, so conn is not held past this point: doing so
+	// would make Close/state-transition paths that need c.mu wait on a
+	// slow or blocked write (see TestSubscriptionCleanupDoesNotWaitForBlockedWireRequest).
 	return conn.WriteMessage(ctx, TextMessage, data)
 }
 
