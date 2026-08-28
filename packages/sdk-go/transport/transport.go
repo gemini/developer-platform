@@ -277,34 +277,33 @@ func (c *Client) Execute(ctx context.Context, req *http.Request, payloadJSON []b
 			}
 		}
 
-		// Execute HTTP call
-		resp, lastErr = c.httpClient.Do(req.WithContext(ctx))
-		if lastErr != nil {
-			if resp != nil && resp.Body != nil {
-				_ = resp.Body.Close()
+		// Execute HTTP call. Keep the response for this attempt separate from
+		// the response exposed to hooks and callers so an error path can never
+		// leave a partially initialized response behind.
+		attemptResp, attemptErr := c.httpClient.Do(req.WithContext(ctx))
+		lastErr = attemptErr
+		resp = nil
+		if attemptErr != nil {
+			if attemptResp != nil && attemptResp.Body != nil {
+				_ = attemptResp.Body.Close()
 			}
-			resp = nil
-		}
-		if lastErr == nil {
-			if resp == nil {
-				lastErr = ErrNoResponse
-			} else {
-				body, lastErr = readResponseBody(resp)
-				if lastErr == nil {
-					// readResponseBody closes the network response body. Expose a
-					// readable replacement to Execute callers while higher-level
-					// helpers continue to consume the captured bytes directly.
-					resp.Body = io.NopCloser(bytes.NewReader(body))
-				}
+		} else if attemptResp == nil {
+			lastErr = ErrNoResponse
+		} else {
+			resp = attemptResp
+			body, lastErr = readResponseBody(resp)
+			if lastErr == nil {
+				// readResponseBody closes the network response body. Expose a
+				// readable replacement to Execute callers while higher-level
+				// helpers continue to consume the captured bytes directly.
+				resp.Body = io.NopCloser(bytes.NewReader(body))
 			}
 
 			// Calibrate remote clock skew if Date header is present
-			if resp != nil {
-				dateStr := resp.Header.Get("Date")
-				if serverTime, err := http.ParseTime(dateStr); err == nil {
-					if cal, ok := c.auth.(auth.ClockSkewCalibrator); ok {
-						cal.CalibrateServerTime(serverTime)
-					}
+			dateStr := resp.Header.Get("Date")
+			if serverTime, err := http.ParseTime(dateStr); err == nil {
+				if cal, ok := c.auth.(auth.ClockSkewCalibrator); ok {
+					cal.CalibrateServerTime(serverTime)
 				}
 			}
 
@@ -312,6 +311,11 @@ func (c *Client) Execute(ctx context.Context, req *http.Request, payloadJSON []b
 				c.hooks.OnRequestEnd(ctx, req, resp, time.Since(start), nil)
 				return resp, body, nil
 			}
+		}
+		if attemptErr == nil && resp == nil {
+			// Defensive fallback: the branch above should always assign resp
+			// when attemptErr is nil and attemptResp is non-nil.
+			lastErr = ErrNoResponse
 		}
 
 		statusCode := 0

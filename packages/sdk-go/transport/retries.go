@@ -1,11 +1,11 @@
 package transport
 
 import (
+	"crypto/rand"
 	"errors"
 	"io"
 	"math"
-	// nosemgrep: go.lang.security.audit.crypto.math_random.math-random-used
-	"math/rand/v2"
+	"math/big"
 	"net"
 	"net/http"
 	"strconv"
@@ -135,7 +135,10 @@ func (p RetryPolicy) CalculateBackoff(attempt int, retryAfterHeader string) time
 
 	// Full jitter randomizes uniformly between zero and the calculated delay.
 	if p.Jitter {
-		jitterFactor := rand.Float64() // #nosec G404 -- retry jitter is not security-sensitive
+		jitterFactor := 1.0
+		if randomValue, err := rand.Int(rand.Reader, big.NewInt(1_000_000)); err == nil {
+			jitterFactor = float64(randomValue.Int64()) / 1_000_000
+		}
 		delay *= jitterFactor
 	}
 

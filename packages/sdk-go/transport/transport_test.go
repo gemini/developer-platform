@@ -279,6 +279,35 @@ func TestTransport_NilInputsAreHandledWithoutPanic(t *testing.T) {
 	}
 }
 
+func TestTransport_DropsPartialResponseWhenRoundTripReturnsError(t *testing.T) {
+	partialResponse := &http.Response{
+		StatusCode: http.StatusBadGateway,
+		Header:     make(http.Header),
+		Body:       io.NopCloser(strings.NewReader("partial response")),
+	}
+	client := NewClient(
+		WithHTTPClient(&http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+			return partialResponse, errors.New("connection failed")
+		})}),
+		WithRetryPolicy(RetryPolicy{Jitter: false}),
+	)
+	req, err := http.NewRequest(http.MethodGet, "https://api.gemini.com/v1/test", nil)
+	if err != nil {
+		t.Fatalf("creating request: %v", err)
+	}
+
+	resp, body, err := client.Execute(context.Background(), req, nil)
+	if resp != nil {
+		t.Fatalf("Execute returned partial response: %#v", resp)
+	}
+	if body != nil {
+		t.Fatalf("Execute returned partial body: %q", body)
+	}
+	if err == nil || !strings.Contains(err.Error(), "connection failed") {
+		t.Fatalf("Execute error = %v, want connection failure", err)
+	}
+}
+
 func TestTransport_MutatingPostNeverRetried(t *testing.T) {
 	var attempts int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
