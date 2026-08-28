@@ -198,6 +198,23 @@ func TestTypedOrderRequestsRejectInvalidValuesBeforeSending(t *testing.T) {
 	}
 }
 
+func TestTypedOrderRequestsAcceptFloat64OrderID(t *testing.T) {
+	// encoding/json decodes JSON numbers into interface{} as float64, so an
+	// order ID that has round-tripped through generic JSON decoding elsewhere
+	// in a caller's application must still pass validation here.
+	dialer := &mockDrainDialer{responseResult: json.RawMessage(`{"orderId":7}`)}
+	client := websocket.NewPrivateClient(
+		"wss://ws.gemini.com",
+		auth.NewHMAC("key", "secret"),
+		websocket.WithDialer(dialer),
+	)
+	defer client.Close()
+
+	if _, err := client.CancelOrder(context.Background(), websocket.OrderCancelParams{OrderID: float64(7)}); err != nil {
+		t.Fatalf("expected float64 order ID to pass validation, got: %v", err)
+	}
+}
+
 func TestTypedOrderRequestsAllowEqualStopAndLimitPrices(t *testing.T) {
 	client := websocket.NewPrivateClient(
 		"wss://ws.gemini.com",

@@ -308,6 +308,8 @@ func validOrderID(value any) bool {
 		return id > 0
 	case uint64:
 		return id > 0
+	case float64:
+		return id > 0
 	default:
 		return false
 	}
