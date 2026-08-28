@@ -9,6 +9,7 @@
     "url": "git+https://github.com/gemini/developer-platform.git",
     "directory": "packages/sdk-typescript"
   },
+  "homepage": "https://github.com/gemini/developer-platform/tree/main/packages/sdk-typescript",
   "publishConfig": {
     "access": "public",
     "provenance": true
