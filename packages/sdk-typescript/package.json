@@ -1,6 +1,6 @@
 {
   "name": "@gemini-markets/sdk",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Gemini exchange TypeScript SDK — browser and server entry points with HMAC, OAuth (PKCE), REST, and WebSocket support.",
   "type": "module",
   "license": "Apache-2.0",
