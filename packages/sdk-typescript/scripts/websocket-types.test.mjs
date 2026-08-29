@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { addCompatibilityAliases } from "./websocket-compatibility.mjs";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const sdkDir = resolve(scriptDir, "..");
@@ -69,4 +70,23 @@ test("generated control-plane request method literals stay narrowed", () => {
 test("generated WebSocket types preserve the previous RFQ delivery enum export", () => {
   const source = readFileSync(sdkGeneratedPath, "utf8");
   assert.match(source, /export \{ AnonymousSchema_153 as AnonymousSchema_152 \};/);
+});
+
+test("RFQ compatibility alias follows generator-derived anonymous enum names", () => {
+  const source = `export enum AnonymousSchema_999 {
+  FAILED = "FAILED",
+  FINALIZED = "FINALIZED",
+  DECLINED = "DECLINED",
+  CONFIRMED = "CONFIRMED",
+  ACCEPTED = "ACCEPTED",
+  RESERVED_CLOSED = "CLOSED",
+}`;
+
+  assert.match(
+    addCompatibilityAliases(source),
+    /export \{ AnonymousSchema_999 as AnonymousSchema_152 \};/,
+  );
+
+  const stableSource = source.replaceAll("AnonymousSchema_999", "AnonymousSchema_152");
+  assert.equal(addCompatibilityAliases(stableSource), stableSource);
 });

@@ -22,6 +22,7 @@ import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve, join } from "node:path";
 import { loadPublishedSpecText } from "./spec-sources.mjs";
+import { addCompatibilityAliases } from "./websocket-compatibility.mjs";
 
 const PUBLISHED_SPEC_URL = "https://developer.gemini.com/specs/asyncapi/websocket.yaml";
 
@@ -164,17 +165,6 @@ function refineRfqLegSymbol(source) {
   const block = source.slice(start, end);
   if (/^\s*s\??:\s*string;/m.test(block)) return source;
   return `${source.slice(0, end)}\n  s?: string;${source.slice(end)}`;
-}
-
-// Preserve the public enum export emitted by the previous generated schema
-// numbering. Anonymous schema names are generator-derived and may shift when
-// the upstream document changes, but removing an exported name is a breaking
-// change for consumers. Keep the old RFQ delivery enum as a deprecated alias.
-function addCompatibilityAliases(source) {
-  if (!source.includes("export enum AnonymousSchema_153 {")) {
-    throw new Error("generate-ws-types: expected AnonymousSchema_153 for compatibility alias.");
-  }
-  return `${source}\n\n/** @deprecated Use AnonymousSchema_153. */\nexport { AnonymousSchema_153 as AnonymousSchema_152 };`;
 }
 
 // Modelina's library output doesn't prefix declarations with `export`; add it
