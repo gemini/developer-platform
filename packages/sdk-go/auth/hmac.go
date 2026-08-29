@@ -19,7 +19,7 @@ import (
 	"time"
 )
 
-// NonceGenerator generates strictly monotonic nonce strings.
+// NonceGenerator generates nonce strings.
 type NonceGenerator interface {
 	Next() string
 }
@@ -51,6 +51,27 @@ func newSecondNonce(nowFunc func() time.Time) *monotonicNonce {
 		nowFunc: nowFunc,
 		unit:    func(now time.Time) int64 { return now.Unix() },
 	}
+}
+
+type timeBasedNonce struct {
+	skewOffset atomic.Int64 // Skew in nanoseconds
+	nowFunc    func() time.Time
+}
+
+func newTimeBasedNonce(nowFunc func() time.Time) *timeBasedNonce {
+	if nowFunc == nil {
+		nowFunc = time.Now
+	}
+	return &timeBasedNonce{nowFunc: nowFunc}
+}
+
+func (n *timeBasedNonce) SetSkew(skew time.Duration) {
+	n.skewOffset.Store(int64(skew))
+}
+
+func (n *timeBasedNonce) Next() string {
+	skew := time.Duration(n.skewOffset.Load())
+	return strconv.FormatInt(n.nowFunc().Add(skew).Unix(), 10)
 }
 
 func (m *monotonicNonce) SetSkew(skew time.Duration) {
@@ -123,8 +144,8 @@ func WithNonceMode(mode NonceMode) HMACOption {
 		}
 		h.nonceMode = mode
 		if mode == NonceModeTimeBased {
-			h.nonces = newSecondNonce(time.Now)
-			h.wsNonces = newSecondNonce(time.Now)
+			h.nonces = newTimeBasedNonce(time.Now)
+			h.wsNonces = newTimeBasedNonce(time.Now)
 			return
 		}
 		h.nonces = newMonotonicNonce(time.Now)
@@ -166,8 +187,8 @@ func NewHMAC(key APIKey, secret APISecret, opts ...HMACOption) *HMAC {
 // authentication.
 func NewTimeBasedHMAC(key APIKey, secret APISecret, opts ...HMACOption) *HMAC {
 	allOpts := make([]HMACOption, 0, len(opts)+1)
-	allOpts = append(allOpts, opts...)
 	allOpts = append(allOpts, WithNonceMode(NonceModeTimeBased))
+	allOpts = append(allOpts, opts...)
 	return NewHMAC(key, secret, allOpts...)
 }
 
@@ -208,7 +229,7 @@ func (h *HMAC) AcquireRequest(ctx context.Context) (func(), error) {
 	}
 }
 
-// NextNonce returns the next strictly monotonic nonce.
+// NextNonce returns the next nonce for the configured nonce mode.
 func (h *HMAC) NextNonce() string {
 	return h.nonces.Next()
 }
@@ -221,6 +242,12 @@ func (h *HMAC) CalibrateServerTime(serverTime time.Time) {
 	}
 	if mono, ok := h.wsNonces.(*monotonicNonce); ok {
 		mono.SetSkew(skew)
+	}
+	if timestamp, ok := h.nonces.(*timeBasedNonce); ok {
+		timestamp.SetSkew(skew)
+	}
+	if timestamp, ok := h.wsNonces.(*timeBasedNonce); ok {
+		timestamp.SetSkew(skew)
 	}
 }
 

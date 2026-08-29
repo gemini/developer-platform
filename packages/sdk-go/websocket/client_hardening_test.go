@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"sync"
 	"sync/atomic"
@@ -86,6 +87,27 @@ type hardeningDialer struct {
 	calls atomic.Int32
 }
 
+type trackingResponseBody struct {
+	closed atomic.Bool
+}
+
+func (*trackingResponseBody) Read([]byte) (int, error) {
+	return 0, io.EOF
+}
+
+func (b *trackingResponseBody) Close() error {
+	b.closed.Store(true)
+	return nil
+}
+
+type failedHandshakeDialer struct {
+	body *trackingResponseBody
+}
+
+func (d *failedHandshakeDialer) Dial(context.Context, string, http.Header) (Conn, *http.Response, error) {
+	return nil, &http.Response{StatusCode: http.StatusUnauthorized, Body: d.body}, errors.New("handshake rejected")
+}
+
 func (d *hardeningDialer) Dial(context.Context, string, http.Header) (Conn, *http.Response, error) {
 	d.calls.Add(1)
 	if d.conn == nil {
@@ -109,6 +131,19 @@ func waitForConnectionError(t *testing.T, events <-chan ConnectionEvent, want er
 		case <-deadline:
 			t.Fatalf("timed out waiting for connection error %v", want)
 		}
+	}
+}
+
+func TestClient_ClosesFailedHandshakeResponseBody(t *testing.T) {
+	body := &trackingResponseBody{}
+	client := NewClient("wss://ws.gemini.com", WithDialer(&failedHandshakeDialer{body: body}))
+	t.Cleanup(func() { _ = client.Close() })
+
+	if err := client.Connect(context.Background()); err == nil {
+		t.Fatal("Connect() error = nil, want handshake failure")
+	}
+	if !body.closed.Load() {
+		t.Fatal("failed handshake response body was not closed")
 	}
 }
 

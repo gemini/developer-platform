@@ -129,6 +129,7 @@ func (c *Client) NewQuoteReconciler(symbol string, opts ...services.ReconcilerOp
 // supplied HTTP clients remain shared and caller-owned.
 func (c *Client) WithOptions(opts ...Option) *Client {
 	newCfg := *c.config
+	newCfg.configErr = nil
 	if c.config.ownsHTTPClient {
 		// A default client owns its transport. Let newClientFromConfig create a
 		// fresh client so closing either facade cannot close idle connections

@@ -60,6 +60,18 @@ func TestMonotonicNonce_Concurrency(t *testing.T) {
 	}
 }
 
+func TestTimeBasedNonce_RemainsAtCurrentEpochSecond(t *testing.T) {
+	fixedTime := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	gen := newTimeBasedNonce(func() time.Time { return fixedTime })
+	want := strconv.FormatInt(fixedTime.Unix(), 10)
+
+	for i := 0; i < 100; i++ {
+		if got := gen.Next(); got != want {
+			t.Fatalf("nonce %d = %q, want current epoch second %q", i, got, want)
+		}
+	}
+}
+
 func TestHMAC_Authenticate(t *testing.T) {
 	key := APIKey("my-test-api-key")
 	secret := APISecret("my-test-secret-12345")
@@ -236,8 +248,8 @@ func TestHMAC_MonotonicNonceRejectsWebSocketAuthentication(t *testing.T) {
 func TestTimeBasedHMACSupportsRESTAndWebSocketAuthentication(t *testing.T) {
 	fixedTime := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
 	h := NewTimeBasedHMAC(APIKey("key"), APISecret("secret"))
-	h.nonces = newSecondNonce(func() time.Time { return fixedTime })
-	h.wsNonces = newSecondNonce(func() time.Time { return fixedTime })
+	h.nonces = newTimeBasedNonce(func() time.Time { return fixedTime })
+	h.wsNonces = newTimeBasedNonce(func() time.Time { return fixedTime })
 
 	restReq := httptest.NewRequest("POST", "https://api.gemini.com/v1/order/new", nil)
 	if err := h.Authenticate(context.Background(), restReq, nil); err != nil {
@@ -261,6 +273,15 @@ func TestTimeBasedHMACSupportsRESTAndWebSocketAuthentication(t *testing.T) {
 	}
 	if got := wsReq.Header.Get(geminiNonceHeader); got != strconv.FormatInt(fixedTime.Unix(), 10) {
 		t.Fatalf("WebSocket nonce = %q, want %d", got, fixedTime.Unix())
+	}
+}
+
+func TestNewTimeBasedHMAC_AppliesCustomNonceGenerator(t *testing.T) {
+	gen := newMonotonicNonce(func() time.Time { return time.UnixMilli(123) })
+	h := NewTimeBasedHMAC("key", "secret", WithCustomNonceGenerator(gen))
+
+	if got := h.NextNonce(); got != "123" {
+		t.Fatalf("NextNonce() = %q, want custom generator nonce 123", got)
 	}
 }
 

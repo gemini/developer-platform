@@ -109,6 +109,9 @@ func (c *Client) dial(ctx context.Context, dialer Dialer, wsURL string) (Conn, *
 		return nil, nil, err
 	}
 	conn, resp, err := dialer.Dial(ctx, wsURL, headers)
+	if (err != nil || conn == nil) && resp != nil && resp.Body != nil {
+		_ = resp.Body.Close()
+	}
 	if err == nil && conn == nil {
 		return nil, resp, errors.New("gemini websocket: dialer returned a nil connection")
 	}
