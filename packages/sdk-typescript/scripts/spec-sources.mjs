@@ -10,7 +10,7 @@ export const PUBLISHED_SPECS = Object.freeze({
 const PUBLISHED_SPEC_SHA256 = Object.freeze({
   [PUBLISHED_SPECS.rest]: "79a0dc4061f3942dca8b30a589bbd406c781d2c6c19283d87cb21177afdcab5e",
   [PUBLISHED_SPECS.predictionMarkets]: "0c70a976f4553ae39d14d6851416cb974f081919216b94ebd851f044d108cfe7",
-  [PUBLISHED_SPECS.websocket]: "72910c6993db03ada3aaf7de4f6c0c3bb56d74148c77407e9a96a121ab333feb",
+  [PUBLISHED_SPECS.websocket]: "904160ee9d2f5ba4c4a789e0173877ca936019fefa83a2eba1dcf2a1fef2a796",
 });
 
 const ALLOWED_PUBLISHED_SPEC_URLS = new Set(Object.values(PUBLISHED_SPECS));

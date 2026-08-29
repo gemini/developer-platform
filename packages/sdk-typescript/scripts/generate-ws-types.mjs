@@ -22,6 +22,7 @@ import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve, join } from "node:path";
 import { loadPublishedSpecText } from "./spec-sources.mjs";
+import { addCompatibilityAliases } from "./websocket-compatibility.mjs";
 
 const PUBLISHED_SPEC_URL = "https://developer.gemini.com/specs/asyncapi/websocket.yaml";
 
@@ -169,12 +170,12 @@ function refineRfqLegSymbol(source) {
 // Modelina's library output doesn't prefix declarations with `export`; add it
 // so the barrel file exports every type.
 const body = refineRfqLegSymbol(
-  refineKnownMethodLiterals(
+  addCompatibilityAliases(refineKnownMethodLiterals(
     models
       .map((m) => m.result)
       .join("\n\n")
       .replace(/^(interface |enum |type )/gm, "export $1"),
-  ),
+  )),
 );
 
 if (/\bany\b/.test(body)) {

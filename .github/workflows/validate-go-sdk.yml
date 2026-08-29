@@ -1,0 +1,90 @@
+name: Validate Go SDK
+
+on:
+  pull_request:
+    paths:
+      - "packages/sdk-go/**"
+      - ".github/workflows/validate-go-sdk.yml"
+      - ".github/workflows/release-go-sdk.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  minimum-go:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: packages/sdk-go
+
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+        with:
+          go-version: "1.23.x"
+          cache: false
+
+      - name: Test with minimum supported Go
+        env:
+          GOTOOLCHAIN: local
+        run: go test ./...
+
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: packages/sdk-go
+
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+        with:
+          # The generator module pins the minimum Go toolchain required by the
+          # vulnerability-fixed code generator; the SDK itself supports Go 1.23.
+          go-version-file: packages/sdk-go/scripts/go.mod
+          cache: true
+          cache-dependency-path: |
+            packages/sdk-go/go.mod
+            packages/sdk-go/go.sum
+            packages/sdk-go/websocket/gorilla/go.mod
+            packages/sdk-go/websocket/gorilla/go.sum
+            packages/sdk-go/scripts/go.mod
+            packages/sdk-go/scripts/go.sum
+            packages/sdk-go/cmd/demo/go.mod
+            packages/sdk-go/cmd/demo/go.sum
+
+      - name: Verify module dependencies
+        run: |
+          go mod verify
+          (cd websocket/gorilla && go mod verify)
+          (cd scripts && go mod verify)
+          (cd cmd/demo && go mod verify)
+
+      - run: make test
+      - run: make race
+      - run: make vet
+      - name: Verify 32-bit wire integer decoding
+        run: GOARCH=386 go test ./generated/clearing
+      - run: make generate-check
+      - run: make release-smoke
+
+      - name: Install pinned security analyzers
+        env:
+          GOBIN: ${{ runner.temp }}/go-bin
+        run: |
+          # Use immutable module revisions rather than mutable release tags.
+          go install golang.org/x/vuln/cmd/govulncheck@d1f380186385b4f64e00313f31743df8e4b89a77 # v1.1.4
+          go install github.com/securego/gosec/v2/cmd/gosec@c9453023c4e81ebdb6dde29e22d9cd5e2285fb16 # v2.22.8
+          go install honnef.co/go/tools/cmd/staticcheck@b8ec13ce4d00445d75da053c47498e6f9ec5d7d6 # 2025.1.1
+          echo "$GOBIN" >> "$GITHUB_PATH"
+
+      - name: Run security analyzers
+        run: make security

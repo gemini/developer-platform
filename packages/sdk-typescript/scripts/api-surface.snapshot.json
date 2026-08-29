@@ -59,7 +59,12 @@
       {
         "kind": "EnumDeclaration",
         "name": "AnonymousSchema_152",
-        "declaration": "export declare enum AnonymousSchema_152 { RESERVED_CLOSED = \"CLOSED\", ACCEPTED = \"ACCEPTED\", CONFIRMED = \"CONFIRMED\", DECLINED = \"DECLINED\", FINALIZED = \"FINALIZED\", FAILED = \"FAILED\" }"
+        "declaration": "export declare enum AnonymousSchema_153 { RESERVED_CLOSED = \"CLOSED\", ACCEPTED = \"ACCEPTED\", CONFIRMED = \"CONFIRMED\", DECLINED = \"DECLINED\", FINALIZED = \"FINALIZED\", FAILED = \"FAILED\" }"
+      },
+      {
+        "kind": "EnumDeclaration",
+        "name": "AnonymousSchema_153",
+        "declaration": "export declare enum AnonymousSchema_153 { RESERVED_CLOSED = \"CLOSED\", ACCEPTED = \"ACCEPTED\", CONFIRMED = \"CONFIRMED\", DECLINED = \"DECLINED\", FINALIZED = \"FINALIZED\", FAILED = \"FAILED\" }"
       },
       {
         "kind": "InterfaceDeclaration",
@@ -764,7 +769,7 @@
       {
         "kind": "InterfaceDeclaration",
         "name": "RfqPrivateDelivery",
-        "declaration": "export interface RfqPrivateDelivery { e: 'requestForQuote'; i: string; E: number | bigint; r: string; x: AnonymousSchema_152; S: RfqLifecycleState; q?: string; p?: string; sz?: string; qs?: RfqQuoteStatus; vu?: number | bigint; }"
+        "declaration": "export interface RfqPrivateDelivery { e: 'requestForQuote'; i: string; E: number | bigint; r: string; x: AnonymousSchema_153; S: RfqLifecycleState; q?: string; p?: string; sz?: string; qs?: RfqQuoteStatus; vu?: number | bigint; }"
       },
       {
         "kind": "InterfaceDeclaration",
@@ -1051,7 +1056,12 @@
       {
         "kind": "EnumDeclaration",
         "name": "AnonymousSchema_152",
-        "declaration": "export declare enum AnonymousSchema_152 { RESERVED_CLOSED = \"CLOSED\", ACCEPTED = \"ACCEPTED\", CONFIRMED = \"CONFIRMED\", DECLINED = \"DECLINED\", FINALIZED = \"FINALIZED\", FAILED = \"FAILED\" }"
+        "declaration": "export declare enum AnonymousSchema_153 { RESERVED_CLOSED = \"CLOSED\", ACCEPTED = \"ACCEPTED\", CONFIRMED = \"CONFIRMED\", DECLINED = \"DECLINED\", FINALIZED = \"FINALIZED\", FAILED = \"FAILED\" }"
+      },
+      {
+        "kind": "EnumDeclaration",
+        "name": "AnonymousSchema_153",
+        "declaration": "export declare enum AnonymousSchema_153 { RESERVED_CLOSED = \"CLOSED\", ACCEPTED = \"ACCEPTED\", CONFIRMED = \"CONFIRMED\", DECLINED = \"DECLINED\", FINALIZED = \"FINALIZED\", FAILED = \"FAILED\" }"
       },
       {
         "kind": "InterfaceDeclaration",
@@ -1801,7 +1811,7 @@
       {
         "kind": "InterfaceDeclaration",
         "name": "RfqPrivateDelivery",
-        "declaration": "export interface RfqPrivateDelivery { e: 'requestForQuote'; i: string; E: number | bigint; r: string; x: AnonymousSchema_152; S: RfqLifecycleState; q?: string; p?: string; sz?: string; qs?: RfqQuoteStatus; vu?: number | bigint; }"
+        "declaration": "export interface RfqPrivateDelivery { e: 'requestForQuote'; i: string; E: number | bigint; r: string; x: AnonymousSchema_153; S: RfqLifecycleState; q?: string; p?: string; sz?: string; qs?: RfqQuoteStatus; vu?: number | bigint; }"
       },
       {
         "kind": "InterfaceDeclaration",

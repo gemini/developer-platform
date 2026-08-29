@@ -7,6 +7,7 @@ A suite of developer tools for integrating with the [Gemini](https://www.gemini.
 | Package | Description |
 |---------|-------------|
 | [`packages/mcp-server`](packages/mcp-server/) | MCP server exposing Gemini API as tools for AI assistants |
+| [`packages/sdk-go`](packages/sdk-go/) | Official Go SDK for the Gemini REST and WebSocket APIs |
 | [`samples/`](samples/) | REST and WebSocket examples in TypeScript, Python, and Go |
 | [`skills/`](skills/) | Claude Code skills (e.g., terminal candlestick charts) |
 
