@@ -33,7 +33,15 @@ jobs:
           cache-dependency-path: packages/sdk-typescript/package-lock.json
 
       - name: Verify release tag
+        env:
+          RELEASE_TAG_CREATED: ${{ github.event.created }}
+          RELEASE_TAG_FORCED: ${{ github.event.forced }}
         run: |
+          test "$RELEASE_TAG_CREATED" = "true"
+          test "$RELEASE_TAG_FORCED" = "false"
+          test "$(git cat-file -t "$GITHUB_REF_NAME")" = "tag"
+          tagged_commit="$(git rev-parse "$GITHUB_REF_NAME^{commit}")"
+          test "$tagged_commit" = "$GITHUB_SHA"
           tag_version="${GITHUB_REF_NAME#typescript-sdk-v}"
           package_version="$(node -p "JSON.parse(require('fs').readFileSync('package.json', 'utf8')).version")"
           test "$tag_version" = "$package_version"
