@@ -2513,7 +2513,7 @@ type ListTradesParams struct {
 	Timestamp *TimestampType `form:"timestamp,omitempty" json:"timestamp,omitempty"`
 
 	// SinceTid Only retuns trades that executed after this tid. since_tid trumps timestamp parameter which has no effect if provided too. You may set since_tid to zero to get the earliest available trade history data.
-	SinceTid *float32 `form:"since_tid,omitempty" json:"since_tid,omitempty"`
+	SinceTid *int64 `form:"since_tid,omitempty" json:"since_tid,omitempty"`
 
 	// LimitTrades The maximum number of trades to return. The default is 50.
 	LimitTrades *float32 `form:"limit_trades,omitempty" json:"limit_trades,omitempty"`

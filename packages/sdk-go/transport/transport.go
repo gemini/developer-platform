@@ -182,16 +182,33 @@ func (c *Client) ConfigurationError() error {
 // requests, so a request reused after an authenticated call must not carry
 // credentials or a signed/bodyless request shape into a public call.
 func resetUnauthenticatedRequest(req *http.Request) {
+	hasGeminiAuthentication := false
+	for _, key := range []string{
+		"X-GEMINI-APIKEY",
+		"X-GEMINI-NONCE",
+		"X-GEMINI-PAYLOAD",
+		"X-GEMINI-SIGNATURE",
+	} {
+		if req.Header.Get(key) != "" {
+			hasGeminiAuthentication = true
+		}
+	}
 	for _, key := range []string{
 		"Authorization",
 		"X-GEMINI-APIKEY",
 		"X-GEMINI-NONCE",
 		"X-GEMINI-PAYLOAD",
 		"X-GEMINI-SIGNATURE",
-		"Content-Type",
-		"Content-Length",
-		"Cache-Control",
 	} {
+		req.Header.Del(key)
+	}
+	// A public request may have a caller-supplied body. Only discard body
+	// state when the request carries Gemini authentication state left by a
+	// previous SDK auth strategy; otherwise preserve the caller's request.
+	if !hasGeminiAuthentication {
+		return
+	}
+	for _, key := range []string{"Content-Type", "Content-Length", "Cache-Control"} {
 		req.Header.Del(key)
 	}
 	req.Body = http.NoBody

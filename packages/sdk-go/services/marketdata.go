@@ -112,7 +112,7 @@ func listTradesQuery(params *marketdata.ListTradesParams) url.Values {
 		q.Set("timestamp", timestamp)
 	}
 	if params.SinceTid != nil {
-		q.Set("since_tid", strconv.FormatFloat(float64(*params.SinceTid), 'f', -1, 32))
+		q.Set("since_tid", strconv.FormatInt(*params.SinceTid, 10))
 	}
 	if params.LimitTrades != nil {
 		q.Set("limit_trades", strconv.FormatFloat(float64(*params.LimitTrades), 'f', -1, 32))

@@ -115,6 +115,39 @@ func TestTransport_PublicRequestClearsPriorAuthenticationState(t *testing.T) {
 	}
 }
 
+func TestTransport_PublicRequestPreservesCallerSuppliedBody(t *testing.T) {
+	var receivedBody string
+	var receivedContentType string
+	client := NewClient(WithHTTPClient(&http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		body, err := io.ReadAll(req.Body)
+		if err != nil {
+			return nil, err
+		}
+		receivedBody = string(body)
+		receivedContentType = req.Header.Get("Content-Type")
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     make(http.Header),
+			Body:       io.NopCloser(strings.NewReader(`{"result":"ok"}`)),
+			Request:    req,
+		}, nil
+	})}))
+	req, err := http.NewRequest(http.MethodPost, "https://api.gemini.com/v1/public", strings.NewReader(`caller-body`))
+	if err != nil {
+		t.Fatalf("creating request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/custom")
+	if _, _, err := client.Execute(context.Background(), req, nil); err != nil {
+		t.Fatalf("public Execute failed: %v", err)
+	}
+	if receivedBody != "caller-body" {
+		t.Fatalf("public request body = %q, want caller body", receivedBody)
+	}
+	if receivedContentType != "application/custom" {
+		t.Fatalf("public Content-Type = %q, want caller header", receivedContentType)
+	}
+}
+
 func TestTransport_AuthenticatedRequestsRequireHTTPS(t *testing.T) {
 	var roundTrips atomic.Int32
 	client := NewClient(

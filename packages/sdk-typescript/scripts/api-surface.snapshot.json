@@ -58,6 +58,11 @@
       },
       {
         "kind": "EnumDeclaration",
+        "name": "AnonymousSchema_152",
+        "declaration": "export declare enum AnonymousSchema_153 { RESERVED_CLOSED = \"CLOSED\", ACCEPTED = \"ACCEPTED\", CONFIRMED = \"CONFIRMED\", DECLINED = \"DECLINED\", FINALIZED = \"FINALIZED\", FAILED = \"FAILED\" }"
+      },
+      {
+        "kind": "EnumDeclaration",
         "name": "AnonymousSchema_153",
         "declaration": "export declare enum AnonymousSchema_153 { RESERVED_CLOSED = \"CLOSED\", ACCEPTED = \"ACCEPTED\", CONFIRMED = \"CONFIRMED\", DECLINED = \"DECLINED\", FINALIZED = \"FINALIZED\", FAILED = \"FAILED\" }"
       },
@@ -1017,6 +1022,11 @@
         "kind": "EnumDeclaration",
         "name": "AnonymousSchema_148",
         "declaration": "export declare enum AnonymousSchema_148 { YES = \"YES\", NO = \"NO\" }"
+      },
+      {
+        "kind": "EnumDeclaration",
+        "name": "AnonymousSchema_152",
+        "declaration": "export declare enum AnonymousSchema_153 { RESERVED_CLOSED = \"CLOSED\", ACCEPTED = \"ACCEPTED\", CONFIRMED = \"CONFIRMED\", DECLINED = \"DECLINED\", FINALIZED = \"FINALIZED\", FAILED = \"FAILED\" }"
       },
       {
         "kind": "EnumDeclaration",

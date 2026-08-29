@@ -119,6 +119,7 @@ var wideIntegerPropertyNames = map[string]struct{}{
 	"last_updated_ms": {},
 	"order_id":        {},
 	"quoteId":         {},
+	"since_tid":       {},
 	"tid":             {},
 	"timestamp_nanos": {},
 	"timestampms":     {},
@@ -282,6 +283,7 @@ func fixDoc(doc *openapi3.T) {
 		}
 		for _, paramRef := range doc.Components.Parameters {
 			if paramRef != nil && paramRef.Value != nil && paramRef.Value.Schema != nil && paramRef.Value.Schema.Value != nil {
+				setWideIntegerOverride(paramRef.Value.Name, paramRef.Value.Schema.Value)
 				fixSchema(paramRef.Value.Schema.Value)
 			}
 		}
@@ -306,6 +308,7 @@ func fixDoc(doc *openapi3.T) {
 				}
 				for _, paramRef := range op.Parameters {
 					if paramRef != nil && paramRef.Value != nil && paramRef.Value.Schema != nil && paramRef.Value.Schema.Value != nil {
+						setWideIntegerOverride(paramRef.Value.Name, paramRef.Value.Schema.Value)
 						fixSchema(paramRef.Value.Schema.Value)
 					}
 				}

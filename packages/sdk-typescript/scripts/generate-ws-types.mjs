@@ -166,15 +166,26 @@ function refineRfqLegSymbol(source) {
   return `${source.slice(0, end)}\n  s?: string;${source.slice(end)}`;
 }
 
+// Preserve the public enum export emitted by the previous generated schema
+// numbering. Anonymous schema names are generator-derived and may shift when
+// the upstream document changes, but removing an exported name is a breaking
+// change for consumers. Keep the old RFQ delivery enum as a deprecated alias.
+function addCompatibilityAliases(source) {
+  if (!source.includes("export enum AnonymousSchema_153 {")) {
+    throw new Error("generate-ws-types: expected AnonymousSchema_153 for compatibility alias.");
+  }
+  return `${source}\n\n/** @deprecated Use AnonymousSchema_153. */\nexport { AnonymousSchema_153 as AnonymousSchema_152 };`;
+}
+
 // Modelina's library output doesn't prefix declarations with `export`; add it
 // so the barrel file exports every type.
 const body = refineRfqLegSymbol(
-  refineKnownMethodLiterals(
+  addCompatibilityAliases(refineKnownMethodLiterals(
     models
       .map((m) => m.result)
       .join("\n\n")
       .replace(/^(interface |enum |type )/gm, "export $1"),
-  ),
+  )),
 );
 
 if (/\bany\b/.test(body)) {

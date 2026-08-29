@@ -65,3 +65,8 @@ test("generated control-plane request method literals stay narrowed", () => {
   assert.match(interfaceBlock(source, "UnsubscribeRequest"), /^\s*method: "UNSUBSCRIBE" \| "unsubscribe";/m);
   assert.match(interfaceBlock(source, "ListSubscriptionsRequest"), /^\s*method: "LIST_SUBSCRIPTIONS" \| "list_subscriptions";/m);
 });
+
+test("generated WebSocket types preserve the previous RFQ delivery enum export", () => {
+  const source = readFileSync(sdkGeneratedPath, "utf8");
+  assert.match(source, /export \{ AnonymousSchema_153 as AnonymousSchema_152 \};/);
+});

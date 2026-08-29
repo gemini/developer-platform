@@ -114,7 +114,7 @@ func TestMarketDataService_Methods(t *testing.T) {
 	if err := timestamp.FromTimestampType1(1700000000000); err != nil {
 		t.Fatalf("constructing trade timestamp failed: %v", err)
 	}
-	sinceTID := float32(123)
+	sinceTID := int64(123)
 	maxTrades := float32(10)
 	includeBreaks := true
 	trades, err = svc.GetTradesWithParams(ctx, "btcusd", &marketdata.ListTradesParams{
@@ -125,6 +125,10 @@ func TestMarketDataService_Methods(t *testing.T) {
 	})
 	if err != nil || len(trades) != 1 || capturedPath != "/v1/trades/btcusd" || capturedQuery != "include_breaks=true&limit_trades=10&since_tid=123&timestamp=1700000000000" {
 		t.Fatalf("GetTradesWithParams failed: err=%v path=%q query=%q", err, capturedPath, capturedQuery)
+	}
+	largeSinceTID := int64(1<<24 + 123)
+	if _, err := svc.GetTradesWithParams(ctx, "btcusd", &marketdata.ListTradesParams{SinceTid: &largeSinceTID}); err != nil || capturedQuery != "since_tid=16777339" {
+		t.Fatalf("GetTradesWithParams lost exact since_tid: err=%v query=%q", err, capturedQuery)
 	}
 
 	// 7. GetCandles

@@ -434,3 +434,6 @@ export enum RfqQuoteStatus {
   WON = "WON",
   LOST = "LOST",
 }
+
+/** @deprecated Use AnonymousSchema_153. */
+export { AnonymousSchema_153 as AnonymousSchema_152 };
