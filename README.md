@@ -7,84 +7,11 @@ A suite of developer tools for integrating with the [Gemini](https://www.gemini.
 | Package | Description |
 |---------|-------------|
 | [`packages/mcp-server`](packages/mcp-server/) | MCP server exposing Gemini API as tools for AI assistants |
-| [`packages/sdk-go`](packages/sdk-go/) | Official Go SDK for the Gemini REST and WebSocket APIs (core module) |
-| [`packages/sdk-go/websocket/gorilla`](packages/sdk-go/websocket/gorilla/) | Optional Gorilla WebSocket adapter for the Go SDK |
-| [`packages/sdk-typescript`](packages/sdk-typescript/) ([npm package](https://www.npmjs.com/package/@gemini-markets/sdk)) | Official TypeScript SDK for REST and WebSocket APIs, with server and browser entry points |
+| [Go SDK](packages/sdk-go/README.md) | Official Go SDK for the Gemini REST and WebSocket APIs |
+| [Go SDK Gorilla WebSocket adapter](packages/sdk-go/websocket/gorilla/) | Optional Gorilla WebSocket adapter for the Go SDK |
+| [TypeScript SDK](packages/sdk-typescript/README.md) ([npm package](https://www.npmjs.com/package/@gemini-markets/sdk)) | Official TypeScript SDK for REST and WebSocket APIs, with server and browser entry points |
 | [`samples/`](samples/) | REST and WebSocket examples in TypeScript, Python, and Go |
 | [`skills/`](skills/) | Claude Code skills (e.g., terminal candlestick charts) |
-
-## Go SDKs
-
-The Go SDK is split into two Go modules. The core module uses only the Go
-standard library; the optional Gorilla module provides a WebSocket dialer:
-
-```bash
-go get github.com/gemini/developer-platform/packages/sdk-go
-go get github.com/gemini/developer-platform/packages/sdk-go/websocket/gorilla
-```
-
-Use the core SDK to call public or authenticated REST endpoints:
-
-```go
-package main
-
-import (
-    "context"
-    "fmt"
-    "log"
-    "os"
-
-    "github.com/gemini/developer-platform/packages/sdk-go"
-)
-
-func main() {
-    client := gemini.NewClient(
-        gemini.WithAPIKey(os.Getenv("GEMINI_API_KEY"), os.Getenv("GEMINI_API_SECRET")),
-    )
-    defer client.Close()
-
-    ticker, err := client.MarketData.GetTicker(context.Background(), "BTCUSD")
-    if err != nil {
-        log.Fatal(err)
-    }
-    fmt.Println("BTCUSD last price:", gemini.Val(ticker.Last))
-}
-```
-
-For sandbox requests, add `gemini.WithEnvironment(gemini.Sandbox)`. See the
-[Go SDK README](packages/sdk-go/README.md) for REST services, WebSocket feeds,
-OAuth, generated request models, and testing guidance.
-
-## TypeScript SDK
-
-Install the published package with npm:
-
-```bash
-npm install @gemini-markets/sdk
-```
-
-Choose an explicit runtime entry point. Use `/server` for Node.js backends,
-bots, and HMAC authentication; use `/browser` for browser or edge clients and
-public market data or OAuth PKCE REST requests:
-
-```ts
-import { createClient, HmacAuth } from "@gemini-markets/sdk/server";
-
-const gemini = await createClient({
-  env: "sandbox", // or "production"
-  auth: new HmacAuth({
-    apiKey: process.env.GEMINI_API_KEY!,
-    apiSecret: process.env.GEMINI_API_SECRET!,
-  }),
-});
-
-const ticker = await gemini.marketData.getTicker({ symbol: "BTCUSD" });
-console.log(ticker.last);
-```
-
-The package is ESM-only and requires Node.js 22.4 or newer for server use. See
-the [TypeScript SDK README](packages/sdk-typescript/README.md) for browser
-constraints, OAuth, WebSockets, and supported product domains.
 
 ## Samples
 
@@ -131,8 +58,7 @@ cd samples/go && go mod download
 ## Configuration
 
 Samples, the MCP server, and the Go demo read credentials from environment
-variables. When using an SDK directly, pass the values through its client
-options as shown above:
+variables. See each package README for SDK-specific configuration:
 
 | Variable | Description |
 |----------|-------------|
