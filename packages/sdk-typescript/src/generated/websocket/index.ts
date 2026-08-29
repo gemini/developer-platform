@@ -409,7 +409,7 @@ export interface RfqPrivateDelivery {
   i: string;
   E: number | bigint;
   r: string;
-  x: AnonymousSchema_152;
+  x: AnonymousSchema_153;
   S: RfqLifecycleState;
   q?: string;
   p?: string;
@@ -418,7 +418,7 @@ export interface RfqPrivateDelivery {
   vu?: number | bigint;
 }
 
-export enum AnonymousSchema_152 {
+export enum AnonymousSchema_153 {
   RESERVED_CLOSED = "CLOSED",
   ACCEPTED = "ACCEPTED",
   CONFIRMED = "CONFIRMED",

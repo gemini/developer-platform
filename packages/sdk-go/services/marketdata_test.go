@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/gemini/developer-platform/packages/sdk-go/generated/marketdata"
 	"github.com/gemini/developer-platform/packages/sdk-go/services"
 	"github.com/gemini/developer-platform/packages/sdk-go/transport"
 )
@@ -103,6 +104,27 @@ func TestMarketDataService_Methods(t *testing.T) {
 	trades, err := svc.GetTrades(ctx, "btcusd", 5)
 	if err != nil || len(trades) != 1 || capturedPath != "/v1/trades/btcusd" || capturedQuery != "limit_trades=5" {
 		t.Fatalf("GetTrades failed: %v", err)
+	}
+	const largeLimit = 1<<24 + 1
+	if _, err := svc.GetTrades(ctx, "btcusd", largeLimit); err != nil || capturedQuery != "limit_trades=16777217" {
+		t.Fatalf("GetTrades lost exact integer limit: err=%v query=%q", err, capturedQuery)
+	}
+
+	var timestamp marketdata.TimestampType
+	if err := timestamp.FromTimestampType1(1700000000000); err != nil {
+		t.Fatalf("constructing trade timestamp failed: %v", err)
+	}
+	sinceTID := float32(123)
+	maxTrades := float32(10)
+	includeBreaks := true
+	trades, err = svc.GetTradesWithParams(ctx, "btcusd", &marketdata.ListTradesParams{
+		Timestamp:     &timestamp,
+		SinceTid:      &sinceTID,
+		LimitTrades:   &maxTrades,
+		IncludeBreaks: &includeBreaks,
+	})
+	if err != nil || len(trades) != 1 || capturedPath != "/v1/trades/btcusd" || capturedQuery != "include_breaks=true&limit_trades=10&since_tid=123&timestamp=1700000000000" {
+		t.Fatalf("GetTradesWithParams failed: err=%v path=%q query=%q", err, capturedPath, capturedQuery)
 	}
 
 	// 7. GetCandles

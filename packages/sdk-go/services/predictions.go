@@ -72,8 +72,15 @@ func (s *PredictionsService) GetTermsStatus(ctx context.Context) (*predictions.P
 
 // GetCategories returns active prediction market categories.
 func (s *PredictionsService) GetCategories(ctx context.Context) ([]string, error) {
+	return s.GetCategoriesWithParams(ctx, nil)
+}
+
+// GetCategoriesWithParams returns prediction market categories filtered by
+// the optional event status values defined by the API contract.
+func (s *PredictionsService) GetCategoriesWithParams(ctx context.Context, params *predictions.GetCategoriesParams) ([]string, error) {
+	path := withQuery("/v1/prediction-markets/categories", getCategoriesQuery(params))
 	var res []string
-	if err := s.public.get(ctx, "/v1/prediction-markets/categories", &res); err != nil {
+	if err := s.public.get(ctx, path, &res); err != nil {
 		return nil, err
 	}
 	return res, nil
@@ -136,6 +143,17 @@ func listEventsQuery(params *predictions.ListEventsParams) url.Values {
 	}
 	if params.Offset != nil {
 		q.Set("offset", strconv.Itoa(*params.Offset))
+	}
+	return q
+}
+
+func getCategoriesQuery(params *predictions.GetCategoriesParams) url.Values {
+	q := url.Values{}
+	if params == nil {
+		return q
+	}
+	for _, status := range valueOrEmpty(params.Status) {
+		q.Add("status", string(status))
 	}
 	return q
 }

@@ -58,11 +58,12 @@ type ResponseErrorPayload struct {
 // UnmarshalJSON handles both string and numeric "id" fields from exchange responses.
 func (r *ResponseFrame) UnmarshalJSON(data []byte) error {
 	type alias ResponseFrame
+	next := ResponseFrame{}
 	aux := struct {
 		RawID json.RawMessage `json:"id,omitempty"`
 		*alias
 	}{
-		alias: (*alias)(r),
+		alias: (*alias)(&next),
 	}
 	if err := json.Unmarshal(data, &aux); err != nil {
 		return err
@@ -72,13 +73,14 @@ func (r *ResponseFrame) UnmarshalJSON(data []byte) error {
 		if err != nil {
 			return fmt.Errorf("gemini websocket: invalid response id: %w", err)
 		}
-		r.ID = id
+		aux.alias.ID = id
 	}
-	if r.Error != nil {
-		if r.Error.Message == "" && r.Error.Msg != "" {
-			r.Error.Message = r.Error.Msg
+	if aux.alias.Error != nil {
+		if aux.alias.Error.Message == "" && aux.alias.Error.Msg != "" {
+			aux.alias.Error.Message = aux.alias.Error.Msg
 		}
 	}
+	*r = next
 	return nil
 }
 

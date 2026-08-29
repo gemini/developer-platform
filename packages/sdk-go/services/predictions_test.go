@@ -113,6 +113,7 @@ func TestPredictionsService_TermsGatingDoesNotAcceptFailedResponse(t *testing.T)
 }
 
 func TestPredictionsService_ReadEndpoints(t *testing.T) {
+	var categoryStatus []string
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
@@ -121,6 +122,7 @@ func TestPredictionsService_ReadEndpoints(t *testing.T) {
 		case "/v1/prediction-markets/terms/status":
 			_, _ = w.Write([]byte(`{"acceptedVersion":2,"hasAcceptedLatest":false,"latestVersion":3}`))
 		case "/v1/prediction-markets/categories":
+			categoryStatus = append([]string(nil), r.URL.Query()["status"]...)
 			_, _ = w.Write([]byte(`["crypto","sports"]`))
 		case "/v1/prediction-markets/events":
 			query := r.URL.Query()
@@ -177,6 +179,16 @@ func TestPredictionsService_ReadEndpoints(t *testing.T) {
 	}
 	if len(categories) != 2 || categories[0] != "crypto" || categories[1] != "sports" {
 		t.Fatalf("unexpected categories: %v", categories)
+	}
+
+	statusFilter := predictions.MarketStatusActive
+	if _, err := service.GetCategoriesWithParams(context.Background(), &predictions.GetCategoriesParams{
+		Status: &[]predictions.MarketStatus{statusFilter},
+	}); err != nil {
+		t.Fatalf("GetCategoriesWithParams failed: %v", err)
+	}
+	if !reflect.DeepEqual(categoryStatus, []string{"active"}) {
+		t.Fatalf("expected category status filter to be forwarded, got %v", categoryStatus)
 	}
 
 	eventStatus := predictions.MarketStatusActive

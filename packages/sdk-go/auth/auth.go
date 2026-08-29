@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strings"
+	"unicode"
 )
 
 // ErrInvalidTokenSource indicates that OAuth bearer authentication was
@@ -40,6 +42,18 @@ func clearAuthenticationHeaders(header http.Header) {
 	} {
 		header.Del(key)
 	}
+}
+
+func validHeaderCredential(value string) bool {
+	if strings.TrimSpace(value) == "" {
+		return false
+	}
+	for _, char := range value {
+		if unicode.IsSpace(char) || unicode.IsControl(char) {
+			return false
+		}
+	}
+	return true
 }
 
 // Strategy defines the interface for signing and authenticating HTTP requests to Gemini.

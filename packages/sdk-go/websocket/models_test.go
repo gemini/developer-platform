@@ -45,6 +45,31 @@ func TestResponseFrame_DecodesStringID(t *testing.T) {
 	}
 }
 
+func TestResponseFrame_DecodingSparseFrameClearsPreviousState(t *testing.T) {
+	frame := ResponseFrame{
+		ID:     "old-request",
+		Status: 500,
+		Result: json.RawMessage(`{"value":1}`),
+		Error:  &ResponseErrorPayload{Code: 1001, Message: "old error"},
+	}
+	if err := json.Unmarshal([]byte(`{"status":200,"id":null}`), &frame); err != nil {
+		t.Fatalf("failed to decode sparse response frame: %v", err)
+	}
+	if frame.ID != "" || frame.Status != 200 || frame.Result != nil || frame.Error != nil {
+		t.Fatalf("sparse response retained stale state: %+v", frame)
+	}
+}
+
+func TestResponseFrame_InvalidIDDoesNotPartiallyMutateReceiver(t *testing.T) {
+	frame := ResponseFrame{ID: "old-request", Status: 200, Result: json.RawMessage(`null`)}
+	if err := json.Unmarshal([]byte(`{"id":true}`), &frame); err == nil {
+		t.Fatal("expected invalid response ID to fail")
+	}
+	if frame.ID != "old-request" || frame.Status != 200 || string(frame.Result) != "null" {
+		t.Fatalf("invalid response mutated receiver: %+v", frame)
+	}
+}
+
 func TestRequestErrorAndConnectionStateFormatting(t *testing.T) {
 	withMessage := &RequestError{ID: "7", Status: 400, Code: 1001, Message: "invalid request"}
 	if got := withMessage.Error(); got == "" {

@@ -2,8 +2,10 @@ package services
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/url"
+	"strconv"
 
 	"github.com/gemini/developer-platform/packages/sdk-go/generated/marketdata"
 	"github.com/gemini/developer-platform/packages/sdk-go/transport"
@@ -81,13 +83,62 @@ func (s *MarketDataService) GetOrderBook(ctx context.Context, symbol string, lim
 func (s *MarketDataService) GetTrades(ctx context.Context, symbol string, limitTrades int) ([]marketdata.Trade, error) {
 	path := "/v1/trades/" + url.PathEscape(symbol)
 	if limitTrades > 0 {
-		path = fmt.Sprintf("%s?limit_trades=%d", path, limitTrades)
+		path = withQuery(path, url.Values{"limit_trades": {strconv.Itoa(limitTrades)}})
 	}
 	var trades []marketdata.Trade
 	if err := s.get(ctx, path, &trades); err != nil {
 		return nil, err
 	}
 	return trades, nil
+}
+
+// GetTradesWithParams returns trades using all optional query parameters
+// defined by the API contract.
+func (s *MarketDataService) GetTradesWithParams(ctx context.Context, symbol string, params *marketdata.ListTradesParams) ([]marketdata.Trade, error) {
+	path := withQuery("/v1/trades/"+url.PathEscape(symbol), listTradesQuery(params))
+	var trades []marketdata.Trade
+	if err := s.get(ctx, path, &trades); err != nil {
+		return nil, err
+	}
+	return trades, nil
+}
+
+func listTradesQuery(params *marketdata.ListTradesParams) url.Values {
+	q := url.Values{}
+	if params == nil {
+		return q
+	}
+	if timestamp, ok := timestampQueryValue(params.Timestamp); ok {
+		q.Set("timestamp", timestamp)
+	}
+	if params.SinceTid != nil {
+		q.Set("since_tid", strconv.FormatFloat(float64(*params.SinceTid), 'f', -1, 32))
+	}
+	if params.LimitTrades != nil {
+		q.Set("limit_trades", strconv.FormatFloat(float64(*params.LimitTrades), 'f', -1, 32))
+	}
+	if params.IncludeBreaks != nil {
+		q.Set("include_breaks", strconv.FormatBool(*params.IncludeBreaks))
+	}
+	return q
+}
+
+func timestampQueryValue(timestamp *marketdata.TimestampType) (string, bool) {
+	if timestamp == nil {
+		return "", false
+	}
+	raw, err := json.Marshal(timestamp)
+	if err != nil || len(raw) == 0 || string(raw) == "null" {
+		return "", false
+	}
+	if raw[0] == '"' {
+		var value string
+		if err := json.Unmarshal(raw, &value); err != nil {
+			return "", false
+		}
+		return value, true
+	}
+	return string(raw), true
 }
 
 // GetCandles returns OHLCV candlestick data for a symbol and timeframe.

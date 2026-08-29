@@ -157,10 +157,12 @@ func TestAuthenticationStrategiesClearReservedHeaders(t *testing.T) {
 
 func TestHMAC_ValidateRejectsMissingCredentials(t *testing.T) {
 	for name, strategy := range map[string]*HMAC{
-		"nil":          nil,
-		"empty key":    NewHMAC("", "secret"),
-		"empty secret": NewHMAC("key", ""),
-		"zero value":   &HMAC{},
+		"nil":              nil,
+		"empty key":        NewHMAC("", "secret"),
+		"key with space":   NewHMAC("key with space", "secret"),
+		"key with newline": NewHMAC("key\nwith-newline", "secret"),
+		"empty secret":     NewHMAC("key", ""),
+		"zero value":       &HMAC{},
 	} {
 		t.Run(name, func(t *testing.T) {
 			if err := strategy.Validate(); err != ErrInvalidHMACCredentials {

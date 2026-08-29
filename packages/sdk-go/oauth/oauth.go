@@ -452,30 +452,43 @@ func (s *Source) Token(ctx context.Context) (string, error) {
 	refreshToken := s.token.RefreshToken
 	s.mu.Unlock()
 
-	refreshed, err := s.config.Refresh(ctx, refreshToken)
-	if err == nil {
-		if refreshed.RefreshToken == "" {
-			refreshed.RefreshToken = refreshToken
+	// A refresh is shared by all callers, but each caller still owns its wait.
+	// Detach the refresh operation from the leader's cancellation so a short
+	// request deadline cannot make otherwise healthy concurrent callers fail.
+	refreshCtx, refreshCancel := context.WithTimeout(context.WithoutCancel(ctx), defaultTokenTimeout)
+	go func() {
+		defer refreshCancel()
+		refreshed, err := s.config.Refresh(refreshCtx, refreshToken)
+		if err == nil {
+			if refreshed.RefreshToken == "" {
+				refreshed.RefreshToken = refreshToken
+			}
+			if refreshed.TokenType == "" {
+				refreshed.TokenType = "Bearer"
+			}
 		}
-		if refreshed.TokenType == "" {
-			refreshed.TokenType = "Bearer"
-		}
-	}
 
-	s.mu.Lock()
-	if err == nil {
-		s.token = *refreshed
-		current.token = refreshed.AccessToken
-	} else {
-		current.err = err
+		s.mu.Lock()
+		if err == nil {
+			s.token = *refreshed
+			current.token = refreshed.AccessToken
+		} else {
+			current.err = err
+		}
+		s.refreshing = nil
+		close(current.done)
+		s.mu.Unlock()
+	}()
+
+	select {
+	case <-current.done:
+		if current.err != nil {
+			return "", fmt.Errorf("%w: %w", ErrTokenRefresh, current.err)
+		}
+		return current.token, nil
+	case <-ctx.Done():
+		return "", ctx.Err()
 	}
-	s.refreshing = nil
-	close(current.done)
-	s.mu.Unlock()
-	if err != nil {
-		return "", fmt.Errorf("%w: %w", ErrTokenRefresh, err)
-	}
-	return current.token, nil
 }
 
 func (c Config) validate() error {

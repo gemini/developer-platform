@@ -396,6 +396,74 @@ func TestTokenSourceWaitingCallHonorsCancellation(t *testing.T) {
 	}
 }
 
+func TestTokenSourceLeaderCancellationDoesNotCancelSharedRefresh(t *testing.T) {
+	refreshStarted := make(chan struct{})
+	releaseRefresh := make(chan struct{})
+	var refreshes atomic.Int32
+	server := httptest.NewTLSServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		refreshes.Add(1)
+		close(refreshStarted)
+		<-releaseRefresh
+		writer.Header().Set("Content-Type", "application/json")
+		_, _ = writer.Write([]byte(`{"access_token":"refreshed-token","token_type":"Bearer","expires_in":3600}`))
+	}))
+	defer server.Close()
+
+	cfg := validConfig(server.URL)
+	cfg.HTTPClient = server.Client()
+	source, err := NewTokenSource(cfg, Token{AccessToken: "expired", RefreshToken: "refresh", ExpiresAt: time.Now().Add(-time.Hour)}, WithEarlyExpiry(0))
+	if err != nil {
+		t.Fatalf("NewTokenSource() error = %v", err)
+	}
+
+	leaderCtx, cancelLeader := context.WithCancel(context.Background())
+	leaderResult := make(chan error, 1)
+	go func() {
+		_, callErr := source.Token(leaderCtx)
+		leaderResult <- callErr
+	}()
+	select {
+	case <-refreshStarted:
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for refresh to start")
+	}
+
+	waiterResult := make(chan struct {
+		token string
+		err   error
+	}, 1)
+	go func() {
+		token, callErr := source.Token(context.Background())
+		waiterResult <- struct {
+			token string
+			err   error
+		}{token: token, err: callErr}
+	}()
+	cancelLeader()
+
+	select {
+	case callErr := <-leaderResult:
+		if !errors.Is(callErr, context.Canceled) {
+			t.Fatalf("leader Token() error = %v, want context.Canceled", callErr)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("canceled leader Token() did not return")
+	}
+
+	close(releaseRefresh)
+	select {
+	case result := <-waiterResult:
+		if result.err != nil || result.token != "refreshed-token" {
+			t.Fatalf("waiting Token() = %q, %v; want refreshed-token, nil", result.token, result.err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("waiting Token() did not receive the shared refresh result")
+	}
+	if refreshes.Load() != 1 {
+		t.Fatalf("refresh endpoint called %d times, want 1", refreshes.Load())
+	}
+}
+
 func TestTokenRequestsDoNotRetryOrFollowRedirects(t *testing.T) {
 	var redirected atomic.Int32
 	target := httptest.NewTLSServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {

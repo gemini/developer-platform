@@ -125,7 +125,7 @@ func NewHMAC(key APIKey, secret APISecret, opts ...HMACOption) *HMAC {
 
 // Validate reports whether the HMAC strategy has usable credentials.
 func (h *HMAC) Validate() error {
-	if h == nil || strings.TrimSpace(string(h.key)) == "" || strings.TrimSpace(string(h.secret)) == "" {
+	if h == nil || !validHeaderCredential(string(h.key)) || strings.TrimSpace(string(h.secret)) == "" {
 		return ErrInvalidHMACCredentials
 	}
 	return nil
