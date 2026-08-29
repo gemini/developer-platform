@@ -69,7 +69,7 @@ test("generated control-plane request method literals stay narrowed", () => {
 
 test("generated WebSocket types preserve the previous RFQ delivery enum export", () => {
   const source = readFileSync(sdkGeneratedPath, "utf8");
-  assert.match(source, /export \{ AnonymousSchema_153 as AnonymousSchema_152 \};/);
+  assert.equal(addCompatibilityAliases(source), source);
 });
 
 test("RFQ compatibility alias follows generator-derived anonymous enum names", () => {
