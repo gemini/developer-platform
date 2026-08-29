@@ -37,3 +37,37 @@ func TestDispatchSymbolLessSnapshotFencesOlderGeneration(t *testing.T) {
 	}
 	client.Close()
 }
+
+func TestDispatchSymbolLessSnapshotDoesNotBecomeDifferentialBaseline(t *testing.T) {
+	client := NewClient("wss://ws.sandbox.gemini.com")
+	client.state.Store(int32(StateConnected))
+
+	partial := newSubscription[OrderBookSnapshot](1)
+	differential := newSubscription[DepthUpdate](1)
+	client.subsMu.Lock()
+	tables := client.subTables.Load().clone()
+	tables.partialDepthSubs["BTCUSD"] = []*subscription[OrderBookSnapshot]{partial}
+	tables.depthSubs["BTCUSD"] = []*subscription[DepthUpdate]{differential}
+	client.subTables.Store(tables)
+	client.subsMu.Unlock()
+
+	stop := make(chan struct{})
+	const snapshot = `{"lastUpdateId":7,"bids":[["100","1"]],"asks":[]}`
+	if handled, err := client.dispatchOrderBookSnapshot(stop, []byte(snapshot), 1, tables); !handled || err != nil {
+		t.Fatalf("dispatchOrderBookSnapshot() = handled %t, error %v", handled, err)
+	}
+	select {
+	case got := <-partial.ch:
+		if got.Symbol != "BTCUSD" || got.LastUpdateID != 7 {
+			t.Fatalf("unexpected partial snapshot: %+v", got)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for partial snapshot")
+	}
+	select {
+	case got := <-differential.ch:
+		t.Fatalf("partial snapshot was delivered as differential update: %+v", got)
+	default:
+	}
+	client.Close()
+}

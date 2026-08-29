@@ -57,6 +57,64 @@ func TestTransport_ExecuteReturnsReadableResponseBody(t *testing.T) {
 	}
 }
 
+func TestTransport_PublicRequestClearsPriorAuthenticationState(t *testing.T) {
+	var publicRequest *http.Request
+	response := func(req *http.Request) (*http.Response, error) {
+		if req.URL.Host == "public.example" {
+			publicRequest = req
+		}
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     make(http.Header),
+			Body:       io.NopCloser(strings.NewReader(`{"result":"ok"}`)),
+			Request:    req,
+		}, nil
+	}
+
+	authenticated := NewClient(
+		WithHTTPClient(&http.Client{Transport: roundTripFunc(response)}),
+		WithAuth(auth.NewHMAC("key", "secret")),
+	)
+	req, err := http.NewRequest(http.MethodPost, "https://api.gemini.com/v1/private", nil)
+	if err != nil {
+		t.Fatalf("creating request: %v", err)
+	}
+	if _, _, err := authenticated.Execute(context.Background(), req, []byte(`{"symbol":"BTCUSD"}`)); err != nil {
+		t.Fatalf("authenticated Execute failed: %v", err)
+	}
+
+	publicURL, err := http.NewRequest(http.MethodGet, "https://public.example/v1/symbols", nil)
+	if err != nil {
+		t.Fatalf("creating public URL: %v", err)
+	}
+	req.URL = publicURL.URL
+	req.Method = http.MethodGet
+	public := NewClient(WithHTTPClient(&http.Client{Transport: roundTripFunc(response)}))
+	if _, _, err := public.Execute(context.Background(), req, nil); err != nil {
+		t.Fatalf("public Execute failed: %v", err)
+	}
+	if publicRequest == nil {
+		t.Fatal("public request did not reach the RoundTripper")
+	}
+	for _, key := range []string{
+		"Authorization",
+		"X-GEMINI-APIKEY",
+		"X-GEMINI-NONCE",
+		"X-GEMINI-PAYLOAD",
+		"X-GEMINI-SIGNATURE",
+		"Content-Type",
+		"Content-Length",
+		"Cache-Control",
+	} {
+		if got := publicRequest.Header.Get(key); got != "" {
+			t.Errorf("public request retained %s=%q", key, got)
+		}
+	}
+	if publicRequest.Body != http.NoBody || publicRequest.GetBody != nil || publicRequest.ContentLength != 0 {
+		t.Fatalf("public request retained authenticated body state: body=%v getBody=%v contentLength=%d", publicRequest.Body, publicRequest.GetBody != nil, publicRequest.ContentLength)
+	}
+}
+
 func TestTransport_AuthenticatedRequestsRequireHTTPS(t *testing.T) {
 	var roundTrips atomic.Int32
 	client := NewClient(

@@ -34,8 +34,9 @@ func (c *Client) dispatchOrderBookSnapshot(stop <-chan struct{}, payload []byte,
 		return true, nil
 	}
 
+	symbolLess := strings.TrimSpace(envelope.Symbol) == ""
 	symbol := strings.ToUpper(envelope.Symbol)
-	if symbol == "" {
+	if symbolLess {
 		var ok bool
 		symbol, ok = c.uniqueSnapshotSymbol(tables)
 		if !ok {
@@ -60,6 +61,14 @@ func (c *Client) dispatchOrderBookSnapshot(stop <-chan struct{}, payload []byte,
 	}
 	for _, sub := range tables.partialDepthSubs[symbol] {
 		sub.send(stop, snapshot)
+	}
+	// A symbol-less frame is the partial-depth contract. The shared client
+	// normally rejects mixed depth variants before they reach this point, but
+	// keep the dispatcher fail-closed if a stale table or a future subscription
+	// path ever violates that invariant: never synthesize an incomplete
+	// differential-depth baseline from a partial snapshot.
+	if symbolLess && len(tables.partialDepthSubs[symbol]) > 0 {
+		return true, nil
 	}
 
 	if len(tables.depthSubs[symbol]) == 0 {

@@ -16,6 +16,12 @@ import (
 	"github.com/gemini/developer-platform/packages/sdk-go/auth"
 )
 
+type typedNilTokenSource struct{}
+
+func (*typedNilTokenSource) Token(context.Context) (string, error) {
+	return "", nil
+}
+
 func TestBearer_StaticToken(t *testing.T) {
 	token := auth.BearerToken("oauth-access-token-abc-123")
 	strategy := auth.NewBearer(token)
@@ -32,6 +38,22 @@ func TestBearer_StaticToken(t *testing.T) {
 	authHeader := req.Header.Get("Authorization")
 	if authHeader != "Bearer oauth-access-token-abc-123" {
 		t.Fatalf("expected 'Bearer oauth-access-token-abc-123', got %s", authHeader)
+	}
+}
+
+func TestBearer_RejectsTypedNilTokenSource(t *testing.T) {
+	var source *typedNilTokenSource
+	strategy := auth.NewBearerWithSource(source)
+
+	if err := strategy.Validate(); !errors.Is(err, auth.ErrInvalidTokenSource) {
+		t.Fatalf("Validate() error = %v, want ErrInvalidTokenSource", err)
+	}
+	req, err := http.NewRequest(http.MethodGet, "https://api.gemini.com/v1/balances", nil)
+	if err != nil {
+		t.Fatalf("failed creating request: %v", err)
+	}
+	if err := strategy.Authenticate(context.Background(), req, nil); !errors.Is(err, auth.ErrInvalidTokenSource) {
+		t.Fatalf("Authenticate() error = %v, want ErrInvalidTokenSource", err)
 	}
 }
 

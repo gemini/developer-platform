@@ -101,7 +101,7 @@ func TestQuoteReconciler_StartStreamingHydratesAndAppliesEvents(t *testing.T) {
 	dialer := &reconcilerStreamDialer{}
 	wsClient := websocket.NewPrivateClient(
 		"wss://ws.gemini.com",
-		auth.NewHMAC(auth.APIKey("key"), auth.APISecret("secret")),
+		auth.NewTimeBasedHMAC(auth.APIKey("key"), auth.APISecret("secret")),
 		websocket.WithDialer(dialer),
 	)
 	t.Cleanup(func() { _ = wsClient.Close() })
@@ -164,7 +164,7 @@ func TestQuoteReconciler_RehydratesAfterOrdinaryReconnect(t *testing.T) {
 	dialer := &reconcilerStreamDialer{}
 	wsClient := websocket.NewPrivateClient(
 		"wss://ws.gemini.com",
-		auth.NewHMAC(auth.APIKey("key"), auth.APISecret("secret")),
+		auth.NewTimeBasedHMAC(auth.APIKey("key"), auth.APISecret("secret")),
 		websocket.WithDialer(dialer),
 	)
 	t.Cleanup(func() { _ = wsClient.Close() })
@@ -246,7 +246,7 @@ func TestQuoteReconciler_SerializesInitialAndReconnectHydration(t *testing.T) {
 	dialer := &reconcilerStreamDialer{}
 	wsClient := websocket.NewPrivateClient(
 		"wss://ws.gemini.com",
-		auth.NewHMAC(auth.APIKey("key"), auth.APISecret("secret")),
+		auth.NewTimeBasedHMAC(auth.APIKey("key"), auth.APISecret("secret")),
 		websocket.WithDialer(dialer),
 	)
 	t.Cleanup(func() { _ = wsClient.Close() })
@@ -338,7 +338,7 @@ func TestQuoteReconciler_StartStreamingBuffersEventsDuringHydration(t *testing.T
 	dialer := &reconcilerStreamDialer{}
 	wsClient := websocket.NewPrivateClient(
 		"wss://ws.gemini.com",
-		auth.NewHMAC(auth.APIKey("key"), auth.APISecret("secret")),
+		auth.NewTimeBasedHMAC(auth.APIKey("key"), auth.APISecret("secret")),
 		websocket.WithDialer(dialer),
 	)
 	t.Cleanup(func() { _ = wsClient.Close() })
@@ -411,7 +411,7 @@ func TestQuoteReconciler_StartStreamingDoesNotUnsubscribeOtherOrderSubscribers(t
 	dialer := &reconcilerStreamDialer{}
 	wsClient := websocket.NewPrivateClient(
 		"wss://ws.gemini.com",
-		auth.NewHMAC(auth.APIKey("key"), auth.APISecret("secret")),
+		auth.NewTimeBasedHMAC(auth.APIKey("key"), auth.APISecret("secret")),
 		websocket.WithDialer(dialer),
 	)
 	t.Cleanup(func() { _ = wsClient.Close() })
@@ -464,7 +464,7 @@ func TestQuoteReconciler_StartStreamingRejectsDuplicateStream(t *testing.T) {
 	dialer := &reconcilerStreamDialer{}
 	wsClient := websocket.NewPrivateClient(
 		"wss://ws.gemini.com",
-		auth.NewHMAC(auth.APIKey("key"), auth.APISecret("secret")),
+		auth.NewTimeBasedHMAC(auth.APIKey("key"), auth.APISecret("secret")),
 		websocket.WithDialer(dialer),
 	)
 	t.Cleanup(func() { _ = wsClient.Close() })

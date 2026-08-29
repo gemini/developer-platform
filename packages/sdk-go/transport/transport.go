@@ -177,6 +177,28 @@ func (c *Client) ConfigurationError() error {
 	return c.configErr
 }
 
+// resetUnauthenticatedRequest removes state that an SDK authentication
+// strategy may have attached to a request. Execute accepts caller-owned
+// requests, so a request reused after an authenticated call must not carry
+// credentials or a signed/bodyless request shape into a public call.
+func resetUnauthenticatedRequest(req *http.Request) {
+	for _, key := range []string{
+		"Authorization",
+		"X-GEMINI-APIKEY",
+		"X-GEMINI-NONCE",
+		"X-GEMINI-PAYLOAD",
+		"X-GEMINI-SIGNATURE",
+		"Content-Type",
+		"Content-Length",
+		"Cache-Control",
+	} {
+		req.Header.Del(key)
+	}
+	req.Body = http.NoBody
+	req.GetBody = nil
+	req.ContentLength = 0
+}
+
 // Execute performs an HTTP request with safe retries and response error
 // classification. The returned response body is readable and must be closed by
 // the caller; the returned byte slice contains the same captured body.
@@ -230,27 +252,32 @@ func (c *Client) Execute(ctx context.Context, req *http.Request, payloadJSON []b
 		defer releaseRequest()
 	}
 
-	// Apply authentication if provided
+	// Apply authentication if provided. When the caller reuses a request that
+	// was previously authenticated, clear all SDK-owned auth and body state
+	// before sending it through the public path.
 	if c.auth != nil {
 		if err := c.auth.Authenticate(ctx, req, payloadJSON); err != nil {
 			err = fmt.Errorf("gemini transport: auth failed: %w", err)
 			c.hooks.OnRequestEnd(ctx, req, nil, time.Since(start), err)
 			return nil, nil, err
 		}
-	} else if len(payloadJSON) > 0 {
-		// Public request with body (unauthenticated)
-		req.Header.Set("Content-Type", "application/json")
-		req.GetBody = func() (io.ReadCloser, error) {
-			return io.NopCloser(bytes.NewReader(payloadJSON)), nil
+	} else {
+		resetUnauthenticatedRequest(req)
+		if len(payloadJSON) > 0 {
+			// Public request with body (unauthenticated)
+			req.Header.Set("Content-Type", "application/json")
+			req.GetBody = func() (io.ReadCloser, error) {
+				return io.NopCloser(bytes.NewReader(payloadJSON)), nil
+			}
+			body, bodyErr := req.GetBody()
+			if bodyErr != nil {
+				bodyErr = fmt.Errorf("gemini transport: creating request body: %w", bodyErr)
+				c.hooks.OnRequestEnd(ctx, req, nil, time.Since(start), bodyErr)
+				return nil, nil, bodyErr
+			}
+			req.Body = body
+			req.ContentLength = int64(len(payloadJSON))
 		}
-		body, bodyErr := req.GetBody()
-		if bodyErr != nil {
-			bodyErr = fmt.Errorf("gemini transport: creating request body: %w", bodyErr)
-			c.hooks.OnRequestEnd(ctx, req, nil, time.Since(start), bodyErr)
-			return nil, nil, bodyErr
-		}
-		req.Body = body
-		req.ContentLength = int64(len(payloadJSON))
 	}
 
 	var resp *http.Response

@@ -68,7 +68,7 @@ func TestPrivateRFQDeliveryAndQuoteMethodsUseDocumentedWireContract(t *testing.T
 	}
 	client := websocket.NewPrivateClient(
 		"wss://ws.gemini.com",
-		auth.NewHMAC("key", "secret"),
+		auth.NewTimeBasedHMAC("key", "secret"),
 		websocket.WithDialer(dialer),
 	)
 	defer client.Close()
@@ -143,7 +143,7 @@ func TestRFQQuoteMethodsRejectInvalidParametersBeforeWriting(t *testing.T) {
 	dialer := &mockDrainDialer{}
 	client := websocket.NewPrivateClient(
 		"wss://ws.gemini.com",
-		auth.NewHMAC("key", "secret"),
+		auth.NewTimeBasedHMAC("key", "secret"),
 		websocket.WithDialer(dialer),
 	)
 	defer client.Close()
@@ -246,7 +246,7 @@ func TestRFQQuoteMethodsUseBearerAuthentication(t *testing.T) {
 func TestRFQDeliveryScopesAreMutuallyExclusive(t *testing.T) {
 	client := websocket.NewPrivateClient(
 		"wss://ws.gemini.com",
-		auth.NewHMAC("key", "secret"),
+		auth.NewTimeBasedHMAC("key", "secret"),
 		websocket.WithDialer(&mockDrainDialer{}),
 	)
 	defer client.Close()

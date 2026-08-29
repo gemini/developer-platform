@@ -3,6 +3,7 @@ package websocket_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 	"time"
 
@@ -97,7 +98,7 @@ func TestTypedPrivateOptionsUseDocumentedScopesAndIntervals(t *testing.T) {
 	dialer := &mockDrainDialer{}
 	client := websocket.NewPrivateClient(
 		"wss://ws.gemini.com",
-		auth.NewHMAC("key", "secret"),
+		auth.NewTimeBasedHMAC("key", "secret"),
 		websocket.WithDialer(dialer),
 	)
 	defer client.Close()
@@ -192,6 +193,24 @@ func TestTypedDepthVariantsDoNotShareAnAmbiguousSymbol(t *testing.T) {
 	}
 	if _, err := client.SubscribeDepthWithOptions(ctx, "ETHUSD", websocket.DepthSubscriptionOptions{Interval: 100 * time.Millisecond}); err != nil {
 		t.Fatalf("depth gate was not released after conflict: %v", err)
+	}
+}
+
+func TestTypedDepthAndPartialDepthDoNotShareAnAmbiguousSymbol(t *testing.T) {
+	dialer := &mockDrainDialer{}
+	client := websocket.NewPublicClient("wss://ws.gemini.com", websocket.WithDialer(dialer))
+	defer client.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if _, err := client.SubscribeDepth(ctx, "BTCUSD"); err != nil {
+		t.Fatalf("SubscribeDepth failed: %v", err)
+	}
+	if _, err := client.SubscribePartialDepth(ctx, "BTCUSD", websocket.PartialDepthSubscriptionOptions{Levels: websocket.DepthLevel10}); !errors.Is(err, websocket.ErrSubscriptionVariantMismatch) {
+		t.Fatalf("expected mixed depth subscription to fail closed, got %v", err)
+	}
+	if _, err := client.SubscribePartialDepth(ctx, "ETHUSD", websocket.PartialDepthSubscriptionOptions{Levels: websocket.DepthLevel10}); err != nil {
+		t.Fatalf("partial-depth gate was not released after conflict: %v", err)
 	}
 }
 

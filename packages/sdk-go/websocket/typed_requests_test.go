@@ -15,7 +15,7 @@ func TestTypedUtilityAndSubscriptionRequests(t *testing.T) {
 	dialer := &mockDrainDialer{responseResult: json.RawMessage(`{"serverTime":123}`)}
 	client := websocket.NewPrivateClient(
 		"wss://ws.gemini.com",
-		auth.NewHMAC("key", "secret"),
+		auth.NewTimeBasedHMAC("key", "secret"),
 		websocket.WithDialer(dialer),
 	)
 	defer client.Close()
@@ -53,7 +53,7 @@ func TestTypedOrderRequestsRequireAuthAndConfirmation(t *testing.T) {
 	privateDialer := &mockDrainDialer{responseResult: json.RawMessage(`{"orderId":7}`)}
 	private := websocket.NewPrivateClient(
 		"wss://ws.gemini.com",
-		auth.NewHMAC("key", "secret"),
+		auth.NewTimeBasedHMAC("key", "secret"),
 		websocket.WithDialer(privateDialer),
 	)
 	defer private.Close()
@@ -122,7 +122,7 @@ func TestTypedOrderRequestsRequireAuthAndConfirmation(t *testing.T) {
 }
 
 func TestTypedOrderRequestsMatchStopLimitWireFormat(t *testing.T) {
-	client := websocket.NewPrivateClient("wss://ws.gemini.com", auth.NewHMAC("key", "secret"))
+	client := websocket.NewPrivateClient("wss://ws.gemini.com", auth.NewTimeBasedHMAC("key", "secret"))
 	defer client.Close()
 
 	err := func() error {
@@ -210,7 +210,7 @@ func TestTypedOrderRequestsAcceptFloat64OrderID(t *testing.T) {
 	dialer := &mockDrainDialer{responseResult: json.RawMessage(`{"orderId":7}`)}
 	client := websocket.NewPrivateClient(
 		"wss://ws.gemini.com",
-		auth.NewHMAC("key", "secret"),
+		auth.NewTimeBasedHMAC("key", "secret"),
 		websocket.WithDialer(dialer),
 	)
 	defer client.Close()
@@ -223,7 +223,7 @@ func TestTypedOrderRequestsAcceptFloat64OrderID(t *testing.T) {
 func TestTypedOrderRequestsRejectUnsafeFloat64OrderIDs(t *testing.T) {
 	client := websocket.NewPrivateClient(
 		"wss://ws.gemini.com",
-		auth.NewHMAC("key", "secret"),
+		auth.NewTimeBasedHMAC("key", "secret"),
 		websocket.WithDialer(&mockDrainDialer{}),
 	)
 	defer client.Close()
@@ -238,7 +238,7 @@ func TestTypedOrderRequestsRejectUnsafeFloat64OrderIDs(t *testing.T) {
 func TestTypedOrderRequestsAllowEqualStopAndLimitPrices(t *testing.T) {
 	client := websocket.NewPrivateClient(
 		"wss://ws.gemini.com",
-		auth.NewHMAC("key", "secret"),
+		auth.NewTimeBasedHMAC("key", "secret"),
 		websocket.WithDialer(&mockDrainDialer{}),
 	)
 	defer client.Close()

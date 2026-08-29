@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"reflect"
 	"strings"
 )
 
@@ -71,16 +72,26 @@ func (b *Bearer) Key() string {
 // source. It is consumed by the high-level client when available, while the
 // authentication methods retain their own runtime checks for direct users.
 func (b *Bearer) Validate() error {
-	if b == nil || b.tokenSource == nil {
+	if b == nil || isNilTokenSource(b.tokenSource) {
 		return ErrInvalidTokenSource
-	}
-	if tf, ok := b.tokenSource.(TokenFunc); ok && tf == nil {
-		return fmt.Errorf("%w: token function is nil", ErrInvalidTokenSource)
 	}
 	if source, ok := b.tokenSource.(staticTokenSource); ok && !validBearerToken(string(source.token)) {
 		return fmt.Errorf("%w: static token is empty or contains invalid characters", ErrInvalidTokenSource)
 	}
 	return nil
+}
+
+func isNilTokenSource(source TokenSource) bool {
+	if source == nil {
+		return true
+	}
+	value := reflect.ValueOf(source)
+	switch value.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
+		return value.IsNil()
+	default:
+		return false
+	}
 }
 
 // Authenticate attaches the Authorization Bearer header and encodes the

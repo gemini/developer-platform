@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -170,12 +171,15 @@ func TestHMAC_ValidateRejectsMissingCredentials(t *testing.T) {
 			}
 		})
 	}
+	if err := NewHMAC("key", "secret", WithNonceMode(NonceMode(99))).Validate(); !errors.Is(err, ErrInvalidNonceMode) {
+		t.Fatalf("invalid nonce mode error = %v, want ErrInvalidNonceMode", err)
+	}
 }
 
 func TestHMAC_AuthenticateWebSocket(t *testing.T) {
 	key := APIKey("my-ws-api-key")
 	secret := APISecret("my-ws-secret-67890")
-	h := NewHMAC(key, secret)
+	h := NewTimeBasedHMAC(key, secret)
 
 	req := httptest.NewRequest("GET", "wss://ws.gemini.com/v1/marketdata", nil)
 	err := h.AuthenticateWebSocket(context.Background(), req)
@@ -218,6 +222,45 @@ func TestHMAC_AuthenticateWebSocket(t *testing.T) {
 	}
 	if !VerifySignature(secret, payloadB64, sig) {
 		t.Fatal("expected X-GEMINI-SIGNATURE to cryptographically match X-GEMINI-PAYLOAD and secret")
+	}
+}
+
+func TestHMAC_MonotonicNonceRejectsWebSocketAuthentication(t *testing.T) {
+	h := NewHMAC("key", "secret")
+	req := httptest.NewRequest("GET", "wss://ws.gemini.com/v1/marketdata", nil)
+	if err := h.AuthenticateWebSocket(context.Background(), req); !errors.Is(err, ErrTimeBasedNonceRequired) {
+		t.Fatalf("AuthenticateWebSocket() error = %v, want ErrTimeBasedNonceRequired", err)
+	}
+}
+
+func TestTimeBasedHMACSupportsRESTAndWebSocketAuthentication(t *testing.T) {
+	fixedTime := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+	h := NewTimeBasedHMAC(APIKey("key"), APISecret("secret"))
+	h.nonces = newSecondNonce(func() time.Time { return fixedTime })
+	h.wsNonces = newSecondNonce(func() time.Time { return fixedTime })
+
+	restReq := httptest.NewRequest("POST", "https://api.gemini.com/v1/order/new", nil)
+	if err := h.Authenticate(context.Background(), restReq, nil); err != nil {
+		t.Fatalf("REST Authenticate() failed: %v", err)
+	}
+	decoded, err := base64.StdEncoding.DecodeString(restReq.Header.Get(geminiPayloadHeader))
+	if err != nil {
+		t.Fatalf("decoding REST payload: %v", err)
+	}
+	var payload map[string]string
+	if err := json.Unmarshal(decoded, &payload); err != nil {
+		t.Fatalf("decoding REST payload JSON: %v", err)
+	}
+	if payload["nonce"] != strconv.FormatInt(fixedTime.Unix(), 10) {
+		t.Fatalf("REST nonce = %q, want %d", payload["nonce"], fixedTime.Unix())
+	}
+
+	wsReq := httptest.NewRequest("GET", "wss://ws.gemini.com/v1/marketdata", nil)
+	if err := h.AuthenticateWebSocket(context.Background(), wsReq); err != nil {
+		t.Fatalf("WebSocket Authenticate() failed: %v", err)
+	}
+	if got := wsReq.Header.Get(geminiNonceHeader); got != strconv.FormatInt(fixedTime.Unix(), 10) {
+		t.Fatalf("WebSocket nonce = %q, want %d", got, fixedTime.Unix())
 	}
 }
 

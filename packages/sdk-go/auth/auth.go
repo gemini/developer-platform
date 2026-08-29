@@ -21,6 +21,14 @@ var ErrTokenSourceFailure = errors.New("gemini auth: OAuth token source failed")
 // without both an API key and API secret.
 var ErrInvalidHMACCredentials = errors.New("gemini auth: invalid HMAC credentials")
 
+// ErrInvalidNonceMode indicates that an HMAC strategy was configured with an
+// unsupported nonce mode.
+var ErrInvalidNonceMode = errors.New("gemini auth: invalid nonce mode")
+
+// ErrTimeBasedNonceRequired indicates that a non-time-based API key cannot be
+// used for private WebSocket authentication.
+var ErrTimeBasedNonceRequired = errors.New("gemini auth: time-based nonce mode is required for WebSocket authentication")
+
 const (
 	authorizationHeader   = "Authorization"
 	geminiAPIKeyHeader    = "X-GEMINI-APIKEY" // #nosec G101 -- protocol header name, not a credential value

@@ -165,6 +165,11 @@ client := gemini.NewClient(
 )
 ```
 
+`WithAPIKey` uses strictly increasing millisecond nonces for REST-only API-key
+clients. If the same API key must authenticate private WebSocket traffic, it
+must be a Gemini time-based key; configure it with
+`gemini.WithTimeBasedAPIKey`, which uses epoch-second nonces on both surfaces.
+
 For startup validation, `NewClientWithError` rejects blank API keys or secrets
 with `gemini.ErrInvalidHMACCredentials`.
 
@@ -466,12 +471,15 @@ instances and separate connections:
   such as depth, trades, book ticker, and contract status.
 - `client.PrivateWebSocket()` is the authenticated connection for order,
   balance, position, and settlement feeds. Configure `WithAPIKey`,
-  `WithBearerToken`, or another auth option first.
+  `WithTimeBasedAPIKey`, `WithBearerToken`, or another auth option first.
+  `WithAPIKey` uses strict-increasing REST nonces and is intended for
+  REST-only API-key clients; use `WithTimeBasedAPIKey` when the same key must
+  authenticate both REST and private WebSocket traffic.
 
 ```go
 client := gemini.NewClient(
     gemini.WithEnvironment(gemini.Sandbox),
-    gemini.WithAPIKey("your-api-key", "your-api-secret"),
+    gemini.WithTimeBasedAPIKey("your-api-key", "your-api-secret"),
 )
 defer client.Close()
 

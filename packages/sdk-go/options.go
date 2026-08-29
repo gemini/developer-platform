@@ -65,9 +65,20 @@ func WithAuth(strategy auth.Strategy) Option {
 }
 
 // WithAPIKey is a convenience option configuring HMAC-SHA384 auth.
+// It uses the strict-increasing REST nonce contract. Use
+// WithTimeBasedAPIKey when the same key will authenticate private WebSocket
+// connections.
 func WithAPIKey(key string, secret string) Option {
 	return func(c *clientConfig) {
 		c.auth = auth.NewHMAC(auth.APIKey(key), auth.APISecret(secret))
+	}
+}
+
+// WithTimeBasedAPIKey configures an HMAC-SHA384 strategy whose epoch-second
+// nonces are valid for both private REST and WebSocket authentication.
+func WithTimeBasedAPIKey(key string, secret string) Option {
+	return func(c *clientConfig) {
+		c.auth = auth.NewTimeBasedHMAC(auth.APIKey(key), auth.APISecret(secret))
 	}
 }
 

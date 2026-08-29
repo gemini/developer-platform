@@ -77,14 +77,31 @@ type ClockSkewCalibrator interface {
 	CalibrateServerTime(serverTime time.Time)
 }
 
+// NonceMode identifies the API-key nonce contract used by an HMAC strategy.
+// Monotonic mode is appropriate for REST API keys that require strictly
+// increasing millisecond nonces. Time-based mode uses epoch seconds for both
+// REST and private WebSocket authentication, as required by time-based keys.
+type NonceMode uint8
+
+const (
+	NonceModeMonotonic NonceMode = iota
+	NonceModeTimeBased
+)
+
+func (m NonceMode) valid() bool {
+	return m == NonceModeMonotonic || m == NonceModeTimeBased
+}
+
 // HMAC implements Gemini's HMAC-SHA384 payload signing authentication strategy.
 type HMAC struct {
-	key         APIKey
-	secret      APISecret
-	nonces      NonceGenerator
-	wsNonces    NonceGenerator
-	requestGate chan struct{}
-	hasherPool  sync.Pool
+	key              APIKey
+	secret           APISecret
+	nonceMode        NonceMode
+	nonces           NonceGenerator
+	wsNonces         NonceGenerator
+	requestGate      chan struct{}
+	hasherPool       sync.Pool
+	configurationErr error
 }
 
 var (
@@ -94,6 +111,26 @@ var (
 )
 
 type HMACOption func(*HMAC)
+
+// WithNonceMode selects the nonce contract for the HMAC strategy. The option
+// updates both REST and WebSocket defaults so a time-based strategy can safely
+// authenticate both surfaces with the same API key.
+func WithNonceMode(mode NonceMode) HMACOption {
+	return func(h *HMAC) {
+		if !mode.valid() {
+			h.configurationErr = fmt.Errorf("%w: %d", ErrInvalidNonceMode, mode)
+			return
+		}
+		h.nonceMode = mode
+		if mode == NonceModeTimeBased {
+			h.nonces = newSecondNonce(time.Now)
+			h.wsNonces = newSecondNonce(time.Now)
+			return
+		}
+		h.nonces = newMonotonicNonce(time.Now)
+		h.wsNonces = newSecondNonce(time.Now)
+	}
+}
 
 // WithCustomNonceGenerator allows injecting a deterministic or custom nonce generator.
 func WithCustomNonceGenerator(gen NonceGenerator) HMACOption {
@@ -109,6 +146,7 @@ func NewHMAC(key APIKey, secret APISecret, opts ...HMACOption) *HMAC {
 	h := &HMAC{
 		key:         key,
 		secret:      secret,
+		nonceMode:   NonceModeMonotonic,
 		nonces:      newMonotonicNonce(time.Now),
 		wsNonces:    newSecondNonce(time.Now),
 		requestGate: make(chan struct{}, 1),
@@ -123,10 +161,26 @@ func NewHMAC(key APIKey, secret APISecret, opts ...HMACOption) *HMAC {
 	return h
 }
 
+// NewTimeBasedHMAC creates an HMAC strategy for a time-based API key. Its
+// epoch-second nonce generator is valid for both private REST and WebSocket
+// authentication.
+func NewTimeBasedHMAC(key APIKey, secret APISecret, opts ...HMACOption) *HMAC {
+	allOpts := make([]HMACOption, 0, len(opts)+1)
+	allOpts = append(allOpts, opts...)
+	allOpts = append(allOpts, WithNonceMode(NonceModeTimeBased))
+	return NewHMAC(key, secret, allOpts...)
+}
+
 // Validate reports whether the HMAC strategy has usable credentials.
 func (h *HMAC) Validate() error {
 	if h == nil || !validHeaderCredential(string(h.key)) || strings.TrimSpace(string(h.secret)) == "" {
 		return ErrInvalidHMACCredentials
+	}
+	if h.configurationErr != nil {
+		return h.configurationErr
+	}
+	if !h.nonceMode.valid() {
+		return fmt.Errorf("%w: %d", ErrInvalidNonceMode, h.nonceMode)
 	}
 	return nil
 }
@@ -296,6 +350,9 @@ func (h *HMAC) AuthenticateWebSocket(ctx context.Context, req *http.Request) err
 	}
 	if err := h.Validate(); err != nil {
 		return err
+	}
+	if h.nonceMode != NonceModeTimeBased {
+		return ErrTimeBasedNonceRequired
 	}
 	if req.Header == nil {
 		req.Header = make(http.Header)

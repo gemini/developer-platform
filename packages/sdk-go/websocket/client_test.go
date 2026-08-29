@@ -115,7 +115,7 @@ func TestClient_SnapshotModeMarksInitialDepthFrame(t *testing.T) {
 
 func TestClient_WebSocketAuthSharesRequestSequencer(t *testing.T) {
 	dialer := &mockDrainDialer{}
-	strategy := auth.NewHMAC("key", "secret")
+	strategy := auth.NewTimeBasedHMAC("key", "secret")
 	client := websocket.NewPrivateClient("wss://ws.gemini.com", strategy, websocket.WithDialer(dialer))
 	defer client.Close()
 

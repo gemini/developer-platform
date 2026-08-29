@@ -64,7 +64,9 @@
 //	privateWS := client.PrivateWebSocket()
 //	orders, err := privateWS.SubscribeOrderEvents(ctx)
 //
-// Configure an authentication option before using PrivateWebSocket.
+// Configure an authentication option before using PrivateWebSocket. For API
+// keys, use gemini.WithTimeBasedAPIKey so the same key uses epoch-second
+// nonces on both REST and private WebSocket requests.
 //
 //	liveBook := orderbook.NewLiveOrderBook("BTCUSD")
 //	liveBook.OnBBOChanged(func(bbo orderbook.BBO) {
