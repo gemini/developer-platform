@@ -649,7 +649,8 @@ export class OAuthAuth implements AuthStrategy {
     if (this.#client.type === "confidential") requestBody.client_secret = this.#client.clientSecret;
     this.#emit("debug", "revoke.request.start", metadata());
     let response: Awaited<ReturnType<FetchLike>> | undefined;
-    let text: string;
+    let text = "";
+    let successful = false;
     try {
       response = await withSignal(this.#fetchImpl(this.#endpoints.revocation, {
         method: "POST",
@@ -670,7 +671,12 @@ export class OAuthAuth implements AuthStrategy {
         cancelResponseBody(response, error);
         throw error;
       }
-      text = await readBoundedResponseText(response, this.#maxResponseSizeBytes, execution.signal);
+      if (response.status >= 200 && response.status < 300) {
+        successful = true;
+        cancelResponseBody(response, "OAuth token revocation succeeded");
+      } else {
+        text = await readBoundedResponseText(response, this.#maxResponseSizeBytes, execution.signal);
+      }
     } catch (cause) {
       const error = cause instanceof SdkError
         ? cause
@@ -683,7 +689,7 @@ export class OAuthAuth implements AuthStrategy {
     if (response === undefined) {
       throw new SdkError("OAuth token revocation failed");
     }
-    if (response.status >= 200 && response.status < 300) {
+    if (successful) {
       this.#emit("info", "revoke", metadata(response.status, response));
       return;
     }

@@ -1154,6 +1154,28 @@ void test("confidential revocation authenticates with the client secret", async 
   assert.equal(store.record, undefined);
 });
 
+void test("revocation accepts successful empty response bodies", async () => {
+  for (const status of [200, 204]) {
+    const store = new MemoryTokenStore(validTokens());
+    let requests = 0;
+    const auth = new OAuthAuth(publicOptions(store, {
+      fetchImpl: async () => {
+        requests += 1;
+        return {
+          status,
+          headers: { get: () => null },
+          body: null,
+        };
+      },
+    }));
+
+    await auth.revoke();
+
+    assert.equal(requests, 2);
+    assert.equal(store.record, undefined);
+  }
+});
+
 void test("OAuth revocation rejects redirects before reading the response body", async () => {
   for (const response of [
     ...[300, 301, 302, 303, 304, 305, 306, 307, 308].map((status) => ({ status })),
