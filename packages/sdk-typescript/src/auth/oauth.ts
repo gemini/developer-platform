@@ -172,7 +172,11 @@ export interface OAuthAuthOptions {
   authorizationTransactionStore?: OAuthAuthorizationTransactionStore;
   /** OAuth environment. Required to prevent accidental live authorization. */
   env: Environment;
-  /** HTTPS OAuth endpoint overrides for tests, mocks, or proxies. */
+  /**
+   * HTTPS OAuth endpoint overrides for tests, mocks, or proxies. When
+   * overriding `authorization` or `token`, also provide `revocation` so
+   * credentials cannot be sent to a different OAuth authority.
+   */
   endpoints?: Partial<OAuthEndpoints>;
   fetchImpl?: FetchLike;
   now?: () => number;
@@ -412,6 +416,10 @@ export class OAuthAuth implements AuthStrategy {
       : undefined;
     if (options.env !== "sandbox" && options.env !== "production") {
       throw new SdkError("env is required; choose \"sandbox\" or \"production\"");
+    }
+    if ((options.endpoints?.authorization !== undefined || options.endpoints?.token !== undefined) &&
+      options.endpoints?.revocation === undefined) {
+      throw new SdkError("endpoints.revocation is required when overriding endpoints.authorization or endpoints.token");
     }
     const defaults = DEFAULT_OAUTH_ENDPOINTS[options.env];
     this.#endpoints = {

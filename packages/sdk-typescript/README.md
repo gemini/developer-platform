@@ -136,7 +136,7 @@ const client = createClient({ env: "sandbox", auth: new BearerAuth({ accessToken
 
 `BearerAuth` does not persist or refresh credentials. Use it when the application owns the token lifecycle and only wants to hand the current access token to the SDK. Use `BrowserOAuthAuth` or server `OAuthAuth` with an `OAuthTokenStore` when the SDK should refresh and atomically save rotated refresh tokens through the application’s storage adapter. The SDK never opens a browser or starts a callback listener.
 
-Treat the authorization callback URL as sensitive until it has been processed: it contains a one-time code. Do not log or analytics-track the full URL, and remove its query parameters from browser history after handling it. OAuth endpoint overrides must use HTTPS; loopback HTTP redirect URIs are supported for local/native flows.
+Treat the authorization callback URL as sensitive until it has been processed: it contains a one-time code. Do not log or analytics-track the full URL, and remove its query parameters from browser history after handling it. OAuth endpoint overrides must use HTTPS; when overriding the authorization or token endpoint, also provide the matching revocation endpoint. Loopback HTTP redirect URIs are supported for local/native flows.
 
 ---
 

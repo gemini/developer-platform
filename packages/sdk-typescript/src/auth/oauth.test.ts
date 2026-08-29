@@ -871,9 +871,23 @@ void test("OAuth rejects unsafe redirect and endpoint URLs", () => {
   for (const name of ["api", "authorization", "token"] as const) {
     assert.throws(
       () => new OAuthAuth(publicOptions(new MemoryTokenStore(), {
-        endpoints: { [name]: "http://localhost/oauth" },
+        endpoints: {
+          [name]: "http://localhost/oauth",
+          revocation: "https://exchange.sandbox.gemini.com/auth/token/revoke",
+        },
       })),
       (error: BoundaryValue) => error instanceof SdkError && /HTTPS/.test(error.message),
+    );
+  }
+});
+
+void test("OAuth custom authorities require an explicit revocation endpoint", () => {
+  for (const name of ["authorization", "token"] as const) {
+    assert.throws(
+      () => new OAuthAuth(publicOptions(new MemoryTokenStore(), {
+        endpoints: { [name]: `https://custom-${name}.example/oauth` },
+      })),
+      (error: BoundaryValue) => error instanceof SdkError && /endpoints\.revocation is required/.test(error.message),
     );
   }
 });
@@ -1361,6 +1375,7 @@ void test("custom endpoints override default environment URLs", async () => {
     endpoints: {
       authorization: "https://custom-auth.example.com/oauth/authorize",
       token: "https://custom-auth.example.com/oauth/token",
+      revocation: "https://custom-auth.example.com/oauth/revoke",
       api: "https://custom-api.example.com",
     },
     fetchImpl: async (url: string | URL | Request) => {
