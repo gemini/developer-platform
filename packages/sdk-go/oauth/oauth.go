@@ -17,6 +17,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html/template"
 	"io"
 	"net"
 	"net/http"
@@ -65,6 +66,8 @@ var (
 	// request.
 	ErrTokenEndpoint = errors.New("gemini oauth: token endpoint rejected request")
 )
+
+var callbackResponseTemplate = template.Must(template.New("oauth-callback-response").Parse("{{.}}"))
 
 // Endpoint contains the OAuth authorization and token endpoint URLs.
 // Both endpoints must use HTTPS.
@@ -788,5 +791,5 @@ func writeCallbackResponse(writer http.ResponseWriter, status int, message strin
 	writer.Header().Set("Cache-Control", "no-store")
 	writer.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	writer.WriteHeader(status)
-	_, _ = writer.Write([]byte(message))
+	_ = callbackResponseTemplate.Execute(writer, message)
 }

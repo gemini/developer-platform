@@ -226,6 +226,18 @@ func TestListenLoopbackBindsOnlyLoopbackAddresses(t *testing.T) {
 	}
 }
 
+func TestWriteCallbackResponseEscapesBody(t *testing.T) {
+	recorder := httptest.NewRecorder()
+	writeCallbackResponse(recorder, http.StatusOK, "<script>alert(1)</script>")
+
+	if strings.Contains(recorder.Body.String(), "<script>") {
+		t.Fatalf("callback response was not escaped: %q", recorder.Body.String())
+	}
+	if !strings.Contains(recorder.Body.String(), "&lt;script&gt;") {
+		t.Fatalf("callback response lost escaped content: %q", recorder.Body.String())
+	}
+}
+
 func TestLoginRequiresLoopbackCallbackAndBrowserOpener(t *testing.T) {
 	cfg := validConfig("https://exchange.example")
 	if _, err := cfg.Login(context.Background(), nil); !errors.Is(err, ErrBrowserOpenerRequired) {
