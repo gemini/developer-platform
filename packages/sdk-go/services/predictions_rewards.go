@@ -5,8 +5,8 @@ import (
 	"net/url"
 	"strconv"
 
-	"github.com/gemini/gemini-go/generated/predictions"
-	"github.com/gemini/gemini-go/types"
+	"github.com/gemini/developer-platform/packages/sdk-go/generated/predictions"
+	"github.com/gemini/developer-platform/packages/sdk-go/types"
 )
 
 // GetMakerRebateRates returns the currently effective maker-rebate rules.

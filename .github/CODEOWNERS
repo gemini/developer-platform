@@ -5,3 +5,6 @@
 
 # Published TypeScript SDK source, packaging, and release metadata.
 /packages/sdk-typescript/** @fuller @ximt
+
+# Published Go SDK source, module metadata, and release workflow.
+/packages/sdk-go/** @fuller @ximt

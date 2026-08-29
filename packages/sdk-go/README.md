@@ -40,20 +40,95 @@ arithmetic, WebSocket dispatch, and order-book operations.
 Install the core library:
 
 ```bash
-go get github.com/gemini/gemini-go
+go get github.com/gemini/developer-platform/packages/sdk-go
 ```
 
 Optional: Install the Gorilla WebSocket adapter:
 
 ```bash
-go get github.com/gemini/gemini-go/websocket/gorilla
+go get github.com/gemini/developer-platform/packages/sdk-go/websocket/gorilla
 ```
 
-This repository is a monorepo, but `packages/sdk-go` is the published Go
-module root. Release automation must publish that directory at the module tag;
-the `release-smoke` target stages the package as a standalone module and
-compiles the documented import paths, generated packages, service facade,
-demo, and optional Gorilla module.
+This repository is a monorepo, but `packages/sdk-go` is the published Go module
+root. The `release-smoke` target stages the package as a standalone module and
+compiles the documented import paths, generated packages, service facade, demo,
+and optional Gorilla module.
+
+## Releases
+
+Go modules are published from Git tags; there is no package upload step. The
+canonical module roots are:
+
+- `packages/sdk-go` → `github.com/gemini/developer-platform/packages/sdk-go`
+- `packages/sdk-go/websocket/gorilla` → `github.com/gemini/developer-platform/packages/sdk-go/websocket/gorilla`
+
+The `scripts` and `cmd/demo` directories are repository-only modules and are
+not released independently. Because these modules live below the repository
+root, their Git tags must include the directory prefix required by Go's module
+versioning rules. Consumers still use ordinary semantic versions:
+
+```bash
+go get github.com/gemini/developer-platform/packages/sdk-go@v0.1.0
+go get github.com/gemini/developer-platform/packages/sdk-go/websocket/gorilla@v0.1.0
+```
+
+After the release commit has been merged to `main`, a maintainer should create
+signed, annotated tags on that commit and push only the module(s) being
+released. The core module must be released before the Gorilla module when both
+are being released, because the Gorilla module depends on the core module:
+
+```bash
+git fetch origin main
+release_commit="$(git rev-parse origin/main)"
+
+git tag -s packages/sdk-go/v0.1.0 \
+  -m "sdk-go v0.1.0" "$release_commit"
+git verify-tag packages/sdk-go/v0.1.0
+git push origin packages/sdk-go/v0.1.0
+```
+
+After the core module's release workflow succeeds, release the optional
+Gorilla module if it changed:
+
+```bash
+git tag -s packages/sdk-go/websocket/gorilla/v0.1.0 \
+  -m "sdk-go/websocket/gorilla v0.1.0" "$release_commit"
+git verify-tag packages/sdk-go/websocket/gorilla/v0.1.0
+git push origin packages/sdk-go/websocket/gorilla/v0.1.0
+```
+
+The [Go SDK release workflow](../../.github/workflows/release-go-sdk.yml)
+accepts only new, signed annotated, v0/v1, and on-`main` tags. It runs the
+complete test, race, vet, generation, standalone-consumer, and security
+suites, and then verifies that the tagged module is available through
+`proxy.golang.org`. Release tag rules in GitHub should also prevent tag
+deletion or updates. Never move or reuse a published version tag; publish a
+new semantic version for every release. A GitHub Release is optional and is
+only for human-readable notes—the Git tag is the canonical Go release
+artifact.
+
+Before the first release, repository administrators must protect both
+`packages/sdk-go/v*` and `packages/sdk-go/websocket/gorilla/v*` tag patterns:
+restrict tag creation to release maintainers and disallow updates and
+deletion. The workflow has read-only GitHub permissions and never creates or
+moves release tags.
+
+If a future major version requires `v2` or later, the module path must first
+gain the corresponding `/v2` suffix and the release workflow and tag path must
+be updated together, as required by Go's major-version module rules.
+
+To verify a release from the same public path used by consumers:
+
+```bash
+GOPROXY=https://proxy.golang.org \
+  go list -m github.com/gemini/developer-platform/packages/sdk-go@v0.1.0
+GOPROXY=https://proxy.golang.org \
+  go list -m github.com/gemini/developer-platform/packages/sdk-go/websocket/gorilla@v0.1.0
+```
+
+See Go's [module source management](https://go.dev/doc/modules/managing-source)
+and [module publishing guide](https://go.dev/doc/modules/publishing) for the
+underlying tag and proxy behavior.
 
 Use `Production` or `Sandbox` explicitly when selecting an environment. For
 applications that must reject invalid configuration during startup, use the
@@ -119,7 +194,7 @@ The token source is application-owned. It must be safe for concurrent calls,
 honor the request context, and return a current non-expired access token. The
 SDK calls it for each authenticated HTTP attempt and each WebSocket connection
 or reconnect; it does not force-refresh after a `401` response. The optional
-`github.com/gemini/gemini-go/oauth` package provides PKCE authorization-code
+`github.com/gemini/developer-platform/packages/sdk-go/oauth` package provides PKCE authorization-code
 and refresh-token helpers without making interactive login part of the core
 client.
 
@@ -247,7 +322,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/gemini/gemini-go"
+	"github.com/gemini/developer-platform/packages/sdk-go"
 )
 
 func main() {
@@ -289,7 +364,7 @@ order, err := client.Trading.ImmediateOrCancelSell(ctx, "BTCUSD", amount, price)
 
 ```go
 // Import the generated request models used by typed service methods:
-// "github.com/gemini/gemini-go/generated/account"
+// "github.com/gemini/developer-platform/packages/sdk-go/generated/account"
 
 // 1. Account balances and subaccounts
 balances, err := client.Account.GetBalances(ctx, &account.GetAvailableBalancesJSONBody{Account: "primary"})
@@ -518,7 +593,7 @@ application-level liveness checks with
 
 ### Real-Time Order Book and BBO Callbacks
 
-This example uses the optional `github.com/gemini/gemini-go/websocket/orderbook`
+This example uses the optional `github.com/gemini/developer-platform/packages/sdk-go/websocket/orderbook`
 package. Always drain subscription channels; the client applies backpressure
 to preserve every update. Feed channels are bounded. If a consumer falls
 behind far enough to fill the client's inbound dispatch queue, the client

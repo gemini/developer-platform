@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/gemini/gemini-go/types"
+	"github.com/gemini/developer-platform/packages/sdk-go/types"
 )
 
 func TestDecimal_Arithmetic(t *testing.T) {

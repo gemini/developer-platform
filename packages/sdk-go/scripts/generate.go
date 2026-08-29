@@ -107,6 +107,24 @@ var (
 	integerFormatRegex = regexp.MustCompile(`(?m)^(\s*)format:\s*integer\s*$`)
 )
 
+// These fields are identifiers or timestamps whose valid values are wider
+// than the native int on 32-bit builds. Keep bounded collection sizes and
+// other API limits as int because callers use them as local slice/request
+// sizes, but never represent wire-level wide integers with a platform-sized
+// type.
+var wideIntegerPropertyNames = map[string]struct{}{
+	"cancelRejects":   {},
+	"cancelledOrders": {},
+	"eid":             {},
+	"last_updated_ms": {},
+	"order_id":        {},
+	"quoteId":         {},
+	"tid":             {},
+	"timestamp_nanos": {},
+	"timestampms":     {},
+	"txTime":          {},
+}
+
 func sanitizeSpecBytes(data []byte) []byte {
 	out := longFormatRegex.ReplaceAll(data, []byte("${1}format: int64"))
 	out = integerFormatRegex.ReplaceAll(out, []byte("${1}format: int64"))
@@ -131,8 +149,9 @@ func fixSchema(s *openapi3.Schema) {
 			}
 		}
 	}
-	for _, prop := range s.Properties {
+	for propertyName, prop := range s.Properties {
 		if prop.Value != nil {
+			setWideIntegerOverride(propertyName, prop.Value)
 			fixSchema(prop.Value)
 		}
 	}
@@ -159,17 +178,43 @@ func fixSchema(s *openapi3.Schema) {
 	}
 }
 
-func setDecimalOverride(s *openapi3.Schema) {
+func setWideIntegerOverride(propertyName string, s *openapi3.Schema) {
+	if _, ok := wideIntegerPropertyNames[propertyName]; !ok || s == nil || s.Type == nil {
+		return
+	}
+	if s.Type.Is("array") && s.Items != nil && s.Items.Value != nil {
+		setWideIntegerOverride(propertyName, s.Items.Value)
+		return
+	}
+	// Do not replace unions such as timestamp aliases. The generated type may
+	// intentionally support both numeric and string representations.
+	if len(s.AllOf) > 0 || len(s.AnyOf) > 0 || len(s.OneOf) > 0 {
+		return
+	}
+	if s.Type.Is("integer") || s.Type.Is("number") {
+		s.Type = &openapi3.Types{"integer"}
+		s.Format = "int64"
+	}
+}
+
+func setGoTypeOverride(s *openapi3.Schema, goType string) {
 	if s.Extensions == nil {
 		s.Extensions = make(map[string]any)
 	}
+	s.Extensions["x-go-type"] = goType
+}
+
+func setDecimalOverride(s *openapi3.Schema) {
 	goType := "types.Decimal"
 	if s.Type != nil && s.Type.Is("number") {
 		goType = "types.DecimalNumber"
 	}
-	s.Extensions["x-go-type"] = goType
+	setGoTypeOverride(s, goType)
+	if s.Extensions == nil {
+		s.Extensions = make(map[string]any)
+	}
 	s.Extensions["x-go-type-import"] = map[string]any{
-		"path": "github.com/gemini/gemini-go/types",
+		"path": "github.com/gemini/developer-platform/packages/sdk-go/types",
 		"name": "types",
 	}
 }
@@ -309,6 +354,26 @@ func applySDKTypeOverrides(doc *openapi3.T) {
 			nonce.Value.Format = "int64"
 		}
 	}
+	if cancel := doc.Components.Schemas["CancelOrderRequest"]; cancel != nil && cancel.Value != nil {
+		if orderID := cancel.Value.Properties["order_id"]; orderID != nil && orderID.Value != nil {
+			// Order IDs are unsigned 64-bit wire values. Using uint64 avoids
+			// rejecting valid IDs above MaxInt64 in cancellation helpers.
+			setGoTypeOverride(orderID.Value, "uint64")
+		}
+	}
+	if status := doc.Components.Schemas["OrderStatusRequest"]; status != nil && status.Value != nil {
+		if orderID := status.Value.Properties["order_id"]; orderID != nil && orderID.Value != nil {
+			setGoTypeOverride(orderID.Value, "uint64")
+		}
+	}
+	if nonce := doc.Components.Schemas["Nonce"]; nonce != nil && nonce.Value != nil {
+		for _, variant := range nonce.Value.OneOf {
+			if variant.Value != nil && variant.Value.Type != nil && variant.Value.Type.Is("integer") {
+				variant.Value.Type = &openapi3.Types{"integer"}
+				variant.Value.Format = "int64"
+			}
+		}
+	}
 }
 
 // RenderModule generates the Go code for a given module configuration from its OpenAPI spec.
@@ -346,14 +411,14 @@ func RenderModule(mod ModuleConfig) (string, error) {
 	}
 
 	// Rewire third-party runtime imports to stdlib-backed internal packages
-	code = strings.ReplaceAll(code, "\"github.com/oapi-codegen/runtime/types\"", "\"github.com/gemini/gemini-go/types\"")
-	code = strings.ReplaceAll(code, "\"github.com/oapi-codegen/runtime\"", "\"github.com/gemini/gemini-go/internal/runtime\"")
+	code = strings.ReplaceAll(code, "\"github.com/oapi-codegen/runtime/types\"", "\"github.com/gemini/developer-platform/packages/sdk-go/types\"")
+	code = strings.ReplaceAll(code, "\"github.com/oapi-codegen/runtime\"", "\"github.com/gemini/developer-platform/packages/sdk-go/internal/runtime\"")
 	// The generated files already import the shared types package as
 	// openapi_types for dates and UUIDs. Reuse that alias for Decimal fields so
 	// generation does not emit two imports of the same package under different
 	// names.
 	code = strings.ReplaceAll(code, "types.Decimal", "openapi_types.Decimal")
-	code = strings.ReplaceAll(code, "\ttypes \"github.com/gemini/gemini-go/types\"\n", "")
+	code = strings.ReplaceAll(code, "\ttypes \"github.com/gemini/developer-platform/packages/sdk-go/types\"\n", "")
 
 	// Normalize tool version comment line to ensure deterministic comparison across environments
 	versionRegex := regexp.MustCompile(`(?m)^// Code generated by .* DO NOT EDIT\.\r?\n`)

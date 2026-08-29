@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/gemini/gemini-go/transport"
+	"github.com/gemini/developer-platform/packages/sdk-go/transport"
 )
 
 // DepthSnapshotOptions controls the optional limit on a one-shot depth
@@ -171,23 +171,34 @@ func (c *Client) requestConnected(ctx context.Context, method string, params any
 		return ResponseFrame{}, errors.New("gemini websocket: request method is empty")
 	}
 
-	id := globalReqID.Add(1)
-	idString := strconv.FormatInt(id, 10)
-	resultCh := make(chan requestResult, 1)
-	if err := c.registerPending(idString, resultCh); err != nil {
-		return ResponseFrame{}, err
-	}
-
 	frame := struct {
 		ID     int64  `json:"id"`
 		Method string `json:"method"`
 		Params any    `json:"params,omitempty"`
 	}{
-		ID:     id,
+		ID:     globalReqID.Add(1),
 		Method: method,
 		Params: params,
 	}
-	if err := c.Send(ctx, frame); err != nil {
+	data, err := json.Marshal(frame)
+	if err != nil {
+		return ResponseFrame{}, fmt.Errorf("gemini websocket: marshaling request: %w", err)
+	}
+	idString := strconv.FormatInt(frame.ID, 10)
+	resultCh := make(chan requestResult, 1)
+
+	// Register and write against the same captured connection. A connection can
+	// fail between pending admission and the write; using Send here would then
+	// re-read c.conn and could put a non-idempotent request on a newly installed
+	// connection after the old lifecycle already failed the pending request.
+	c.writeMu.Lock()
+	conn, err := c.registerPendingForConn(idString, resultCh)
+	if err == nil {
+		c.logger.Debug("websocket sending frame", slog.Int("bytes", len(data)))
+		err = conn.WriteMessage(ctx, TextMessage, data)
+	}
+	c.writeMu.Unlock()
+	if err != nil {
 		c.removePending(idString)
 		return ResponseFrame{}, err
 	}
@@ -205,25 +216,37 @@ func (c *Client) requestConnected(ctx context.Context, method string, params any
 }
 
 // registerPending admits a request only while the connection is still
-// connected. It takes c.mu before pendingMu so connection failure can
-// invalidate the lifecycle and drain pending requests without allowing a
-// request to register in the gap between those operations.
+// connected. It is retained as a small testable wrapper; requestConnected uses
+// registerPendingForConn so it can write to the exact connection that admitted
+// the pending request.
 func (c *Client) registerPending(id string, resultCh chan requestResult) error {
+	_, err := c.registerPendingForConn(id, resultCh)
+	return err
+}
+
+// registerPendingForConn atomically checks the current lifecycle and admits a
+// request before returning the connection selected for that lifecycle. The
+// caller must treat the returned connection as immutable; it must never
+// re-read c.conn before writing the request.
+func (c *Client) registerPendingForConn(id string, resultCh chan requestResult) (Conn, error) {
+	// Take c.mu before pendingMu so connection failure cannot drain pending
+	// requests between the lifecycle check and registration.
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.State() == StateClosed {
-		return fmt.Errorf("%w: websocket connection closed", transport.ErrConnectionClosed)
+		return nil, fmt.Errorf("%w: websocket connection closed", transport.ErrConnectionClosed)
 	}
 	if c.conn == nil || c.State() != StateConnected {
-		return errors.New("gemini websocket: not connected")
+		return nil, errors.New("gemini websocket: not connected")
 	}
+	conn := c.conn
 	c.pendingMu.Lock()
 	if c.pending == nil {
 		c.pending = make(map[string]chan requestResult)
 	}
 	c.pending[id] = resultCh
 	c.pendingMu.Unlock()
-	return nil
+	return conn, nil
 }
 
 // Ping performs the public WebSocket ping method and waits for the server's

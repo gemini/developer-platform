@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/gemini/gemini-go/websocket"
+	"github.com/gemini/developer-platform/packages/sdk-go/websocket"
 	gorilla_ws "github.com/gorilla/websocket"
 )
 

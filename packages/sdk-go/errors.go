@@ -4,8 +4,9 @@ import (
 	"context"
 	"errors"
 
-	"github.com/gemini/gemini-go/auth"
-	"github.com/gemini/gemini-go/transport"
+	"github.com/gemini/developer-platform/packages/sdk-go/auth"
+	"github.com/gemini/developer-platform/packages/sdk-go/transport"
+	"github.com/gemini/developer-platform/packages/sdk-go/websocket"
 )
 
 // -----------------------------------------------------------------------------
@@ -55,6 +56,14 @@ var (
 	// ErrHTTPSRequired indicates that an authenticated request used an insecure
 	// URL scheme.
 	ErrHTTPSRequired = transport.ErrHTTPSRequired
+
+	// ErrInvalidRequestURL indicates that a request URL is missing a host or
+	// embeds userinfo.
+	ErrInvalidRequestURL = transport.ErrInvalidRequestURL
+
+	// ErrInvalidSnapshot indicates an invalid WebSocket order-book snapshot
+	// option.
+	ErrInvalidSnapshot = websocket.ErrInvalidSnapshot
 
 	// ErrInvalidEnvironment indicates that a client was configured with an
 	// environment that is not one of the SDK's known deployment targets.

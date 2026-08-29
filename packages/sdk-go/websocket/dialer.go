@@ -16,7 +16,7 @@ const (
 )
 
 // ErrNoDialerConfigured is returned when a caller attempts to use WebSocket without configuring a dialer.
-var ErrNoDialerConfigured = errors.New("gemini websocket: no dialer configured; import 'github.com/gemini/gemini-go/websocket/gorilla' and pass gemini.WithWebSocketDialer(gorilla.NewDialer()), or provide a custom websocket.Dialer")
+var ErrNoDialerConfigured = errors.New("gemini websocket: no dialer configured; import 'github.com/gemini/developer-platform/packages/sdk-go/websocket/gorilla' and pass gemini.WithWebSocketDialer(gorilla.NewDialer()), or provide a custom websocket.Dialer")
 
 // Conn represents an abstract bidirectional WebSocket connection.
 type Conn interface {

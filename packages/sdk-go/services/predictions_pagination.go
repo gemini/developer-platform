@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"iter"
 
-	"github.com/gemini/gemini-go/generated/predictions"
-	"github.com/gemini/gemini-go/transport"
+	"github.com/gemini/developer-platform/packages/sdk-go/generated/predictions"
+	"github.com/gemini/developer-platform/packages/sdk-go/transport"
 )
 
 // ErrTimeBoundedOrderHistoryPagination indicates that an iterator was asked
@@ -30,7 +30,7 @@ func (s *PredictionsService) IteratePositions(ctx context.Context, params *predi
 	if err := validatePredictionPagination(base.Limit, base.Offset); err != nil {
 		return paginationError[predictions.Position](err)
 	}
-	pageSize := predictionPageSize(base.Limit, 1000)
+	pageSize := predictionPageSize(base.Limit, 1000, 1000)
 	initialOffset := predictionPageOffset(base.Offset)
 	return newPredictionPaginator(ctx, initialOffset, pageSize, func(ctx context.Context, offset, limit int) ([]predictions.Position, bool, error) {
 		page := base
@@ -55,7 +55,7 @@ func (s *PredictionsService) IterateSettledPositions(ctx context.Context, params
 	if err := validatePredictionPagination(base.Limit, base.Offset); err != nil {
 		return paginationError[predictions.SettledPosition](err)
 	}
-	pageSize := predictionPageSize(base.Limit, 1000)
+	pageSize := predictionPageSize(base.Limit, 1000, 1000)
 	initialOffset := predictionPageOffset(base.Offset)
 	return newPredictionPaginator(ctx, initialOffset, pageSize, func(ctx context.Context, offset, limit int) ([]predictions.SettledPosition, bool, error) {
 		page := base
@@ -79,7 +79,7 @@ func (s *PredictionsService) IterateActiveOrders(ctx context.Context, params *pr
 	if err := validatePredictionPagination(base.Limit, base.Offset); err != nil {
 		return paginationError[predictions.OrderResponse](err)
 	}
-	pageSize := predictionPageSize(base.Limit, 100)
+	pageSize := predictionPageSize(base.Limit, 100, 100)
 	initialOffset := predictionPageOffset(base.Offset)
 	return newPredictionPaginator(ctx, initialOffset, pageSize, func(ctx context.Context, offset, limit int) ([]predictions.OrderResponse, bool, error) {
 		page := base
@@ -111,7 +111,7 @@ func (s *PredictionsService) IterateOrderHistory(ctx context.Context, params *pr
 			yield(zero, ErrTimeBoundedOrderHistoryPagination)
 		}
 	}
-	pageSize := predictionPageSize(base.Limit, 1000)
+	pageSize := predictionPageSize(base.Limit, 1000, 1000)
 	initialOffset := predictionPageOffset(base.Offset)
 	return newPredictionPaginator(ctx, initialOffset, pageSize, func(ctx context.Context, offset, limit int) ([]predictions.OrderResponse, bool, error) {
 		page := base
@@ -135,7 +135,7 @@ func (s *PredictionsService) IterateCombos(ctx context.Context, params *predicti
 	if err := validatePredictionPagination(base.Limit, base.Offset); err != nil {
 		return paginationError[predictions.ComboResponse](err)
 	}
-	pageSize := predictionPageSize(base.Limit, 500)
+	pageSize := predictionPageSize(base.Limit, 500, 500)
 	initialOffset := predictionPageOffset(base.Offset)
 	return newPredictionPaginator(ctx, initialOffset, pageSize, func(ctx context.Context, offset, limit int) ([]predictions.ComboResponse, bool, error) {
 		page := base
@@ -205,7 +205,7 @@ func (s *PredictionsService) IterateLiquidityRewardsEvents(ctx context.Context, 
 	if err := validatePredictionPagination(base.Limit, base.Offset); err != nil {
 		return paginationError[predictions.LiquidityRewardEvent](err)
 	}
-	pageSize := predictionPageSize(base.Limit, 100)
+	pageSize := predictionPageSize(base.Limit, 100, 100)
 	initialOffset := predictionPageOffset(base.Offset)
 	return newPredictionPaginator(ctx, initialOffset, pageSize, func(ctx context.Context, offset, limit int) ([]predictions.LiquidityRewardEvent, bool, error) {
 		page := base
@@ -223,7 +223,7 @@ func (s *PredictionsService) iterateEvents(ctx context.Context, fetch func(*pred
 	if err := validatePredictionPagination(base.Limit, base.Offset); err != nil {
 		return paginationError[predictions.Event](err)
 	}
-	pageSize := predictionPageSize(base.Limit, defaultPageSize)
+	pageSize := predictionPageSize(base.Limit, defaultPageSize, 500)
 	initialOffset := predictionPageOffset(base.Offset)
 	return newPredictionPaginator(ctx, initialOffset, pageSize, func(_ context.Context, offset, limit int) ([]predictions.Event, bool, error) {
 		page := base
@@ -242,8 +242,17 @@ func newPredictionPaginator[T any](ctx context.Context, initialOffset, pageSize 
 	return transport.NewPaginator(ctx, initialOffset, pageSize, transport.PageFetcher[T](fetch))
 }
 
-func predictionPageSize(value *int, defaultSize int) int {
+func predictionPageSize(value *int, defaultSize, maxSize int) int {
+	if defaultSize <= 0 || maxSize <= 0 {
+		return 1
+	}
+	if defaultSize > maxSize {
+		defaultSize = maxSize
+	}
 	if value != nil && *value > 0 {
+		if *value > maxSize {
+			return maxSize
+		}
 		return *value
 	}
 	return defaultSize

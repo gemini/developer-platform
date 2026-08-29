@@ -11,7 +11,7 @@
 //
 // # Quick Start
 //
-//	import "github.com/gemini/gemini-go"
+//	import "github.com/gemini/developer-platform/packages/sdk-go"
 //
 //	client := gemini.NewClient(
 //	    gemini.WithEnvironment(gemini.Production),
@@ -51,7 +51,7 @@
 //
 // To enable real-time WebSocket feeds, configure a dialer adapter (e.g. Gorilla WebSocket):
 //
-//	import "github.com/gemini/gemini-go/websocket/gorilla"
+//	import "github.com/gemini/developer-platform/packages/sdk-go/websocket/gorilla"
 //
 //	client := gemini.NewClient(
 //	    gemini.WithWebSocketDialer(gorilla.NewDialer()),

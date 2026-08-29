@@ -11,9 +11,9 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/gemini/gemini-go/generated/trading"
-	"github.com/gemini/gemini-go/types"
-	"github.com/gemini/gemini-go/websocket"
+	"github.com/gemini/developer-platform/packages/sdk-go/generated/trading"
+	"github.com/gemini/developer-platform/packages/sdk-go/types"
+	"github.com/gemini/developer-platform/packages/sdk-go/websocket"
 )
 
 // DesiredQuote specifies an intended order for the target quoting grid.
@@ -318,7 +318,7 @@ func (r *QuoteReconciler) Sync(ctx context.Context, targets []DesiredQuote) (*Re
 			cancelMu.Unlock()
 			return
 		}
-		idInt, errParse := strconv.ParseInt(o.OrderID, 10, 64)
+		idInt, errParse := strconv.ParseUint(o.OrderID, 10, 64)
 		if errParse != nil {
 			cancelMu.Lock()
 			result.Errors = append(result.Errors, fmt.Errorf("invalid order id %s: %w", o.OrderID, errParse))
@@ -540,7 +540,7 @@ func (r *QuoteReconciler) CancelAll(ctx context.Context) error {
 	var failures []error
 	var cancelledOrders []RestingOrder
 	if err := runBounded(ctx, r.maxConcurrent, orders, func(order RestingOrder) {
-		id, err := strconv.ParseInt(order.OrderID, 10, 64)
+		id, err := strconv.ParseUint(order.OrderID, 10, 64)
 		if err != nil {
 			cancelMu.Lock()
 			failures = append(failures, fmt.Errorf("invalid order id %s: %w", order.OrderID, err))

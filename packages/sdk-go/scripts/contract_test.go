@@ -58,6 +58,61 @@ func TestGeneratedDecimalFieldsPreserveWireType(t *testing.T) {
 	}
 }
 
+func TestGeneratedWideIntegerFieldsAvoidPlatformSizedInts(t *testing.T) {
+	for _, mod := range Modules {
+		t.Run(mod.ID, func(t *testing.T) {
+			raw, err := loadPublishedSpec(mod.SpecURL)
+			if err != nil {
+				t.Fatalf("reading spec %s: %v", mod.SpecURL, err)
+			}
+			loader := openapi3.NewLoader()
+			doc, err := loader.LoadFromData(sanitizeSpecBytes(raw))
+			if err != nil {
+				t.Fatalf("loading spec %s: %v", mod.SpecURL, err)
+			}
+			code, err := RenderModule(mod)
+			if err != nil {
+				t.Fatalf("rendering module %s: %v", mod.ID, err)
+			}
+			fields, err := generatedFieldTypes(code)
+			if err != nil {
+				t.Fatalf("parsing generated module %s: %v", mod.ID, err)
+			}
+
+			for schemaName, schemaRef := range doc.Components.Schemas {
+				if schemaRef == nil || schemaRef.Value == nil {
+					continue
+				}
+				for field, property := range schemaRef.Value.Properties {
+					if _, wide := wideIntegerPropertyNames[field]; !wide || property.Value == nil || property.Value.Type == nil {
+						continue
+					}
+					if len(property.Value.AllOf) > 0 || len(property.Value.AnyOf) > 0 || len(property.Value.OneOf) > 0 {
+						continue
+					}
+					if !property.Value.Type.Is("integer") && !property.Value.Type.Is("number") {
+						continue
+					}
+					got, ok := fields[schemaName][field]
+					if !ok {
+						t.Errorf("%s.%s was not found in generated code", schemaName, field)
+						continue
+					}
+					if field == "order_id" && (schemaName == "CancelOrderRequest" || schemaName == "OrderStatusRequest") {
+						if got != "uint64" {
+							t.Errorf("%s.%s generated as %s, want uint64", schemaName, field, got)
+						}
+						continue
+					}
+					if !strings.Contains(got, "int64") {
+						t.Errorf("%s.%s generated as %s, want a 64-bit integer type", schemaName, field, got)
+					}
+				}
+			}
+		})
+	}
+}
+
 func generatedFieldTypes(code string) (map[string]map[string]string, error) {
 	file, err := parser.ParseFile(token.NewFileSet(), "generated.go", code, 0)
 	if err != nil {

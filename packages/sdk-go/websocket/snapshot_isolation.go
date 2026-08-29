@@ -214,7 +214,7 @@ func (c *Client) removeIsolatedClientForVariant(symbol string, clients map[strin
 
 	snapshotClient.subsMu.Lock()
 	feedKey := fmt.Sprintf("%s:%s@%s", feedPrefix, normSymbol, suffix)
-	err = validateActivePublicFeedVariantLocked(snapshotClient, feedPrefix, normSymbol, feedKey, suffix)
+	err = validateActiveSubscriptionVariantLocked(snapshotClient, feedKey, suffix)
 	snapshotClient.subsMu.Unlock()
 	if err != nil {
 		return nil, err

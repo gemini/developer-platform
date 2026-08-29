@@ -3,7 +3,7 @@ package gemini_test
 import (
 	"testing"
 
-	"github.com/gemini/gemini-go"
+	"github.com/gemini/developer-platform/packages/sdk-go"
 )
 
 func TestPointerHelpers(t *testing.T) {

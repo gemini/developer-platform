@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gemini/gemini-go/auth"
-	"github.com/gemini/gemini-go/websocket"
+	"github.com/gemini/developer-platform/packages/sdk-go/auth"
+	"github.com/gemini/developer-platform/packages/sdk-go/websocket"
 )
 
 func TestPublicRFQEventsDecodeAndRejectMalformedShape(t *testing.T) {
@@ -164,6 +164,20 @@ func TestRFQQuoteMethodsRejectInvalidParametersBeforeWriting(t *testing.T) {
 			name: "submit invalid price",
 			call: func() error {
 				_, err := client.SubmitRFQQuote(context.Background(), websocket.RFQSubmitQuoteParams{RFQID: "rfq-1", Price: "not-a-decimal", Quantity: "1"})
+				return err
+			},
+		},
+		{
+			name: "submit zero price",
+			call: func() error {
+				_, err := client.SubmitRFQQuote(context.Background(), websocket.RFQSubmitQuoteParams{RFQID: "rfq-1", Price: "0", Quantity: "1"})
+				return err
+			},
+		},
+		{
+			name: "submit zero quantity",
+			call: func() error {
+				_, err := client.SubmitRFQQuote(context.Background(), websocket.RFQSubmitQuoteParams{RFQID: "rfq-1", Price: "0.55", Quantity: "0.000"})
 				return err
 			},
 		},

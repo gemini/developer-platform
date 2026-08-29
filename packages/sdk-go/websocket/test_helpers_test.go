@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"sync"
 
-	"github.com/gemini/gemini-go/websocket"
+	"github.com/gemini/developer-platform/packages/sdk-go/websocket"
 )
 
 // mockDrainDialer is the deterministic in-memory transport used by lifecycle

@@ -6,9 +6,9 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/gemini/gemini-go/services"
-	"github.com/gemini/gemini-go/transport"
-	"github.com/gemini/gemini-go/websocket"
+	"github.com/gemini/developer-platform/packages/sdk-go/services"
+	"github.com/gemini/developer-platform/packages/sdk-go/transport"
+	"github.com/gemini/developer-platform/packages/sdk-go/websocket"
 )
 
 // Client is the primary entrypoint to the Gemini Go SDK.

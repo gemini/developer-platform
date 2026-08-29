@@ -6,7 +6,7 @@ import (
 	"testing"
 	"unicode/utf8"
 
-	"github.com/gemini/gemini-go/auth"
+	"github.com/gemini/developer-platform/packages/sdk-go/auth"
 )
 
 func FuzzHMAC_BuildPayload(f *testing.F) {

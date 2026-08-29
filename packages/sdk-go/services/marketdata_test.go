@@ -7,8 +7,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/gemini/gemini-go/services"
-	"github.com/gemini/gemini-go/transport"
+	"github.com/gemini/developer-platform/packages/sdk-go/services"
+	"github.com/gemini/developer-platform/packages/sdk-go/transport"
 )
 
 func TestMarketDataService_Methods(t *testing.T) {

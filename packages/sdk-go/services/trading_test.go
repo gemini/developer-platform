@@ -8,10 +8,10 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/gemini/gemini-go/generated/trading"
-	"github.com/gemini/gemini-go/services"
-	"github.com/gemini/gemini-go/transport"
-	"github.com/gemini/gemini-go/types"
+	"github.com/gemini/developer-platform/packages/sdk-go/generated/trading"
+	"github.com/gemini/developer-platform/packages/sdk-go/services"
+	"github.com/gemini/developer-platform/packages/sdk-go/transport"
+	"github.com/gemini/developer-platform/packages/sdk-go/types"
 )
 
 func TestTradingService_FluentOrderHelpers(t *testing.T) {
@@ -213,11 +213,11 @@ func TestTradingService_Methods(t *testing.T) {
 				OrderId: &orderID,
 			})
 		case "/v1/order/cancel/all":
-			canceled := []int{123456}
+			canceled := []int64{123456}
 			_ = json.NewEncoder(w).Encode(trading.CancelAllResult{
 				Details: &struct {
-					CancelRejects   *[]int `json:"cancelRejects,omitempty"`
-					CancelledOrders *[]int `json:"cancelledOrders,omitempty"`
+					CancelRejects   *[]int64 `json:"cancelRejects,omitempty"`
+					CancelledOrders *[]int64 `json:"cancelledOrders,omitempty"`
 				}{
 					CancelledOrders: &canceled,
 				},

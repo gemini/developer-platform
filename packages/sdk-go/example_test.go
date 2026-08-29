@@ -10,11 +10,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/gemini/gemini-go"
-	"github.com/gemini/gemini-go/generated/trading"
-	"github.com/gemini/gemini-go/transport"
-	"github.com/gemini/gemini-go/websocket"
-	"github.com/gemini/gemini-go/websocket/orderbook"
+	"github.com/gemini/developer-platform/packages/sdk-go"
+	"github.com/gemini/developer-platform/packages/sdk-go/generated/trading"
+	"github.com/gemini/developer-platform/packages/sdk-go/transport"
+	"github.com/gemini/developer-platform/packages/sdk-go/websocket"
+	"github.com/gemini/developer-platform/packages/sdk-go/websocket/orderbook"
 )
 
 func newExampleRESTClient(server *httptest.Server, authenticated bool) *gemini.Client {

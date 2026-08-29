@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gemini/gemini-go/transport"
+	"github.com/gemini/developer-platform/packages/sdk-go/transport"
 )
 
 func TestTraceHook_LatencyBreakdown(t *testing.T) {

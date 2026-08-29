@@ -15,7 +15,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gemini/gemini-go/auth"
+	"github.com/gemini/developer-platform/packages/sdk-go/auth"
 )
 
 var defaultClientUserAgentJSON = func() string {
@@ -192,6 +192,9 @@ func (c *Client) Execute(ctx context.Context, req *http.Request, payloadJSON []b
 	}
 	if req.URL == nil {
 		return nil, nil, errors.New("gemini transport: request URL is nil")
+	}
+	if req.URL.Host == "" || req.URL.User != nil {
+		return nil, nil, ErrInvalidRequestURL
 	}
 	// Keep the transport boundary HTTPS-only even for public requests. Public
 	// data must not silently downgrade when a caller supplies a custom endpoint;

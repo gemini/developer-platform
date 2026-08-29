@@ -5,6 +5,7 @@ on:
     paths:
       - "packages/sdk-go/**"
       - ".github/workflows/validate-go-sdk.yml"
+      - ".github/workflows/release-go-sdk.yml"
 
 permissions:
   contents: read
@@ -48,6 +49,8 @@ jobs:
       - run: make test
       - run: make race
       - run: make vet
+      - name: Verify 32-bit wire integer decoding
+        run: GOARCH=386 go test ./generated/clearing
       - run: make generate-check
       - run: make release-smoke
 

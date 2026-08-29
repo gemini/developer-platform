@@ -79,6 +79,13 @@ func TestNewClientWithErrorRejectsInvalidEndpoint(t *testing.T) {
 	}
 }
 
+func TestNewClientWithErrorRejectsInvalidSnapshot(t *testing.T) {
+	_, err := NewClientWithError("wss://ws.gemini.com", WithSnapshot(-2))
+	if !errors.Is(err, ErrInvalidSnapshot) {
+		t.Fatalf("NewClientWithError() error = %v, want ErrInvalidSnapshot", err)
+	}
+}
+
 type slowConsumerConn struct {
 	closeOnce sync.Once
 	closed    chan struct{}

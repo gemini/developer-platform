@@ -40,6 +40,40 @@ func TestGeneratePKCE(t *testing.T) {
 	}
 }
 
+func TestTokenFormattingDoesNotExposeCredentials(t *testing.T) {
+	token := Token{
+		AccessToken:  "access-token-secret",
+		RefreshToken: "refresh-token-secret",
+		TokenType:    "Bearer",
+		ExpiresAt:    time.Unix(123, 0),
+		Scope:        "account:read",
+	}
+	formatted := fmt.Sprintf("%v %#v", token, token)
+	if strings.Contains(formatted, "access-token-secret") || strings.Contains(formatted, "refresh-token-secret") {
+		t.Fatalf("token formatting exposed credentials: %s", formatted)
+	}
+	if !strings.Contains(formatted, "<redacted>") {
+		t.Fatalf("token formatting omitted redaction marker: %s", formatted)
+	}
+}
+
+func TestConfigFormattingDoesNotExposeClientSecret(t *testing.T) {
+	cfg := Config{
+		ClientID:     "client-id",
+		ClientSecret: "client-secret",
+		Endpoint:     Endpoint{AuthURL: "https://exchange.example/auth", TokenURL: "https://exchange.example/token"},
+		RedirectURL:  "http://localhost:8787/callback",
+		Scopes:       []string{"account:read"},
+	}
+	formatted := fmt.Sprintf("%v %#v", cfg, cfg)
+	if strings.Contains(formatted, cfg.ClientSecret) {
+		t.Fatalf("OAuth config formatting exposed client secret: %s", formatted)
+	}
+	if !strings.Contains(formatted, "<redacted>") {
+		t.Fatalf("OAuth config formatting omitted redaction marker: %s", formatted)
+	}
+}
+
 func TestAuthCodeURLIncludesPKCEWithoutSecrets(t *testing.T) {
 	cfg := Config{
 		ClientID:     "cli-client-id",

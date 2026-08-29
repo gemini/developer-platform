@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"html/template"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/url"
@@ -27,7 +28,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/gemini/gemini-go/auth"
+	"github.com/gemini/developer-platform/packages/sdk-go/auth"
 )
 
 const (
@@ -91,6 +92,36 @@ type Config struct {
 	HTTPClient   *http.Client
 }
 
+// String returns a diagnostic representation without exposing ClientSecret.
+// Config values are commonly printed while diagnosing OAuth startup failures,
+// so the safe representation is the default for ordinary fmt formatting.
+func (c Config) String() string {
+	return fmt.Sprintf(
+		"oauth.Config{ClientID:%q, ClientSecret:%s, Endpoint:{AuthURL:%q, TokenURL:%q}, RedirectURL:%q, Scopes:%q, HTTPClientConfigured:%t}",
+		c.ClientID, secretPresence(c.ClientSecret), c.Endpoint.AuthURL, c.Endpoint.TokenURL,
+		c.RedirectURL, strings.Join(c.Scopes, ","), c.HTTPClient != nil,
+	)
+}
+
+// GoString returns a safe representation for %#v formatting.
+func (c Config) GoString() string {
+	return c.String()
+}
+
+// LogValue prevents structured loggers from reflecting ClientSecret or a
+// caller-provided HTTP client's internal fields.
+func (c Config) LogValue() slog.Value {
+	return slog.GroupValue(
+		slog.String("client_id", c.ClientID),
+		slog.Bool("client_secret_present", strings.TrimSpace(c.ClientSecret) != ""),
+		slog.String("authorization_endpoint", c.Endpoint.AuthURL),
+		slog.String("token_endpoint", c.Endpoint.TokenURL),
+		slog.String("redirect_url", c.RedirectURL),
+		slog.Any("scopes", append([]string(nil), c.Scopes...)),
+		slog.Bool("http_client_configured", c.HTTPClient != nil),
+	)
+}
+
 // Token is an OAuth access token and its optional refresh metadata.
 type Token struct {
 	AccessToken  string
@@ -98,6 +129,42 @@ type Token struct {
 	TokenType    string
 	ExpiresAt    time.Time
 	Scope        string
+}
+
+// String returns a diagnostic representation without exposing access or
+// refresh token material. OAuth tokens are routinely included in startup and
+// refresh logs, so the safe representation is the default even with fmt's
+// ordinary formatting verbs.
+func (t Token) String() string {
+	return fmt.Sprintf(
+		"oauth.Token{AccessToken:%s, RefreshToken:%s, TokenType:%q, ExpiresAt:%s, Scope:%q}",
+		secretPresence(t.AccessToken), secretPresence(t.RefreshToken), t.TokenType,
+		t.ExpiresAt.UTC().Format(time.RFC3339), t.Scope,
+	)
+}
+
+// GoString returns a safe representation for %#v formatting.
+func (t Token) GoString() string {
+	return t.String()
+}
+
+// LogValue prevents structured loggers from reflecting the exported token
+// fields and accidentally recording credentials.
+func (t Token) LogValue() slog.Value {
+	return slog.GroupValue(
+		slog.Bool("access_token_present", strings.TrimSpace(t.AccessToken) != ""),
+		slog.Bool("refresh_token_present", strings.TrimSpace(t.RefreshToken) != ""),
+		slog.String("token_type", t.TokenType),
+		slog.Time("expires_at", t.ExpiresAt),
+		slog.String("scope", t.Scope),
+	)
+}
+
+func secretPresence(value string) string {
+	if strings.TrimSpace(value) == "" {
+		return "<unset>"
+	}
+	return "<redacted>"
 }
 
 // Valid reports whether the access token is present and remains valid after
@@ -318,6 +385,9 @@ func NewTokenSource(config Config, initial Token, opts ...SourceOption) (*Source
 	if strings.TrimSpace(initial.AccessToken) == "" && strings.TrimSpace(initial.RefreshToken) == "" {
 		return nil, ErrInvalidToken
 	}
+	if strings.TrimSpace(initial.AccessToken) != "" && !validAccessToken(initial.AccessToken) {
+		return nil, fmt.Errorf("%w: access token contains invalid characters", ErrInvalidToken)
+	}
 	if initial.TokenType == "" {
 		initial.TokenType = "Bearer"
 	}
@@ -440,6 +510,21 @@ func validateHTTPSURL(raw, name string) error {
 		return fmt.Errorf("%w: %s must be an HTTPS URL without userinfo, query, or fragment", ErrInvalidConfig, name)
 	}
 	return nil
+}
+
+func validAccessToken(value string) bool {
+	if strings.TrimSpace(value) == "" {
+		return false
+	}
+	for i := 0; i < len(value); i++ {
+		char := value[i]
+		if (char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z') ||
+			(char >= '0' && char <= '9') || strings.ContainsRune("-._~+/=", rune(char)) {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 func validateRedirectURL(raw string) error {
@@ -589,8 +674,8 @@ func (c Config) tokenRequest(ctx context.Context, form url.Values) (*Token, erro
 	if decodeErr != nil {
 		return nil, fmt.Errorf("%w: decode token response: %v", ErrInvalidToken, decodeErr)
 	}
-	if strings.TrimSpace(response.AccessToken) == "" {
-		return nil, fmt.Errorf("%w: token response has no access token", ErrInvalidToken)
+	if !validAccessToken(response.AccessToken) {
+		return nil, fmt.Errorf("%w: token response has no usable access token", ErrInvalidToken)
 	}
 	if response.ExpiresIn != nil && *response.ExpiresIn < 0 {
 		return nil, fmt.Errorf("%w: token expiry is negative", ErrInvalidToken)

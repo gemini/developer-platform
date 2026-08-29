@@ -4,7 +4,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/gemini/gemini-go/generated/predictions"
+	"github.com/gemini/developer-platform/packages/sdk-go/generated/predictions"
 )
 
 // Sports event tickers use a stable market-family suffix followed by an

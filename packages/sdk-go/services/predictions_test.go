@@ -9,10 +9,10 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/gemini/gemini-go/auth"
-	"github.com/gemini/gemini-go/generated/predictions"
-	"github.com/gemini/gemini-go/services"
-	"github.com/gemini/gemini-go/transport"
+	"github.com/gemini/developer-platform/packages/sdk-go/auth"
+	"github.com/gemini/developer-platform/packages/sdk-go/generated/predictions"
+	"github.com/gemini/developer-platform/packages/sdk-go/services"
+	"github.com/gemini/developer-platform/packages/sdk-go/transport"
 )
 
 func TestPredictionsService_TermsGating(t *testing.T) {

@@ -64,9 +64,15 @@ var (
 	// attempted without an authentication strategy.
 	ErrAuthenticationRequired = errors.New("gemini client: authentication strategy required")
 
-	// ErrHTTPSRequired indicates that an authenticated HTTP request used an
-	// insecure URL scheme.
-	ErrHTTPSRequired = errors.New("gemini client: authenticated requests require HTTPS")
+	// ErrHTTPSRequired indicates that an HTTP request used an insecure URL
+	// scheme. The transport applies this invariant to public and authenticated
+	// requests alike.
+	ErrHTTPSRequired = errors.New("gemini client: HTTP requests require HTTPS")
+
+	// ErrInvalidRequestURL indicates that a request URL is missing a host or
+	// embeds userinfo. Callers must provide the destination explicitly and
+	// credentials must never be accepted as part of the URL.
+	ErrInvalidRequestURL = errors.New("gemini client: invalid request URL")
 
 	// ErrCancelConfirmationRequired indicates that a destructive cancel-all
 	// operation was not explicitly confirmed by the caller.

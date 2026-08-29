@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/gemini/gemini-go/transport"
-	"github.com/gemini/gemini-go/types"
+	"github.com/gemini/developer-platform/packages/sdk-go/transport"
+	"github.com/gemini/developer-platform/packages/sdk-go/types"
 )
 
 // JSONObject is the lossless generic object shape used by WebSocket methods

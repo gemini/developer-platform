@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gemini/gemini-go/transport"
-	"github.com/gemini/gemini-go/types"
-	"github.com/gemini/gemini-go/websocket"
+	"github.com/gemini/developer-platform/packages/sdk-go/transport"
+	"github.com/gemini/developer-platform/packages/sdk-go/types"
+	"github.com/gemini/developer-platform/packages/sdk-go/websocket"
 )
 
 func TestOrderBook_LevelsAndBBO(t *testing.T) {
@@ -671,6 +671,27 @@ func TestOrderBook_VWAP_Imbalance_CumulativeDepth(t *testing.T) {
 	}
 	if fillOversized.RemainingQty.String() != "4" {
 		t.Fatalf("expected remaining qty 4, got %s", fillOversized.RemainingQty.String())
+	}
+}
+
+func TestOrderBook_VWAP_SellSlippageIsPositiveWhenFillingBelowTopBid(t *testing.T) {
+	book := NewOrderBook("BTCUSD")
+	if err := book.ApplySnapshot(1, [][]string{
+		{"100", "1"},
+		{"80", "1"},
+	}, nil); err != nil {
+		t.Fatalf("ApplySnapshot failed: %v", err)
+	}
+
+	fill, err := book.VWAP(false, types.MustParseDecimal("2"))
+	if err != nil {
+		t.Fatalf("VWAP failed: %v", err)
+	}
+	if fill.AveragePrice.String() != "90" {
+		t.Fatalf("expected average sell price 90, got %s", fill.AveragePrice.String())
+	}
+	if fill.SlippageBps != 1000 {
+		t.Fatalf("expected +1000 bps adverse sell slippage, got %v", fill.SlippageBps)
 	}
 }
 

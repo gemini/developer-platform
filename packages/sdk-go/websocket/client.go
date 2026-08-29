@@ -12,8 +12,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/gemini/gemini-go/auth"
-	"github.com/gemini/gemini-go/transport"
+	"github.com/gemini/developer-platform/packages/sdk-go/auth"
+	"github.com/gemini/developer-platform/packages/sdk-go/transport"
 )
 
 // ErrAuthenticationRequired is returned when an authenticated WebSocket operation
@@ -23,6 +23,11 @@ var ErrAuthenticationRequired = transport.ErrAuthenticationRequired
 // ErrInvalidURL indicates that the WebSocket endpoint is not an absolute URL
 // with a host and the required WSS scheme.
 var ErrInvalidURL = errors.New("gemini websocket: invalid endpoint URL")
+
+// ErrInvalidSnapshot indicates that a snapshot option is outside the wire
+// contract. -1 requests the full book, 0 disables snapshots, and positive
+// values request a bounded partial snapshot.
+var ErrInvalidSnapshot = errors.New("gemini websocket: invalid snapshot value")
 
 // ErrRequestFailed is returned when the WebSocket server rejects a correlated
 // request with a non-success status.
@@ -138,7 +143,7 @@ type Client struct {
 	subsMu                 sync.Mutex
 	rfqScopeMu             sync.Mutex
 	subscriptionWireMu     sync.Mutex
-	subscriptionGates      map[string]chan struct{}
+	subscriptionGates      map[string]*subscriptionWireGate
 	subscriptionReplayGate chan struct{}
 	activeFeeds            map[string]RequestFrame
 	snapshotMode           bool
@@ -157,6 +162,15 @@ func newTokenGate() chan struct{} {
 	gate := make(chan struct{}, 1)
 	gate <- struct{}{}
 	return gate
+}
+
+type subscriptionWireGate struct {
+	token chan struct{}
+	refs  int
+}
+
+func newSubscriptionWireGate() *subscriptionWireGate {
+	return &subscriptionWireGate{token: newTokenGate()}
 }
 
 type requestResult struct {
@@ -372,6 +386,12 @@ func WithMaxReconnects(max int) ClientOption {
 // low-level WebSocket client.
 func WithSnapshot(snapshot int) ClientOption {
 	return func(c *Client) {
+		if snapshot < -1 {
+			if c.configErr == nil {
+				c.configErr = fmt.Errorf("%w: %d; want -1, 0, or a positive level", ErrInvalidSnapshot, snapshot)
+			}
+			return
+		}
 		parsed, err := url.Parse(c.url)
 		if err != nil {
 			return
@@ -426,7 +446,7 @@ func NewClient(url string, opts ...ClientOption) *Client {
 		eventChan:              make(chan ConnectionEvent, 32),
 		eventSubscribers:       make(map[uint64]chan ConnectionEvent),
 		pending:                make(map[string]chan requestResult),
-		subscriptionGates:      make(map[string]chan struct{}),
+		subscriptionGates:      make(map[string]*subscriptionWireGate),
 		subscriptionReplayGate: newTokenGate(),
 		snapshotPending:        make(map[string]uint64),
 		snapshotClients:        make(map[string]*Client),

@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gemini/gemini-go"
-	"github.com/gemini/gemini-go/auth"
-	"github.com/gemini/gemini-go/websocket/gorilla"
+	"github.com/gemini/developer-platform/packages/sdk-go"
+	"github.com/gemini/developer-platform/packages/sdk-go/auth"
+	"github.com/gemini/developer-platform/packages/sdk-go/websocket/gorilla"
 )
 
 // TestOAuthIntegration validates the bearer authentication path against a

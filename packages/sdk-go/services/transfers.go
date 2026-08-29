@@ -4,8 +4,8 @@ import (
 	"context"
 	"net/url"
 
-	"github.com/gemini/gemini-go/generated/account"
-	"github.com/gemini/gemini-go/transport"
+	"github.com/gemini/developer-platform/packages/sdk-go/generated/account"
+	"github.com/gemini/developer-platform/packages/sdk-go/transport"
 )
 
 // TransfersService provides access to crypto withdrawals, fee estimates, multi-network past transfers, and custody fees.

@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gemini/gemini-go"
-	"github.com/gemini/gemini-go/transport"
+	"github.com/gemini/developer-platform/packages/sdk-go"
+	"github.com/gemini/developer-platform/packages/sdk-go/transport"
 )
 
 func TestErrors_DomainVsAPIClassification(t *testing.T) {

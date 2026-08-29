@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gemini/gemini-go/types"
-	"github.com/gemini/gemini-go/websocket"
+	"github.com/gemini/developer-platform/packages/sdk-go/types"
+	"github.com/gemini/developer-platform/packages/sdk-go/websocket"
 )
 
 const maxPendingOrderEvents = 4096

@@ -7,9 +7,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/gemini/gemini-go/auth"
-	"github.com/gemini/gemini-go/services"
-	"github.com/gemini/gemini-go/transport"
+	"github.com/gemini/developer-platform/packages/sdk-go/auth"
+	"github.com/gemini/developer-platform/packages/sdk-go/services"
+	"github.com/gemini/developer-platform/packages/sdk-go/transport"
 )
 
 func TestPerpetualsService_FundingEndpoints(t *testing.T) {
@@ -27,8 +27,8 @@ func TestPerpetualsService_FundingEndpoints(t *testing.T) {
 			"amount":                    0.000125,
 			"estimatedFundingAmount":    0.000150,
 			"fundingDateTime":           "2026-08-20T14:00:00.000Z",
-			"fundingTimestampMilliSecs": 1750000000000,
-			"nextFundingTimestamp":      1750003600000,
+			"fundingTimestampMilliSecs": int64(1750000000000),
+			"nextFundingTimestamp":      int64(1750003600000),
 		})
 	})
 
@@ -51,12 +51,12 @@ func TestPerpetualsService_FundingEndpoints(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode([]map[string]any{
 			{"eventType": "Hourly Funding Transfer", "hourlyFundingTransfer": map[string]any{
-				"eventType": "Hourly Funding Transfer", "timestamp": 1750000000000,
+				"eventType": "Hourly Funding Transfer", "timestamp": int64(1750000000000),
 				"assetCode": "GUSD", "action": "Debit",
 				"quantity": map[string]any{"currency": "GUSD", "value": "0.000120"},
 			}},
 			{"eventType": "Hourly Funding Transfer", "hourlyFundingTransfer": map[string]any{
-				"eventType": "Hourly Funding Transfer", "timestamp": 1750003600000,
+				"eventType": "Hourly Funding Transfer", "timestamp": int64(1750003600000),
 				"assetCode": "GUSD", "action": "Debit",
 				"quantity": map[string]any{"currency": "GUSD", "value": "0.000125"},
 			}},

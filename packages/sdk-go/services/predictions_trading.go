@@ -3,7 +3,7 @@ package services
 import (
 	"context"
 
-	"github.com/gemini/gemini-go/generated/predictions"
+	"github.com/gemini/developer-platform/packages/sdk-go/generated/predictions"
 )
 
 // PredictionOrderOperationResponse reports the result of a prediction-market

@@ -3,7 +3,7 @@ package services
 import (
 	"testing"
 
-	"github.com/gemini/gemini-go/websocket"
+	"github.com/gemini/developer-platform/packages/sdk-go/websocket"
 )
 
 func TestEnqueuePendingOrderEventHasHardLimit(t *testing.T) {

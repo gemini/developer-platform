@@ -16,7 +16,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gemini/gemini-go/auth"
+	"github.com/gemini/developer-platform/packages/sdk-go/auth"
 )
 
 type roundTripFunc func(*http.Request) (*http.Response, error)
@@ -105,6 +105,29 @@ func TestTransport_PublicRequestsRequireHTTPS(t *testing.T) {
 	}
 	if got := roundTrips.Load(); got != 0 {
 		t.Fatalf("insecure public request reached RoundTripper %d times", got)
+	}
+}
+
+func TestTransport_RequestURLsRejectMissingHostAndUserinfo(t *testing.T) {
+	client := NewClient(WithHTTPClient(&http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+		t.Fatal("invalid request URL reached RoundTripper")
+		return nil, nil
+	})}))
+
+	tests := []string{
+		"https:/v1/test",
+		"https://user:password@api.gemini.com/v1/test",
+	}
+	for _, rawURL := range tests {
+		t.Run(rawURL, func(t *testing.T) {
+			req, err := http.NewRequest(http.MethodGet, rawURL, nil)
+			if err != nil {
+				t.Fatalf("creating request: %v", err)
+			}
+			if _, _, err := client.Execute(context.Background(), req, nil); !errors.Is(err, ErrInvalidRequestURL) {
+				t.Fatalf("Execute error = %v, want ErrInvalidRequestURL", err)
+			}
+		})
 	}
 }
 

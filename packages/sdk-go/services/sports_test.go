@@ -4,8 +4,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/gemini/gemini-go/generated/predictions"
-	"github.com/gemini/gemini-go/services"
+	"github.com/gemini/developer-platform/packages/sdk-go/generated/predictions"
+	"github.com/gemini/developer-platform/packages/sdk-go/services"
 )
 
 func TestNormalizeContestRoot(t *testing.T) {

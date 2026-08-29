@@ -8,9 +8,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/gemini/gemini-go/generated/account"
-	"github.com/gemini/gemini-go/services"
-	"github.com/gemini/gemini-go/transport"
+	"github.com/gemini/developer-platform/packages/sdk-go/generated/account"
+	"github.com/gemini/developer-platform/packages/sdk-go/services"
+	"github.com/gemini/developer-platform/packages/sdk-go/transport"
 )
 
 func TestAccountService_Methods(t *testing.T) {
@@ -57,8 +57,8 @@ func TestAccountService_Methods(t *testing.T) {
 			_ = json.NewEncoder(w).Encode(map[string]any{"name": "Trading Renamed", "account": "trading-renamed"})
 		case "/v1/account/list":
 			_ = json.NewEncoder(w).Encode([]map[string]any{
-				{"name": "Primary", "account": "primary", "type": "exchange", "counterparty_id": "EMONNYXH", "created": 1495127793000, "status": "open"},
-				{"name": "Trading Renamed", "account": "trading-renamed", "type": "exchange", "counterparty_id": nil, "created": 1565970772000, "status": "closed"},
+				{"name": "Primary", "account": "primary", "type": "exchange", "counterparty_id": "EMONNYXH", "created": int64(1495127793000), "status": "open"},
+				{"name": "Trading Renamed", "account": "trading-renamed", "type": "exchange", "counterparty_id": nil, "created": int64(1565970772000), "status": "closed"},
 			})
 		case "/v1/account/transfer/USD":
 			amt := "500.00"

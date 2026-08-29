@@ -241,11 +241,11 @@ func validateRFQQuoteParams(params any) error {
 		if strings.TrimSpace(params.RFQID) == "" {
 			return invalid("rfqId is required")
 		}
-		if !validRFQPlainDecimal(&params.Price) {
-			return invalid("price must be a decimal string")
+		if !validRFQPositiveDecimal(&params.Price) {
+			return invalid("price must be a positive decimal string")
 		}
-		if !validRFQPlainDecimal(&params.Quantity) {
-			return invalid("quantity must be a decimal string")
+		if !validRFQPositiveDecimal(&params.Quantity) {
+			return invalid("quantity must be a positive decimal string")
 		}
 		if params.ValidUntil != nil && *params.ValidUntil < 0 {
 			return invalid("validUntil must be non-negative")
@@ -283,10 +283,11 @@ func subscribeGlobalFeed[T any](
 	}
 	sub := newSubscription[T](chBuf)
 	req := RequestFrame{ID: globalReqID.Add(1), Method: "SUBSCRIBE", Params: []string{feedName}}
-	if err := c.acquireSubscriptionWire(ctx, feedName); err != nil {
+	wireGate, err := c.acquireSubscriptionWire(ctx, feedName)
+	if err != nil {
 		return nil, err
 	}
-	defer c.releaseSubscriptionWire(feedName)
+	defer c.releaseSubscriptionWire(feedName, wireGate)
 	if err := c.acquireSubscriptionReplay(ctx); err != nil {
 		return nil, err
 	}
@@ -372,6 +373,21 @@ func validRFQPlainDecimal(value *string) bool {
 		return false
 	}
 	return hasDigit
+}
+
+func validRFQPositiveDecimal(value *string) bool {
+	if !validRFQPlainDecimal(value) {
+		return false
+	}
+	if value == nil {
+		return false
+	}
+	for i := 0; i < len(*value); i++ {
+		if (*value)[i] >= '1' && (*value)[i] <= '9' {
+			return true
+		}
+	}
+	return false
 }
 
 func validRFQNonEmptyString(value *string) bool {

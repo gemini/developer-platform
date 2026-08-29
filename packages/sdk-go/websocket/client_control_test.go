@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gemini/gemini-go/transport"
-	"github.com/gemini/gemini-go/websocket"
+	"github.com/gemini/developer-platform/packages/sdk-go/transport"
+	"github.com/gemini/developer-platform/packages/sdk-go/websocket"
 )
 
 func TestClient_CloseInterruptsBlockedDial(t *testing.T) {

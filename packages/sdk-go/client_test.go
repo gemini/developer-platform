@@ -8,14 +8,14 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/gemini/gemini-go"
-	"github.com/gemini/gemini-go/auth"
-	"github.com/gemini/gemini-go/geminitest"
-	"github.com/gemini/gemini-go/generated/account"
-	"github.com/gemini/gemini-go/generated/predictions"
-	"github.com/gemini/gemini-go/generated/trading"
-	"github.com/gemini/gemini-go/transport"
-	"github.com/gemini/gemini-go/websocket"
+	"github.com/gemini/developer-platform/packages/sdk-go"
+	"github.com/gemini/developer-platform/packages/sdk-go/auth"
+	"github.com/gemini/developer-platform/packages/sdk-go/geminitest"
+	"github.com/gemini/developer-platform/packages/sdk-go/generated/account"
+	"github.com/gemini/developer-platform/packages/sdk-go/generated/predictions"
+	"github.com/gemini/developer-platform/packages/sdk-go/generated/trading"
+	"github.com/gemini/developer-platform/packages/sdk-go/transport"
+	"github.com/gemini/developer-platform/packages/sdk-go/websocket"
 )
 
 type trackingRoundTripper struct {

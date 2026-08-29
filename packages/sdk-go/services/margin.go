@@ -3,8 +3,8 @@ package services
 import (
 	"context"
 
-	"github.com/gemini/gemini-go/generated/margin"
-	"github.com/gemini/gemini-go/transport"
+	"github.com/gemini/developer-platform/packages/sdk-go/generated/margin"
+	"github.com/gemini/developer-platform/packages/sdk-go/transport"
 )
 
 // MarginService provides access to margin trading and account margin information.

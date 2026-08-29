@@ -11,10 +11,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gemini/gemini-go"
-	"github.com/gemini/gemini-go/types"
-	"github.com/gemini/gemini-go/websocket"
-	"github.com/gemini/gemini-go/websocket/orderbook"
+	"github.com/gemini/developer-platform/packages/sdk-go"
+	"github.com/gemini/developer-platform/packages/sdk-go/types"
+	"github.com/gemini/developer-platform/packages/sdk-go/websocket"
+	"github.com/gemini/developer-platform/packages/sdk-go/websocket/orderbook"
 )
 
 type mockDialer struct{}

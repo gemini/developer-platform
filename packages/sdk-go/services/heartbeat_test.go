@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gemini/gemini-go/services"
-	"github.com/gemini/gemini-go/transport"
+	"github.com/gemini/developer-platform/packages/sdk-go/services"
+	"github.com/gemini/developer-platform/packages/sdk-go/transport"
 )
 
 func TestHeartbeatSession_LifecycleAndErrors(t *testing.T) {

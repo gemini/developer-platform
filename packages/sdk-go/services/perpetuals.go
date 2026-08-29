@@ -5,8 +5,8 @@ import (
 	"net/url"
 	"strconv"
 
-	"github.com/gemini/gemini-go/generated/perpetuals"
-	"github.com/gemini/gemini-go/transport"
+	"github.com/gemini/developer-platform/packages/sdk-go/generated/perpetuals"
+	"github.com/gemini/developer-platform/packages/sdk-go/transport"
 )
 
 // PerpetualsService provides access to derivatives and perpetual contract trading.

@@ -103,36 +103,102 @@ func accountStreamName(base string, options AccountStreamOptions) (string, error
 
 // acquireSubscriptionWire serializes control requests for one feed. Keeping
 // the gate per feed means a stalled depth request cannot block cleanup of an
-// unrelated private feed.
-func (c *Client) acquireSubscriptionWire(ctx context.Context, feedKey string) error {
+// unrelated private feed. The returned gate is a lease and must be released by
+// the caller after a successful acquisition.
+func (c *Client) acquireSubscriptionWire(ctx context.Context, feedKey string) (*subscriptionWireGate, error) {
 	if ctx == nil {
 		ctx = context.Background()
+	}
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-c.doneChan:
+		return nil, fmt.Errorf("gemini websocket: subscription gate closed: %w", context.Canceled)
+	default:
 	}
 	c.subscriptionWireMu.Lock()
 	gate := c.subscriptionGates[feedKey]
 	if gate == nil {
-		gate = newTokenGate()
+		gate = newSubscriptionWireGate()
 		c.subscriptionGates[feedKey] = gate
 	}
+	gate.refs++
 	c.subscriptionWireMu.Unlock()
 
 	select {
 	case <-ctx.Done():
-		return ctx.Err()
+		c.abandonSubscriptionWire(feedKey, gate)
+		return nil, ctx.Err()
 	case <-c.doneChan:
-		return fmt.Errorf("gemini websocket: subscription gate closed: %w", context.Canceled)
-	case <-gate:
-		return nil
+		c.abandonSubscriptionWire(feedKey, gate)
+		return nil, fmt.Errorf("gemini websocket: subscription gate closed: %w", context.Canceled)
+	case <-gate.token:
+		return gate, nil
 	}
 }
 
-func (c *Client) releaseSubscriptionWire(feedKey string) {
+func (c *Client) releaseSubscriptionWire(feedKey string, expected *subscriptionWireGate) {
+	if expected == nil {
+		return
+	}
 	c.subscriptionWireMu.Lock()
 	gate := c.subscriptionGates[feedKey]
-	c.subscriptionWireMu.Unlock()
-	if gate != nil {
-		gate <- struct{}{}
+	if gate != expected {
+		c.subscriptionWireMu.Unlock()
+		return
 	}
+	gate.refs--
+	if gate.refs == 0 {
+		delete(c.subscriptionGates, feedKey)
+	} else {
+		gate.token <- struct{}{}
+	}
+	c.subscriptionWireMu.Unlock()
+}
+
+func (c *Client) abandonSubscriptionWire(feedKey string, expected *subscriptionWireGate) {
+	c.subscriptionWireMu.Lock()
+	gate := c.subscriptionGates[feedKey]
+	if gate == expected {
+		gate.refs--
+		if gate.refs == 0 {
+			delete(c.subscriptionGates, feedKey)
+		}
+	}
+	c.subscriptionWireMu.Unlock()
+}
+
+func subscriptionVariantFamily(feedKey string) string {
+	if strings.HasPrefix(feedKey, "depth:") || strings.HasPrefix(feedKey, "partialDepth:") {
+		_, rest, ok := strings.Cut(feedKey, ":")
+		if !ok {
+			return ""
+		}
+		symbol, _, ok := strings.Cut(rest, "@")
+		if !ok || symbol == "" {
+			return ""
+		}
+		return "depth:" + symbol
+	}
+	for _, prefix := range []string{"orders@", "balances@", "positions@"} {
+		if strings.HasPrefix(feedKey, prefix) {
+			return strings.TrimSuffix(prefix, "@")
+		}
+	}
+	return ""
+}
+
+func validateActiveSubscriptionVariantLocked(c *Client, requestedKey, requestedStream string) error {
+	family := subscriptionVariantFamily(requestedKey)
+	if family == "" {
+		return nil
+	}
+	for activeKey := range c.activeFeeds {
+		if activeKey != requestedKey && subscriptionVariantFamily(activeKey) == family {
+			return fmt.Errorf("%w: active %q, requested %q", ErrSubscriptionVariantMismatch, activeKey, requestedStream)
+		}
+	}
+	return nil
 }
 
 // acquireSubscriptionReplay reserves the short table-snapshot interval used
@@ -190,25 +256,21 @@ func subscribePublicFeed[T any](
 		Params: []string{stream},
 	}
 
-	if err := c.acquireSubscriptionWire(ctx, feedKey); err != nil {
+	wireGate, err := c.acquireSubscriptionWire(ctx, feedKey)
+	if err != nil {
 		return nil, err
 	}
-	defer c.releaseSubscriptionWire(feedKey)
+	defer c.releaseSubscriptionWire(feedKey, wireGate)
 	if err := c.acquireSubscriptionReplay(ctx); err != nil {
 		return nil, err
 	}
 
 	c.subsMu.Lock()
 	oldTables := c.subTables.Load()
-	if feedPrefix == "depth" || feedPrefix == "partialDepth" {
-		for activeKey := range c.activeFeeds {
-			prefix := fmt.Sprintf("%s:%s@", feedPrefix, normSymbol)
-			if strings.HasPrefix(activeKey, prefix) && activeKey != feedKey {
-				c.subsMu.Unlock()
-				c.releaseSubscriptionReplay()
-				return nil, fmt.Errorf("gemini websocket: %s stream variant already active for %s", feedPrefix, normSymbol)
-			}
-		}
+	if err := validateActiveSubscriptionVariantLocked(c, feedKey, stream); err != nil {
+		c.subsMu.Unlock()
+		c.releaseSubscriptionReplay()
+		return nil, err
 	}
 	_, alreadyActive := c.activeFeeds[feedKey]
 	needWireSubscribe := !alreadyActive
@@ -257,17 +319,18 @@ func unsubscribePublicFeed[T any](
 		stream = fmt.Sprintf("%s@%s", strings.ToLower(normSymbol), streamSuffix)
 	}
 
-	if err := c.acquireSubscriptionWire(ctx, feedKey); err != nil {
+	wireGate, err := c.acquireSubscriptionWire(ctx, feedKey)
+	if err != nil {
 		return err
 	}
-	defer c.releaseSubscriptionWire(feedKey)
+	defer c.releaseSubscriptionWire(feedKey, wireGate)
 	if err := c.acquireSubscriptionReplay(ctx); err != nil {
 		return err
 	}
 
 	c.subsMu.Lock()
 	if !isContract {
-		if err := validateActivePublicFeedVariantLocked(c, feedPrefix, normSymbol, feedKey, streamSuffix); err != nil {
+		if err := validateActiveSubscriptionVariantLocked(c, feedKey, stream); err != nil {
 			c.subsMu.Unlock()
 			c.releaseSubscriptionReplay()
 			return err
@@ -316,16 +379,6 @@ func unsubscribePublicFeed[T any](
 	return nil
 }
 
-func validateActivePublicFeedVariantLocked(c *Client, feedPrefix, symbol, requestedKey, requestedStream string) error {
-	prefix := fmt.Sprintf("%s:%s@", feedPrefix, symbol)
-	for activeKey := range c.activeFeeds {
-		if strings.HasPrefix(activeKey, prefix) && activeKey != requestedKey {
-			return fmt.Errorf("%w: active %q, requested %q", ErrSubscriptionVariantMismatch, activeKey, requestedStream)
-		}
-	}
-	return nil
-}
-
 func subscribePrivateFeed[T any](
 	ctx context.Context,
 	c *Client,
@@ -349,10 +402,11 @@ func subscribePrivateFeed[T any](
 		Params: []string{feedName},
 	}
 
-	if err := c.acquireSubscriptionWire(ctx, feedName); err != nil {
+	wireGate, err := c.acquireSubscriptionWire(ctx, feedName)
+	if err != nil {
 		return nil, err
 	}
-	defer c.releaseSubscriptionWire(feedName)
+	defer c.releaseSubscriptionWire(feedName, wireGate)
 	if err := c.acquireSubscriptionReplay(ctx); err != nil {
 		return nil, err
 	}
@@ -360,6 +414,11 @@ func subscribePrivateFeed[T any](
 	c.subsMu.Lock()
 	oldTables := c.subTables.Load()
 	oldMap := getMap(oldTables)
+	if err := validateActiveSubscriptionVariantLocked(c, feedName, feedName); err != nil {
+		c.subsMu.Unlock()
+		c.releaseSubscriptionReplay()
+		return nil, err
+	}
 	needWireSubscribe := len(oldMap[feedName]) == 0
 	newTables := oldTables.clone()
 	newMap := cloneMapSlice(oldMap)
@@ -389,10 +448,11 @@ func unsubscribePrivateFeed[T any](
 	getMap func(*subTables) map[string][]*subscription[T],
 	setMap func(*subTables, map[string][]*subscription[T]),
 ) error {
-	if err := c.acquireSubscriptionWire(ctx, feedName); err != nil {
+	wireGate, err := c.acquireSubscriptionWire(ctx, feedName)
+	if err != nil {
 		return err
 	}
-	defer c.releaseSubscriptionWire(feedName)
+	defer c.releaseSubscriptionWire(feedName, wireGate)
 	if err := c.acquireSubscriptionReplay(ctx); err != nil {
 		return err
 	}
@@ -449,10 +509,11 @@ func unsubscribePrivateFeedChannel[T any](
 	if target == nil {
 		return nil
 	}
-	if err := c.acquireSubscriptionWire(ctx, feedName); err != nil {
+	wireGate, err := c.acquireSubscriptionWire(ctx, feedName)
+	if err != nil {
 		return err
 	}
-	defer c.releaseSubscriptionWire(feedName)
+	defer c.releaseSubscriptionWire(feedName, wireGate)
 	if err := c.acquireSubscriptionReplay(ctx); err != nil {
 		return err
 	}

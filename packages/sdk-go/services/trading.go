@@ -5,9 +5,9 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/gemini/gemini-go/generated/trading"
-	"github.com/gemini/gemini-go/transport"
-	"github.com/gemini/gemini-go/types"
+	"github.com/gemini/developer-platform/packages/sdk-go/generated/trading"
+	"github.com/gemini/developer-platform/packages/sdk-go/transport"
+	"github.com/gemini/developer-platform/packages/sdk-go/types"
 )
 
 // TradingService provides access to authenticated order management and execution endpoints.
@@ -201,8 +201,8 @@ func (s *TradingService) GetOrderStatus(ctx context.Context, req *trading.OrderS
 	return &res, nil
 }
 
-// GetOrderStatusByID gets current status for an order by order ID.
-func (s *TradingService) GetOrderStatusByID(ctx context.Context, orderID int64) (*trading.LimitOrderResponse, error) {
+// GetOrderStatusByID gets current status for an order by its unsigned 64-bit ID.
+func (s *TradingService) GetOrderStatusByID(ctx context.Context, orderID uint64) (*trading.LimitOrderResponse, error) {
 	return s.GetOrderStatus(ctx, &trading.OrderStatusRequest{
 		OrderId: orderID,
 	})

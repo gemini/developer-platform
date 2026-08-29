@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/gemini/gemini-go/websocket"
-	"github.com/gemini/gemini-go/websocket/orderbook"
+	"github.com/gemini/developer-platform/packages/sdk-go/websocket"
+	"github.com/gemini/developer-platform/packages/sdk-go/websocket/orderbook"
 )
 
 func BenchmarkOrderBook_ApplyLevel_Insert(b *testing.B) {

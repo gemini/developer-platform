@@ -12,11 +12,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gemini/gemini-go/generated/trading"
-	"github.com/gemini/gemini-go/services"
-	"github.com/gemini/gemini-go/transport"
-	"github.com/gemini/gemini-go/types"
-	"github.com/gemini/gemini-go/websocket"
+	"github.com/gemini/developer-platform/packages/sdk-go/generated/trading"
+	"github.com/gemini/developer-platform/packages/sdk-go/services"
+	"github.com/gemini/developer-platform/packages/sdk-go/transport"
+	"github.com/gemini/developer-platform/packages/sdk-go/types"
+	"github.com/gemini/developer-platform/packages/sdk-go/websocket"
 )
 
 func TestReconcileResult_ErrAggregatesPartialFailures(t *testing.T) {
@@ -567,6 +567,56 @@ func TestQuoteReconciler_DoesNotPlaceAfterCancellationFailure(t *testing.T) {
 	}
 	if len(result.Errors) == 0 || placeCalls.Load() != 0 {
 		t.Fatalf("expected cancellation failure to block placements, result=%+v placeCalls=%d", result, placeCalls.Load())
+	}
+}
+
+func TestQuoteReconciler_CancelsMaxUint64OrderID(t *testing.T) {
+	const orderID = "18446744073709551615"
+	var cancelledID uint64
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/orders":
+			orderIDValue, symbol, price, amount := orderID, "BTCUSD", "65000", "1"
+			side := trading.LimitOrderResponseSideBuy
+			order := trading.LimitOrderResponse{
+				OrderId:        &orderIDValue,
+				Symbol:         &symbol,
+				Price:          &price,
+				OriginalAmount: &amount,
+				Side:           &side,
+			}
+			_ = json.NewEncoder(w).Encode([]trading.LimitOrderResponse{order})
+		case "/v1/order/cancel":
+			var request struct {
+				OrderID uint64 `json:"order_id"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+				t.Errorf("decode cancellation request: %v", err)
+			}
+			cancelledID = request.OrderID
+			_ = json.NewEncoder(w).Encode(trading.CancelOrderResponse{IsCancelled: ptrBool(true), IsLive: ptrBool(false)})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	reconciler := services.NewQuoteReconciler(
+		services.NewTradingService(
+			transport.NewClient(transport.WithHTTPClient(server.Client())),
+			server.URL,
+		),
+		nil,
+		"BTCUSD",
+	)
+	if err := reconciler.Hydrate(context.Background()); err != nil {
+		t.Fatalf("Hydrate failed: %v", err)
+	}
+	if err := reconciler.CancelAll(context.Background()); err != nil {
+		t.Fatalf("CancelAll failed for a uint64 order ID: %v", err)
+	}
+	if cancelledID != ^uint64(0) {
+		t.Fatalf("expected max uint64 order ID %d, got %d", ^uint64(0), cancelledID)
 	}
 }
 

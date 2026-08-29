@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/gemini/gemini-go/transport"
+	"github.com/gemini/developer-platform/packages/sdk-go/transport"
 )
 
 func TestBaseServiceRejectsNilTransport(t *testing.T) {

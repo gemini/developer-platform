@@ -9,8 +9,8 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/gemini/gemini-go/internal/runtime"
-	openapi_types "github.com/gemini/gemini-go/types"
+	"github.com/gemini/developer-platform/packages/sdk-go/internal/runtime"
+	openapi_types "github.com/gemini/developer-platform/packages/sdk-go/types"
 )
 
 const (
@@ -735,8 +735,8 @@ type CancelAllOrdersRequest struct {
 type CancelAllResult struct {
 	// Details cancelledOrders/cancelRejects with IDs of both
 	Details *struct {
-		CancelRejects   *[]int `json:"cancelRejects,omitempty"`
-		CancelledOrders *[]int `json:"cancelledOrders,omitempty"`
+		CancelRejects   *[]int64 `json:"cancelRejects,omitempty"`
+		CancelledOrders *[]int64 `json:"cancelledOrders,omitempty"`
 	} `json:"details,omitempty"`
 	Result *string `json:"result,omitempty"`
 }
@@ -750,7 +750,7 @@ type CancelOrderRequest struct {
 	Nonce TimestampType `json:"nonce"`
 
 	// OrderId The order ID given by `/order/new`
-	OrderId int64 `json:"order_id"`
+	OrderId uint64 `json:"order_id"`
 
 	// Request The literal string "/v1/order/cancel"
 	Request string `json:"request"`
@@ -823,7 +823,7 @@ type ClearingOrder struct {
 	Timestamp *TimestampType `json:"timestamp,omitempty"`
 
 	// Timestampms The timestamp in milliseconds
-	Timestampms *int `json:"timestampms,omitempty"`
+	Timestampms *int64 `json:"timestampms,omitempty"`
 }
 
 // ClearingOrderSide defines model for ClearingOrder.Side.
@@ -832,7 +832,7 @@ type ClearingOrderSide string
 // CustodyFeeTransfer defines model for CustodyFeeTransfer.
 type CustodyFeeTransfer struct {
 	// Eid Custody fee event id
-	Eid *int `json:"eid,omitempty"`
+	Eid *int64 `json:"eid,omitempty"`
 
 	// EventType Custody fee event type
 	EventType *string `json:"eventType,omitempty"`
@@ -844,7 +844,7 @@ type CustodyFeeTransfer struct {
 	FeeCurrency *string `json:"feeCurrency,omitempty"`
 
 	// TxTime Time of Custody fee record in milliseconds
-	TxTime *int `json:"txTime,omitempty"`
+	TxTime *int64 `json:"txTime,omitempty"`
 }
 
 // ErrorResponse defines model for ErrorResponse.
@@ -1103,7 +1103,7 @@ type InstantQuote struct {
 	QuantityCurrency *string `json:"quantityCurrency,omitempty"`
 
 	// QuoteId Unique ID for the quote. This is used in the execution of the order
-	QuoteId *int `json:"quoteId,omitempty"`
+	QuoteId *int64 `json:"quoteId,omitempty"`
 
 	// Side Either "buy" or "sell"
 	Side *InstantQuoteSide `json:"side,omitempty"`
@@ -1446,7 +1446,7 @@ type Nonce struct {
 }
 
 // Nonce1 defines model for .
-type Nonce1 = int
+type Nonce1 = int64
 
 // NotionalBalance defines model for NotionalBalance.
 type NotionalBalance struct {
@@ -1484,10 +1484,10 @@ type NotionalVolume struct {
 		ApiTakerFeeBps *int    `json:"api_taker_fee_bps,omitempty"`
 		Tier           *string `json:"tier,omitempty"`
 	} `json:"fee_tier,omitempty"`
-	FixAuctionFeeBps *int `json:"fix_auction_fee_bps,omitempty"`
-	FixMakerFeeBps   *int `json:"fix_maker_fee_bps,omitempty"`
-	FixTakerFeeBps   *int `json:"fix_taker_fee_bps,omitempty"`
-	LastUpdatedMs    *int `json:"last_updated_ms,omitempty"`
+	FixAuctionFeeBps *int   `json:"fix_auction_fee_bps,omitempty"`
+	FixMakerFeeBps   *int   `json:"fix_maker_fee_bps,omitempty"`
+	FixTakerFeeBps   *int   `json:"fix_taker_fee_bps,omitempty"`
+	LastUpdatedMs    *int64 `json:"last_updated_ms,omitempty"`
 	Notional1dVolume *[]struct {
 		// Date UTC date in `yyyy-MM-dd` format
 		Date *string `json:"date,omitempty"`
@@ -1606,7 +1606,7 @@ type Order struct {
 		Price *string `json:"price,omitempty"`
 
 		// Tid Unique identifier for the trade
-		Tid *int `json:"tid,omitempty"`
+		Tid *int64 `json:"tid,omitempty"`
 
 		// Timestamp timestamp
 		Timestamp *TimestampType `json:"timestamp,omitempty"`
@@ -1670,7 +1670,7 @@ type OrderStatusRequest struct {
 	Nonce TimestampType `json:"nonce"`
 
 	// OrderId The order id to get information on. The `order_id` represents a whole number and is transmitted as an unsigned 64-bit integer in JSON format. `order_id` cannot be used in combination with `client_order_id`.
-	OrderId int64 `json:"order_id"`
+	OrderId uint64 `json:"order_id"`
 
 	// Request The API endpoint path
 	Request string `json:"request"`

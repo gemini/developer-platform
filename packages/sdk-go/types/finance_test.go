@@ -5,7 +5,7 @@ import (
 	"math"
 	"testing"
 
-	"github.com/gemini/gemini-go/types"
+	"github.com/gemini/developer-platform/packages/sdk-go/types"
 )
 
 func TestCalculateNotional(t *testing.T) {

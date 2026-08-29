@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	gemini_ws "github.com/gemini/gemini-go/websocket"
-	"github.com/gemini/gemini-go/websocket/gorilla"
+	gemini_ws "github.com/gemini/developer-platform/packages/sdk-go/websocket"
+	"github.com/gemini/developer-platform/packages/sdk-go/websocket/gorilla"
 	gorilla_ws "github.com/gorilla/websocket"
 )
 

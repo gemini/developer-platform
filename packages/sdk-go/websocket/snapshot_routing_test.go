@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gemini/gemini-go/websocket"
+	"github.com/gemini/developer-platform/packages/sdk-go/websocket"
 )
 
 const symbolLessSnapshot = `{"lastUpdateId":1,"bids":[["100","1"]],"asks":[["101","1"]]}`

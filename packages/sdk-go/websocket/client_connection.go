@@ -12,8 +12,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gemini/gemini-go/auth"
-	"github.com/gemini/gemini-go/transport"
+	"github.com/gemini/developer-platform/packages/sdk-go/auth"
+	"github.com/gemini/developer-platform/packages/sdk-go/transport"
 )
 
 func (c *Client) acquireLifecycle(ctx context.Context) error {
@@ -323,6 +323,10 @@ func (c *Client) Close() error {
 			c.conn = nil
 		}
 		c.mu.Unlock()
+
+		c.subscriptionWireMu.Lock()
+		clear(c.subscriptionGates)
+		c.subscriptionWireMu.Unlock()
 
 		c.pumpWg.Wait()
 		c.eventWg.Wait()
@@ -693,12 +697,13 @@ func (c *Client) resubscribeActiveFeeds(lifecycle uint64) error {
 		if c.lifecycle.Load() != lifecycle {
 			return nil
 		}
-		if err := c.acquireSubscriptionWire(ctx, feed.key); err != nil {
+		wireGate, err := c.acquireSubscriptionWire(ctx, feed.key)
+		if err != nil {
 			errs = append(errs, fmt.Errorf("stream %q: acquire wire operation: %w", feed.key, err))
 			continue
 		}
 		if c.lifecycle.Load() != lifecycle {
-			c.releaseSubscriptionWire(feed.key)
+			c.releaseSubscriptionWire(feed.key, wireGate)
 			return nil
 		}
 		c.subsMu.Lock()
@@ -706,11 +711,11 @@ func (c *Client) resubscribeActiveFeeds(lifecycle uint64) error {
 		stillCurrent := stillActive && sameRequestFrame(current, feed.frame)
 		c.subsMu.Unlock()
 		if !stillCurrent {
-			c.releaseSubscriptionWire(feed.key)
+			c.releaseSubscriptionWire(feed.key, wireGate)
 			continue
 		}
 		_, requestErr := c.requestConnected(ctx, feed.frame.Method, feed.frame.Params)
-		c.releaseSubscriptionWire(feed.key)
+		c.releaseSubscriptionWire(feed.key, wireGate)
 		if requestErr != nil {
 			stream := ""
 			if len(feed.frame.Params) > 0 {

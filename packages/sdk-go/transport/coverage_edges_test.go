@@ -8,7 +8,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/gemini/gemini-go/transport"
+	"github.com/gemini/developer-platform/packages/sdk-go/transport"
 )
 
 func TestTransport_PaginatorEdgeCases(t *testing.T) {

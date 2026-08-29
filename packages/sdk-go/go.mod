@@ -1,3 +1,3 @@
-module github.com/gemini/gemini-go
+module github.com/gemini/developer-platform/packages/sdk-go
 
 go 1.23

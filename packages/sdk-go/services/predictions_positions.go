@@ -5,7 +5,7 @@ import (
 	"net/url"
 	"strconv"
 
-	"github.com/gemini/gemini-go/generated/predictions"
+	"github.com/gemini/developer-platform/packages/sdk-go/generated/predictions"
 )
 
 // GetPositions returns the authenticated account's current prediction-market

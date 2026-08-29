@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gemini/gemini-go/generated/predictions"
-	"github.com/gemini/gemini-go/services"
-	"github.com/gemini/gemini-go/transport"
+	"github.com/gemini/developer-platform/packages/sdk-go/generated/predictions"
+	"github.com/gemini/developer-platform/packages/sdk-go/services"
+	"github.com/gemini/developer-platform/packages/sdk-go/transport"
 )
 
 func TestPredictionsServiceLessUsedMethods(t *testing.T) {

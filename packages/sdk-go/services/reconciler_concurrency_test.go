@@ -11,10 +11,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gemini/gemini-go/generated/trading"
-	"github.com/gemini/gemini-go/services"
-	"github.com/gemini/gemini-go/transport"
-	"github.com/gemini/gemini-go/types"
+	"github.com/gemini/developer-platform/packages/sdk-go/generated/trading"
+	"github.com/gemini/developer-platform/packages/sdk-go/services"
+	"github.com/gemini/developer-platform/packages/sdk-go/transport"
+	"github.com/gemini/developer-platform/packages/sdk-go/types"
 )
 
 func TestQuoteReconciler_LimitsConcurrentRequests(t *testing.T) {

@@ -4,12 +4,12 @@ import (
 	"context"
 	"iter"
 
-	"github.com/gemini/gemini-go/auth"
-	"github.com/gemini/gemini-go/services"
-	"github.com/gemini/gemini-go/transport"
-	"github.com/gemini/gemini-go/types"
-	"github.com/gemini/gemini-go/websocket"
-	"github.com/gemini/gemini-go/websocket/orderbook"
+	"github.com/gemini/developer-platform/packages/sdk-go/auth"
+	"github.com/gemini/developer-platform/packages/sdk-go/services"
+	"github.com/gemini/developer-platform/packages/sdk-go/transport"
+	"github.com/gemini/developer-platform/packages/sdk-go/types"
+	"github.com/gemini/developer-platform/packages/sdk-go/websocket"
+	"github.com/gemini/developer-platform/packages/sdk-go/websocket/orderbook"
 )
 
 // Re-exported types for streamlined developer experience without importing multiple sub-packages.

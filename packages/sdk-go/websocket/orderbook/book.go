@@ -7,7 +7,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/gemini/gemini-go/types"
+	"github.com/gemini/developer-platform/packages/sdk-go/types"
 )
 
 // PriceLevel represents a price and amount pair in the order book.
@@ -397,8 +397,10 @@ func (b *OrderBook) VWAP(isBuy bool, targetQty types.Decimal) (SimulatedFill, er
 				slippageBps = bps
 			}
 		} else {
-			if bps, err := topPrice.BpsDiffChecked(avgPrice); err == nil {
-				slippageBps = bps
+			if bps, err := avgPrice.BpsDiffChecked(topPrice); err == nil {
+				// A sell that fills below the top bid has positive adverse
+				// slippage, matching the buy-side convention above.
+				slippageBps = -bps
 			}
 		}
 	}

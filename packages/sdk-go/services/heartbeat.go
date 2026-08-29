@@ -6,8 +6,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/gemini/gemini-go/generated/account"
-	"github.com/gemini/gemini-go/transport"
+	"github.com/gemini/developer-platform/packages/sdk-go/generated/account"
+	"github.com/gemini/developer-platform/packages/sdk-go/transport"
 )
 
 // HeartbeatService manages Gemini session heartbeats (dead-man's switch).

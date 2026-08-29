@@ -8,9 +8,9 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/gemini/gemini-go/transport"
-	"github.com/gemini/gemini-go/types"
-	"github.com/gemini/gemini-go/websocket"
+	"github.com/gemini/developer-platform/packages/sdk-go/transport"
+	"github.com/gemini/developer-platform/packages/sdk-go/types"
+	"github.com/gemini/developer-platform/packages/sdk-go/websocket"
 )
 
 // BBO represents the top of the order book and derived metrics.

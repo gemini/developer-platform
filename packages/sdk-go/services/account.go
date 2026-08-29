@@ -6,8 +6,8 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/gemini/gemini-go/generated/account"
-	"github.com/gemini/gemini-go/transport"
+	"github.com/gemini/developer-platform/packages/sdk-go/generated/account"
+	"github.com/gemini/developer-platform/packages/sdk-go/transport"
 )
 
 // AccountService provides access to account management, banking, deposit addresses, and role information.

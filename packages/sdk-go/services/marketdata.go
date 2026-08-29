@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"net/url"
 
-	"github.com/gemini/gemini-go/generated/marketdata"
-	"github.com/gemini/gemini-go/transport"
+	"github.com/gemini/developer-platform/packages/sdk-go/generated/marketdata"
+	"github.com/gemini/developer-platform/packages/sdk-go/transport"
 )
 
 // MarketDataService provides access to public market data endpoints.

@@ -77,8 +77,8 @@ func (b *Bearer) Validate() error {
 	if tf, ok := b.tokenSource.(TokenFunc); ok && tf == nil {
 		return fmt.Errorf("%w: token function is nil", ErrInvalidTokenSource)
 	}
-	if source, ok := b.tokenSource.(staticTokenSource); ok && source.token == "" {
-		return fmt.Errorf("%w: static token is empty", ErrInvalidTokenSource)
+	if source, ok := b.tokenSource.(staticTokenSource); ok && !validBearerToken(string(source.token)) {
+		return fmt.Errorf("%w: static token is empty or contains invalid characters", ErrInvalidTokenSource)
 	}
 	return nil
 }
@@ -164,7 +164,28 @@ func (b *Bearer) token(ctx context.Context) (string, error) {
 	if strings.TrimSpace(rawToken) == "" {
 		return "", fmt.Errorf("%w: token source returned an empty token", ErrTokenSourceFailure)
 	}
+	if !validBearerToken(rawToken) {
+		return "", fmt.Errorf("%w: token source returned invalid token characters", ErrTokenSourceFailure)
+	}
 	return rawToken, nil
+}
+
+// validBearerToken accepts the RFC 6750 b64token character set. Rejecting
+// everything else prevents malformed or header-injection values from reaching
+// HTTP or WebSocket transports.
+func validBearerToken(value string) bool {
+	if strings.TrimSpace(value) == "" {
+		return false
+	}
+	for i := 0; i < len(value); i++ {
+		char := value[i]
+		if (char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z') ||
+			(char >= '0' && char <= '9') || strings.ContainsRune("-._~+/=", rune(char)) {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 func buildOAuthPayload(requestPath string, payloadJSON []byte) ([]byte, error) {

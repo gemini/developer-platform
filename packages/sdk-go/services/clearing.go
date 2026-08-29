@@ -3,8 +3,8 @@ package services
 import (
 	"context"
 
-	"github.com/gemini/gemini-go/generated/clearing"
-	"github.com/gemini/gemini-go/transport"
+	"github.com/gemini/developer-platform/packages/sdk-go/generated/clearing"
+	"github.com/gemini/developer-platform/packages/sdk-go/transport"
 )
 
 // ClearingService provides access to off-exchange Gemini Clearing operations.

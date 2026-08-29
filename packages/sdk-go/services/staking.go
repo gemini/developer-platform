@@ -3,8 +3,8 @@ package services
 import (
 	"context"
 
-	"github.com/gemini/gemini-go/generated/account"
-	"github.com/gemini/gemini-go/transport"
+	"github.com/gemini/developer-platform/packages/sdk-go/generated/account"
+	"github.com/gemini/developer-platform/packages/sdk-go/transport"
 )
 
 // StakingService provides access to Gemini Staking deposits, redemptions, rates, rewards, and history.

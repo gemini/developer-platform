@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/gemini/gemini-go/transport"
+	"github.com/gemini/developer-platform/packages/sdk-go/transport"
 )
 
 // ErrInvalidServiceConfiguration indicates that a service was constructed

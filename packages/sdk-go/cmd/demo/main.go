@@ -13,16 +13,16 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gemini/gemini-go"
-	"github.com/gemini/gemini-go/auth"
-	"github.com/gemini/gemini-go/geminitest"
-	"github.com/gemini/gemini-go/generated/account"
-	"github.com/gemini/gemini-go/generated/predictions"
-	geminioauth "github.com/gemini/gemini-go/oauth"
-	"github.com/gemini/gemini-go/transport"
-	"github.com/gemini/gemini-go/websocket"
-	"github.com/gemini/gemini-go/websocket/gorilla"
-	"github.com/gemini/gemini-go/websocket/orderbook"
+	"github.com/gemini/developer-platform/packages/sdk-go"
+	"github.com/gemini/developer-platform/packages/sdk-go/auth"
+	"github.com/gemini/developer-platform/packages/sdk-go/geminitest"
+	"github.com/gemini/developer-platform/packages/sdk-go/generated/account"
+	"github.com/gemini/developer-platform/packages/sdk-go/generated/predictions"
+	geminioauth "github.com/gemini/developer-platform/packages/sdk-go/oauth"
+	"github.com/gemini/developer-platform/packages/sdk-go/transport"
+	"github.com/gemini/developer-platform/packages/sdk-go/websocket"
+	"github.com/gemini/developer-platform/packages/sdk-go/websocket/gorilla"
+	"github.com/gemini/developer-platform/packages/sdk-go/websocket/orderbook"
 )
 
 const (
@@ -110,6 +110,7 @@ func main() {
 		}
 	}
 	client := gemini.NewClient(clientOptions...)
+	defer client.Close()
 
 	// 2. REST API: GetSymbols
 	fmt.Print("📡 [REST] Fetching active market symbols...")
@@ -211,6 +212,7 @@ func main() {
 		gemini.WithHTTPClient(oauthMock.HTTPClient()),
 		gemini.WithTokenSource(dynamicSource),
 	)
+	defer oauthClient.Close()
 
 	// Simulate expired token failure
 	_, err = oauthClient.Account.GetBalances(ctx, &account.GetAvailableBalancesJSONBody{Account: "primary"})

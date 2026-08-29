@@ -9,8 +9,8 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/gemini/gemini-go/internal/runtime"
-	openapi_types "github.com/gemini/gemini-go/types"
+	"github.com/gemini/developer-platform/packages/sdk-go/internal/runtime"
+	openapi_types "github.com/gemini/developer-platform/packages/sdk-go/types"
 )
 
 const (

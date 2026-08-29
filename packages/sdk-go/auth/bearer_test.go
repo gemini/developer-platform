@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gemini/gemini-go/auth"
+	"github.com/gemini/developer-platform/packages/sdk-go/auth"
 )
 
 func TestBearer_StaticToken(t *testing.T) {
@@ -139,6 +139,15 @@ func TestBearer_DynamicTokenSource(t *testing.T) {
 		t.Fatal("expected error from failing TokenSource, got nil")
 	} else if !errors.Is(err, auth.ErrTokenSourceFailure) {
 		t.Fatalf("expected ErrTokenSourceFailure, got %v", err)
+	}
+}
+
+func TestBearer_RejectsHeaderUnsafeTokenValues(t *testing.T) {
+	for _, token := range []auth.BearerToken{"token with spaces", "token\r\nInjected: value", "token\u2028line"} {
+		strategy := auth.NewBearer(token)
+		if err := strategy.Validate(); err == nil {
+			t.Fatalf("Validate() accepted header-unsafe token %q", token)
+		}
 	}
 }
 

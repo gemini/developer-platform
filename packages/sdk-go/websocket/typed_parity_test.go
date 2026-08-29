@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gemini/gemini-go/auth"
-	"github.com/gemini/gemini-go/websocket"
+	"github.com/gemini/developer-platform/packages/sdk-go/auth"
+	"github.com/gemini/developer-platform/packages/sdk-go/websocket"
 )
 
 func TestTypedPublicDepthOptionsUseDocumentedStreams(t *testing.T) {

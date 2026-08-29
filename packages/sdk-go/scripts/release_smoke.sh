@@ -25,13 +25,13 @@ module release-smoke-consumer
 go 1.23
 
 require (
-	github.com/gemini/gemini-go v0.0.0
-	github.com/gemini/gemini-go/websocket/gorilla v0.0.0
+	github.com/gemini/developer-platform/packages/sdk-go v0.0.0
+	github.com/gemini/developer-platform/packages/sdk-go/websocket/gorilla v0.0.0
 	github.com/gorilla/websocket v1.5.3
 )
 
-replace github.com/gemini/gemini-go => $staged_sdk
-replace github.com/gemini/gemini-go/websocket/gorilla => $staged_sdk/websocket/gorilla
+replace github.com/gemini/developer-platform/packages/sdk-go => $staged_sdk
+replace github.com/gemini/developer-platform/packages/sdk-go/websocket/gorilla => $staged_sdk/websocket/gorilla
 EOF
 cp "$staged_sdk/websocket/gorilla/go.sum" "$consumer/go.sum"
 
@@ -41,13 +41,13 @@ package consumer
 import (
 	"testing"
 
-	gemini "github.com/gemini/gemini-go"
-	"github.com/gemini/gemini-go/types"
-	"github.com/gemini/gemini-go/generated/account"
-	"github.com/gemini/gemini-go/generated/trading"
-	"github.com/gemini/gemini-go/services"
-	"github.com/gemini/gemini-go/websocket"
-	"github.com/gemini/gemini-go/websocket/gorilla"
+	gemini "github.com/gemini/developer-platform/packages/sdk-go"
+	"github.com/gemini/developer-platform/packages/sdk-go/types"
+	"github.com/gemini/developer-platform/packages/sdk-go/generated/account"
+	"github.com/gemini/developer-platform/packages/sdk-go/generated/trading"
+	"github.com/gemini/developer-platform/packages/sdk-go/services"
+	"github.com/gemini/developer-platform/packages/sdk-go/websocket"
+	"github.com/gemini/developer-platform/packages/sdk-go/websocket/gorilla"
 )
 
 func TestPublishedModuleImports(t *testing.T) {
