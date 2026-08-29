@@ -296,6 +296,10 @@ func (c *Client) Execute(ctx context.Context, req *http.Request, payloadJSON []b
 			req.ContentLength = int64(len(payloadJSON))
 		}
 	}
+	// A safe method is retryable only when its body can also be reproduced.
+	// Caller-owned streaming bodies without GetBody are consumed by the first
+	// attempt and must never be sent again in a partial or closed state.
+	requestReplayable := req.Body == nil || req.Body == http.NoBody || req.GetBody != nil
 
 	var resp *http.Response
 	var body []byte
@@ -387,7 +391,7 @@ func (c *Client) Execute(ctx context.Context, req *http.Request, payloadJSON []b
 		}
 
 		// Check if we should retry
-		if attempt < c.retry.MaxRetries && IsRetryable(req.Method, statusCode, lastErr) {
+		if attempt < c.retry.MaxRetries && requestReplayable && IsRetryable(req.Method, statusCode, lastErr) {
 			retryAfterHeader := ""
 			if resp != nil {
 				retryAfterHeader = resp.Header.Get("Retry-After")

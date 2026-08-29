@@ -277,15 +277,23 @@ func (c *Client) failPending(err error) {
 func (c *Client) dispatchResponse(payload []byte) (bool, error) {
 	var envelope struct {
 		ID     json.RawMessage `json:"id"`
-		Status *int            `json:"status"`
+		Status json.RawMessage `json:"status"`
 	}
-	if err := json.Unmarshal(payload, &envelope); err != nil || len(envelope.ID) == 0 || envelope.Status == nil {
+	if err := json.Unmarshal(payload, &envelope); err != nil || len(envelope.ID) == 0 || len(envelope.Status) == 0 {
 		return false, nil
 	}
 
 	responseID, idErr := decodeResponseID(envelope.ID)
+	if idErr == nil && responseID == "" {
+		idErr = errors.New("response id is empty")
+	}
+	var status *int
+	statusErr := json.Unmarshal(envelope.Status, &status)
+	if statusErr == nil && status == nil {
+		statusErr = errors.New("response status is null")
+	}
 	var response ResponseFrame
-	if err := json.Unmarshal(payload, &response); err != nil {
+	if err := errors.Join(idErr, statusErr, json.Unmarshal(payload, &response)); err != nil {
 		malformedErr := fmt.Errorf("%w: %v", ErrMalformedResponse, err)
 		if idErr == nil {
 			c.pendingMu.Lock()
@@ -297,8 +305,6 @@ func (c *Client) dispatchResponse(payload []byte) (bool, error) {
 			if ok {
 				resultCh <- requestResult{err: malformedErr}
 			}
-		} else {
-			malformedErr = fmt.Errorf("%w: invalid response id: %v", ErrMalformedResponse, idErr)
 		}
 		return true, malformedErr
 	}

@@ -54,30 +54,37 @@ func TestDispatchFrame_DoesNotApplyNewSnapshotToQueuedOldFrame(t *testing.T) {
 }
 
 func TestDispatchResponse_FailsPendingRequestOnMalformedCorrelatedResponse(t *testing.T) {
-	client := NewClient("wss://ws.gemini.com")
-	resultCh := make(chan requestResult, 1)
-	client.pendingMu.Lock()
-	client.pending["7"] = resultCh
-	client.pendingMu.Unlock()
+	for name, payload := range map[string][]byte{
+		"error payload": []byte(`{"id":7,"status":200,"error":{"code":"not-an-integer"}}`),
+		"status":        []byte(`{"id":7,"status":"not-an-integer"}`),
+	} {
+		t.Run(name, func(t *testing.T) {
+			client := NewClient("wss://ws.gemini.com")
+			resultCh := make(chan requestResult, 1)
+			client.pendingMu.Lock()
+			client.pending["7"] = resultCh
+			client.pendingMu.Unlock()
 
-	handled, err := client.dispatchResponse([]byte(`{"id":7,"status":200,"error":{"code":"not-an-integer"}}`))
-	if !handled {
-		t.Fatal("malformed correlated response was not recognized")
-	}
-	if !errors.Is(err, ErrMalformedResponse) {
-		t.Fatalf("dispatchResponse error = %v, want ErrMalformedResponse", err)
-	}
-	select {
-	case result := <-resultCh:
-		if !errors.Is(result.err, ErrMalformedResponse) {
-			t.Fatalf("pending request error = %v, want ErrMalformedResponse", result.err)
-		}
-	case <-time.After(time.Second):
-		t.Fatal("pending request was not failed immediately")
-	}
-	client.pendingMu.Lock()
-	defer client.pendingMu.Unlock()
-	if _, ok := client.pending["7"]; ok {
-		t.Fatal("malformed correlated response left the pending request registered")
+			handled, err := client.dispatchResponse(payload)
+			if !handled {
+				t.Fatal("malformed correlated response was not recognized")
+			}
+			if !errors.Is(err, ErrMalformedResponse) {
+				t.Fatalf("dispatchResponse error = %v, want ErrMalformedResponse", err)
+			}
+			select {
+			case result := <-resultCh:
+				if !errors.Is(result.err, ErrMalformedResponse) {
+					t.Fatalf("pending request error = %v, want ErrMalformedResponse", result.err)
+				}
+			case <-time.After(time.Second):
+				t.Fatal("pending request was not failed immediately")
+			}
+			client.pendingMu.Lock()
+			defer client.pendingMu.Unlock()
+			if _, ok := client.pending["7"]; ok {
+				t.Fatal("malformed correlated response left the pending request registered")
+			}
+		})
 	}
 }

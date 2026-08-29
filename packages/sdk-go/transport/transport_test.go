@@ -302,6 +302,39 @@ func TestTransport_SafeGetRetryReplaysRequestBody(t *testing.T) {
 	}
 }
 
+func TestTransport_SafeGetDoesNotRetryOneShotRequestBody(t *testing.T) {
+	var attempts atomic.Int32
+	client := NewClient(
+		WithHTTPClient(&http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			attempts.Add(1)
+			_, _ = io.ReadAll(req.Body)
+			_ = req.Body.Close()
+			return &http.Response{
+				StatusCode: http.StatusServiceUnavailable,
+				Header:     make(http.Header),
+				Body:       http.NoBody,
+				Request:    req,
+			}, nil
+		})}),
+		WithRetryPolicy(RetryPolicy{MaxRetries: 1, BaseDelay: time.Millisecond}),
+	)
+	req, err := http.NewRequest(http.MethodGet, "https://api.gemini.com/v1/test", io.NopCloser(strings.NewReader("one-shot")))
+	if err != nil {
+		t.Fatalf("creating request: %v", err)
+	}
+	if req.GetBody != nil {
+		t.Fatal("test request unexpectedly has a replay function")
+	}
+
+	_, _, err = client.Execute(context.Background(), req, nil)
+	if !errors.Is(err, ErrServiceUnavailable) {
+		t.Fatalf("Execute() error = %v, want ErrServiceUnavailable", err)
+	}
+	if got := attempts.Load(); got != 1 {
+		t.Fatalf("one-shot request attempts = %d, want 1", got)
+	}
+}
+
 func TestTransport_BearerReauthenticatesSafeGetRetry(t *testing.T) {
 	var attempts atomic.Int32
 	var sourceCalls atomic.Int32
