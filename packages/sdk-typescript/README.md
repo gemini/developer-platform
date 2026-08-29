@@ -84,6 +84,60 @@ For browser applications and Cloudflare Workers, import from `@gemini-markets/sd
 
 The package is ESM-only. Node.js applications should use `import` or dynamic `import()`; this package does not provide a CommonJS `require()` entry point.
 
+### OAuth Authorization and Token Ownership
+
+The SDK provides OAuth protocol primitives and Bearer request authentication. Your application owns browser navigation, callback handling, and the storage implementation.
+
+For a browser or other public client, use `BrowserOAuthAuth`. It generates a state value and an S256 PKCE verifier, and returns both the authorization URL and the short-lived transaction that must survive until the callback. The transaction contains the verifier, so treat it as application-private and short-lived. `tokenStore` is an adapter supplied by your application; the SDK does not choose where or how OAuth tokens are stored.
+
+```ts
+import { BrowserOAuthAuth, createClient } from "@gemini-markets/sdk/browser";
+
+const auth = new BrowserOAuthAuth({
+  env: "sandbox",
+  client: {
+    type: "public",
+    clientId: "my-public-client",
+    redirectUri: "https://my-app.example/callback",
+  },
+  tokenStore, // Application-controlled storage; do not use localStorage for refresh tokens.
+});
+
+const authorization = await auth.beginAuthorization(["balances:read", "orders:read"]);
+saveAuthorizationTransaction(authorization.transaction); // Keep this app-owned and short-lived.
+window.location.assign(authorization.url);
+
+// In the application callback handler:
+const transaction = loadAuthorizationTransaction();
+await auth.completeAuthorization(new URL(window.location.href), transaction);
+const client = createClient({ env: "sandbox", auth });
+```
+
+For web applications whose callback runs in a different request or process, provide an `authorizationTransactionStore`. The SDK saves the transaction from `beginAuthorization()` and atomically consumes it when `completeAuthorization(callback)` is called without a transaction. Keep this short-lived store separate from the long-lived OAuth token store, namespace both stores by user, client, and environment, enforce a short TTL in the transaction store, and make `consume` a real one-time operation. Without that store, complete the flow with the same auth instance and keep the returned transaction private.
+
+The token store is intentionally storage-agnostic. `OAuthTokenStore` can be implemented over a keychain, encrypted file, database, or application-controlled browser secure-storage layer. The application owns encryption, access control, serialization, and lifecycle; the SDK only calls the adapter to load, save, clear, and serialize refresh operations.
+
+`auth.revoke()` revokes the long-lived refresh token and the current access token before clearing the application’s local record. If either remote revocation attempt fails, the record is retained so the application can retry; consumers may explicitly clear it when their logout policy requires local-only removal.
+
+If your application already owns token persistence and refresh, omit `tokenStore` for the authorization exchange and initialize the client with the resulting access token:
+
+```ts
+import { BearerAuth, BrowserOAuthAuth, createClient } from "@gemini-markets/sdk/browser";
+
+const oauth = new BrowserOAuthAuth({
+  env: "sandbox",
+  client: { type: "public", clientId: "my-public-client", redirectUri: "https://my-app.example/callback" },
+});
+const authorization = await oauth.beginAuthorization(["balances:read"]);
+// Open authorization.url and restore authorization.transaction in the callback.
+const tokens = await oauth.completeAuthorization(callbackUrl, authorization.transaction);
+const client = createClient({ env: "sandbox", auth: new BearerAuth({ accessToken: tokens.accessToken }) });
+```
+
+`BearerAuth` does not persist or refresh credentials. Use it when the application owns the token lifecycle and only wants to hand the current access token to the SDK. Use `BrowserOAuthAuth` or server `OAuthAuth` with an `OAuthTokenStore` when the SDK should refresh and atomically save rotated refresh tokens through the application’s storage adapter. The SDK never opens a browser or starts a callback listener.
+
+Treat the authorization callback URL as sensitive until it has been processed: it contains a one-time code. Do not log or analytics-track the full URL, and remove its query parameters from browser history after handling it. OAuth endpoint overrides must use HTTPS; when overriding the authorization or token endpoint, also provide the matching revocation endpoint. Loopback HTTP redirect URIs are supported for local/native flows.
+
 ---
 
 ### 2. 🎯 Prediction Markets

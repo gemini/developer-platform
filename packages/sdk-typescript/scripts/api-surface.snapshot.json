@@ -127,6 +127,16 @@
         "declaration": "export interface BalanceUpdate { e: 'balanceUpdate'; E: number | bigint; u: number | bigint; B: Balance[]; }"
       },
       {
+        "kind": "ClassDeclaration",
+        "name": "BearerAuth",
+        "declaration": "export declare class BearerAuth implements AuthStrategy { #private; readonly authCapability: \"bearer\"; constructor(options: BearerAuthOptions); nextNonce(): undefined; credentialHeaders(_payloadBase64: string): Promise<Record<string, string>>; }"
+      },
+      {
+        "kind": "InterfaceDeclaration",
+        "name": "BearerAuthOptions",
+        "declaration": "export interface BearerAuthOptions { accessToken: string; }"
+      },
+      {
         "kind": "InterfaceDeclaration",
         "name": "BookDelta",
         "declaration": "export interface BookDelta { bids: Level[]; asks: Level[]; }"
@@ -144,7 +154,7 @@
       {
         "kind": "TypeAliasDeclaration",
         "name": "BrowserClientOptions",
-        "declaration": "export type BrowserClientOptions = Omit<GeminiMarketsOptions, \"auth\"> & { auth?: BrowserOAuthAuth; };"
+        "declaration": "export type BrowserClientOptions = Omit<GeminiMarketsOptions, \"auth\"> & { auth?: BrowserOAuthAuth | import(\"../auth/bearer.js\").BearerAuth; };"
       },
       {
         "kind": "TypeAliasDeclaration",
@@ -228,6 +238,11 @@
       },
       {
         "kind": "FunctionDeclaration",
+        "name": "createPkceCodeChallenge",
+        "declaration": "export declare function createPkceCodeChallenge(codeVerifier: string): Promise<string>;"
+      },
+      {
+        "kind": "FunctionDeclaration",
         "name": "createResponseMetadata",
         "declaration": "export declare function createResponseMetadata(options: { endpoint: string; method: HttpMethod; correlationId: string; status?: number; retryCount: number; headers?: ResponseHeaders; }): ResponseMetadata;"
       },
@@ -244,7 +259,7 @@
       {
         "kind": "VariableDeclaration",
         "name": "DEFAULT_OAUTH_ENDPOINTS",
-        "declaration": "DEFAULT_OAUTH_ENDPOINTS: { production: { api: string; authorization: string; token: string; }; sandbox: { api: string; authorization: string; token: string; }; }"
+        "declaration": "DEFAULT_OAUTH_ENDPOINTS: { production: { api: string; authorization: string; token: string; revocation: string; }; sandbox: { api: string; authorization: string; token: string; revocation: string; }; }"
       },
       {
         "kind": "TypeAliasDeclaration",
@@ -320,6 +335,11 @@
         "kind": "InterfaceDeclaration",
         "name": "GeminiMarketsOptions",
         "declaration": "export interface GeminiMarketsOptions { /** Environment to connect to. This is required to prevent accidental live requests. */ env: Environment; /** Logger for SDK logs. Default: silent (`NOOP_LOGGER`). */ logger?: Logger; /** Receives safe diagnostics from REST, OAuth, WebSocket, and order-book operations. */ onDiagnostic?: DiagnosticListener; /** Authentication for private Prediction Markets REST methods. */ auth?: AuthStrategy; /** End-to-end timeout for REST and WebSocket waits. Default: 30 seconds. */ timeoutMs?: number; /** Optional application-level WebSocket liveness checks. */ webSocketLiveness?: { intervalMs?: number; timeoutMs?: number; }; /** Maximum inbound WebSocket message size in UTF-8 bytes. */ webSocketMaxMessageSizeBytes?: number; /** Exponential WebSocket reconnect backoff. */ webSocketBackoff?: { baseMs?: number; capMs?: number; factor?: number; }; /** Automatic WebSocket reconnect policy. Defaults to ten attempts. */ webSocketReconnect?: WebSocketReconnectOptions; /** WebSocket handshake timeout forwarded through the replaceable socket factory. */ webSocketHandshakeTimeoutMs?: number; /** Negotiate per-message compression when the runtime transport supports it. Default: false. */ webSocketPerMessageDeflate?: boolean; /** Retry count for generated safe REST reads only. Default: 5. */ maxRetries?: number; /** Maximum REST response body size. Default: 16 MiB. */ maxResponseSizeBytes?: number; /** Backoff settings for generated safe REST reads only. */ backoff?: { baseMs?: number; capMs?: number; factor?: number; }; /** Custom fetch implementation for REST instrumentation or routing. */ fetch?: FetchLike; /** Custom WebSocket factory for runtimes that need upgrade headers, such as `ws` for Node.js HMAC auth. */ webSocketFactory?: SocketFactory; /** Optional hook for request tracing and metrics. */ onRequest?: (payload: import(\"../transport/http.js\").RequestHookPayload) => void; /** Optional hook for response tracing and metrics. */ onResponse?: (payload: import(\"../transport/http.js\").ResponseHookPayload) => void; }"
+      },
+      {
+        "kind": "FunctionDeclaration",
+        "name": "generatePkceCodeVerifier",
+        "declaration": "export declare function generatePkceCodeVerifier(randomBytes?: RandomBytes): string;"
       },
       {
         "kind": "InterfaceDeclaration",
@@ -473,8 +493,13 @@
       },
       {
         "kind": "InterfaceDeclaration",
+        "name": "OAuthAuthorizationTransactionStore",
+        "declaration": "export interface OAuthAuthorizationTransactionStore { /** Store this record with a short expiration and keep its verifier confidential. */ save(transaction: OAuthAuthorizationTransaction): Promise<void>; /** Atomically return and delete the record for `state`; return undefined on replay or expiry. */ consume(state: string): Promise<OAuthAuthorizationTransaction | undefined>; }"
+      },
+      {
+        "kind": "InterfaceDeclaration",
         "name": "OAuthEndpoints",
-        "declaration": "export interface OAuthEndpoints { api: string; authorization: string; token: string; }"
+        "declaration": "export interface OAuthEndpoints { api: string; authorization: string; token: string; /** OAuth token revocation endpoint. Omit to use the environment default. */ revocation?: string; }"
       },
       {
         "kind": "ClassDeclaration",
@@ -494,7 +519,7 @@
       {
         "kind": "InterfaceDeclaration",
         "name": "OAuthTokenStore",
-        "declaration": "export interface OAuthTokenStore<T = OAuthTokens> { load(): Promise<T | undefined>; save(tokens: T): Promise<void>; clear(): Promise<void>; /** * Atomically claim an authorization state. Return `true` only for the first * claim and retain the claim for the transaction's short lifetime. * Implement this durably when authorization transactions can cross process * or page boundaries. */ consumeAuthorizationState(state: string): Promise<boolean>; /** * Clear the stored record only when it still uses `refreshToken`. * A store shared by processes must implement this as a real compare-and-swap operation. */ clearIfCurrent?(refreshToken: string): Promise<boolean>; runExclusive<T>(operation: () => Promise<T>): Promise<T>; }"
+        "declaration": "export interface OAuthTokenStore<T = OAuthTokens> { load(): Promise<T | undefined>; save(tokens: T): Promise<void>; clear(): Promise<void>; /** * Legacy compatibility hook for atomically claiming an authorization state. * Prefer `authorizationTransactionStore` when authorization transactions are * stored separately from tokens. */ consumeAuthorizationState?(state: string): Promise<boolean>; /** * Clear the stored record only when it still uses `refreshToken`. * A store shared by processes must implement this as a real compare-and-swap operation. */ clearIfCurrent?(refreshToken: string): Promise<boolean>; runExclusive<T>(operation: () => Promise<T>): Promise<T>; }"
       },
       {
         "kind": "TypeAliasDeclaration",
@@ -635,6 +660,11 @@
         "kind": "TypeAliasDeclaration",
         "name": "PublicWebSocket",
         "declaration": "export type PublicWebSocket = PublicGeminiWebSocket;"
+      },
+      {
+        "kind": "TypeAliasDeclaration",
+        "name": "RandomBytes",
+        "declaration": "export type RandomBytes = (size: number) => Uint8Array;"
       },
       {
         "kind": "ClassDeclaration",
@@ -1089,6 +1119,16 @@
         "declaration": "export interface BalanceUpdate { e: 'balanceUpdate'; E: number | bigint; u: number | bigint; B: Balance[]; }"
       },
       {
+        "kind": "ClassDeclaration",
+        "name": "BearerAuth",
+        "declaration": "export declare class BearerAuth implements AuthStrategy { #private; readonly authCapability: \"bearer\"; constructor(options: BearerAuthOptions); nextNonce(): undefined; credentialHeaders(_payloadBase64: string): Promise<Record<string, string>>; }"
+      },
+      {
+        "kind": "InterfaceDeclaration",
+        "name": "BearerAuthOptions",
+        "declaration": "export interface BearerAuthOptions { accessToken: string; }"
+      },
+      {
         "kind": "InterfaceDeclaration",
         "name": "BookDelta",
         "declaration": "export interface BookDelta { bids: Level[]; asks: Level[]; }"
@@ -1106,7 +1146,7 @@
       {
         "kind": "TypeAliasDeclaration",
         "name": "BrowserClientOptions",
-        "declaration": "export type BrowserClientOptions = Omit<GeminiMarketsOptions, \"auth\"> & { auth?: BrowserOAuthAuth; };"
+        "declaration": "export type BrowserClientOptions = Omit<GeminiMarketsOptions, \"auth\"> & { auth?: BrowserOAuthAuth | import(\"../auth/bearer.js\").BearerAuth; };"
       },
       {
         "kind": "TypeAliasDeclaration",
@@ -1190,6 +1230,11 @@
       },
       {
         "kind": "FunctionDeclaration",
+        "name": "createPkceCodeChallenge",
+        "declaration": "export declare function createPkceCodeChallenge(codeVerifier: string): Promise<string>;"
+      },
+      {
+        "kind": "FunctionDeclaration",
         "name": "createResponseMetadata",
         "declaration": "export declare function createResponseMetadata(options: { endpoint: string; method: HttpMethod; correlationId: string; status?: number; retryCount: number; headers?: ResponseHeaders; }): ResponseMetadata;"
       },
@@ -1206,7 +1251,7 @@
       {
         "kind": "VariableDeclaration",
         "name": "DEFAULT_OAUTH_ENDPOINTS",
-        "declaration": "DEFAULT_OAUTH_ENDPOINTS: { production: { api: string; authorization: string; token: string; }; sandbox: { api: string; authorization: string; token: string; }; }"
+        "declaration": "DEFAULT_OAUTH_ENDPOINTS: { production: { api: string; authorization: string; token: string; revocation: string; }; sandbox: { api: string; authorization: string; token: string; revocation: string; }; }"
       },
       {
         "kind": "TypeAliasDeclaration",
@@ -1287,6 +1332,11 @@
         "kind": "TypeAliasDeclaration",
         "name": "GeminiWebSocketOptions",
         "declaration": "export type GeminiWebSocketOptions = ConstructorParameters<typeof PublicGeminiWebSocket>[0] & { auth?: AuthStrategy; };"
+      },
+      {
+        "kind": "FunctionDeclaration",
+        "name": "generatePkceCodeVerifier",
+        "declaration": "export declare function generatePkceCodeVerifier(randomBytes?: RandomBytes): string;"
       },
       {
         "kind": "InterfaceDeclaration",
@@ -1446,12 +1496,12 @@
       {
         "kind": "ClassDeclaration",
         "name": "OAuthAuth",
-        "declaration": "export declare class OAuthAuth implements AuthStrategy { #private; /** Runtime marker for server OAuth. BrowserOAuthAuth narrows this value. */ readonly authCapability: \"server\" | \"browser\"; constructor(options: OAuthAuthOptions); beginAuthorization(scopes: string[]): Promise<OAuthAuthorizationRequest>; completeAuthorization(callback: string | URL, transaction: OAuthAuthorizationTransaction | undefined, options?: RequestOptions): Promise<OAuthTokens>; nextNonce(): undefined; credentialHeaders(_payloadBase64: string, options?: RequestOptions): Promise<Record<string, string>>; revoke(options?: RequestOptions): Promise<void>; }"
+        "declaration": "export declare class OAuthAuth implements AuthStrategy { #private; /** Runtime marker for server OAuth. BrowserOAuthAuth narrows this value. */ readonly authCapability: \"server\" | \"browser\"; constructor(options: OAuthAuthOptions); beginAuthorization(scopes: string[]): Promise<OAuthAuthorizationRequest>; completeAuthorization(callback: string | URL, transaction?: OAuthAuthorizationTransaction, options?: RequestOptions): Promise<OAuthTokens>; nextNonce(): undefined; credentialHeaders(_payloadBase64: string, options?: RequestOptions): Promise<Record<string, string>>; revoke(options?: RequestOptions): Promise<void>; }"
       },
       {
         "kind": "InterfaceDeclaration",
         "name": "OAuthAuthOptions",
-        "declaration": "export interface OAuthAuthOptions { client: OAuthClient; tokenStore: OAuthTokenStore; /** OAuth environment. Required to prevent accidental live authorization. */ env: Environment; /** OAuth endpoint overrides for tests, mocks, or proxies. */ endpoints?: Partial<OAuthEndpoints>; fetchImpl?: FetchLike; now?: () => number; randomBytes?: (size: number) => Uint8Array; /** Refresh this many milliseconds before expiry. Default: 60 seconds. */ refreshSkewMs?: number; /** End-to-end timeout for token exchange and refresh. Default: 30 seconds. */ timeoutMs?: number; /** Maximum OAuth response body size. Default: 1 MiB. */ maxResponseSizeBytes?: number; /** Receives safe OAuth lifecycle diagnostics. Default: silent. */ logger?: Logger; onDiagnostic?: DiagnosticListener; }"
+        "declaration": "export interface OAuthAuthOptions { client: OAuthClient; /** Optional when the caller only needs authorization URL and code exchange. */ tokenStore?: OAuthTokenStore; /** Optional short-lived store for transactions that span requests or pages. */ authorizationTransactionStore?: OAuthAuthorizationTransactionStore; /** OAuth environment. Required to prevent accidental live authorization. */ env: Environment; /** * HTTPS OAuth endpoint overrides for tests, mocks, or proxies. When * overriding `authorization` or `token`, also provide `revocation` so * credentials cannot be sent to a different OAuth authority. */ endpoints?: Partial<OAuthEndpoints>; fetchImpl?: FetchLike; now?: () => number; /** Cryptographically secure random source. Override only for deterministic tests. */ randomBytes?: (size: number) => Uint8Array; /** Refresh this many milliseconds before expiry. Default: 60 seconds. */ refreshSkewMs?: number; /** End-to-end timeout for token exchange and refresh. Default: 30 seconds. */ timeoutMs?: number; /** Maximum OAuth response body size. Default: 1 MiB. */ maxResponseSizeBytes?: number; /** Receives safe OAuth lifecycle diagnostics. Default: silent. */ logger?: Logger; onDiagnostic?: DiagnosticListener; }"
       },
       {
         "kind": "ClassDeclaration",
@@ -1469,6 +1519,11 @@
         "declaration": "export interface OAuthAuthorizationTransaction { state: string; /** Present only for public clients. Keep it private until the callback. */ codeVerifier?: string; }"
       },
       {
+        "kind": "InterfaceDeclaration",
+        "name": "OAuthAuthorizationTransactionStore",
+        "declaration": "export interface OAuthAuthorizationTransactionStore { /** Store this record with a short expiration and keep its verifier confidential. */ save(transaction: OAuthAuthorizationTransaction): Promise<void>; /** Atomically return and delete the record for `state`; return undefined on replay or expiry. */ consume(state: string): Promise<OAuthAuthorizationTransaction | undefined>; }"
+      },
+      {
         "kind": "TypeAliasDeclaration",
         "name": "OAuthClient",
         "declaration": "export type OAuthClient = { type: \"public\"; clientId: string; redirectUri: string; } | { type: \"confidential\"; clientId: string; clientSecret: string; redirectUri: string; };"
@@ -1476,7 +1531,7 @@
       {
         "kind": "InterfaceDeclaration",
         "name": "OAuthEndpoints",
-        "declaration": "export interface OAuthEndpoints { api: string; authorization: string; token: string; }"
+        "declaration": "export interface OAuthEndpoints { api: string; authorization: string; token: string; /** OAuth token revocation endpoint. Omit to use the environment default. */ revocation?: string; }"
       },
       {
         "kind": "ClassDeclaration",
@@ -1496,7 +1551,7 @@
       {
         "kind": "InterfaceDeclaration",
         "name": "OAuthTokenStore",
-        "declaration": "export interface OAuthTokenStore<T = OAuthTokens> { load(): Promise<T | undefined>; save(tokens: T): Promise<void>; clear(): Promise<void>; /** * Atomically claim an authorization state. Return `true` only for the first * claim and retain the claim for the transaction's short lifetime. * Implement this durably when authorization transactions can cross process * or page boundaries. */ consumeAuthorizationState(state: string): Promise<boolean>; /** * Clear the stored record only when it still uses `refreshToken`. * A store shared by processes must implement this as a real compare-and-swap operation. */ clearIfCurrent?(refreshToken: string): Promise<boolean>; runExclusive<T>(operation: () => Promise<T>): Promise<T>; }"
+        "declaration": "export interface OAuthTokenStore<T = OAuthTokens> { load(): Promise<T | undefined>; save(tokens: T): Promise<void>; clear(): Promise<void>; /** * Legacy compatibility hook for atomically claiming an authorization state. * Prefer `authorizationTransactionStore` when authorization transactions are * stored separately from tokens. */ consumeAuthorizationState?(state: string): Promise<boolean>; /** * Clear the stored record only when it still uses `refreshToken`. * A store shared by processes must implement this as a real compare-and-swap operation. */ clearIfCurrent?(refreshToken: string): Promise<boolean>; runExclusive<T>(operation: () => Promise<T>): Promise<T>; }"
       },
       {
         "kind": "TypeAliasDeclaration",
@@ -1642,6 +1697,11 @@
         "kind": "TypeAliasDeclaration",
         "name": "PublicWebSocket",
         "declaration": "export type PublicWebSocket = Pick<PublicGeminiWebSocket, \"bookTicker\" | \"trades\" | \"depthUpdates\" | \"depth\" | \"contractStatus\" | \"rfqs\" | \"orderBook\" | \"ping\" | \"time\" | \"conninfo\" | \"listSubscriptions\" | \"depthSnapshot\" | \"close\">;"
+      },
+      {
+        "kind": "TypeAliasDeclaration",
+        "name": "RandomBytes",
+        "declaration": "export type RandomBytes = (size: number) => Uint8Array;"
       },
       {
         "kind": "ClassDeclaration",

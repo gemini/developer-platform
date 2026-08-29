@@ -3,6 +3,7 @@ import { test } from "node:test";
 
 import {
   BrowserOAuthAuth,
+  BearerAuth,
   type BrowserGeminiMarkets,
   type BrowserWebSocket,
   createClient,
@@ -110,6 +111,15 @@ test("BrowserOAuthAuth constructs with a public client", () => {
 
 test("browser createClient accepts BrowserOAuthAuth", () => {
   const client = createClient({ env: "sandbox", auth: new BrowserOAuthAuth(browserOptions(new MemoryTokenStore())) });
+  assert.ok(client);
+  client.close();
+});
+
+test("browser createClient accepts application-managed BearerAuth", () => {
+  const client = createClient({
+    env: "sandbox",
+    auth: new BearerAuth({ accessToken: "access-token" }),
+  });
   assert.ok(client);
   client.close();
 });

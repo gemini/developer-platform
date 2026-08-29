@@ -186,6 +186,42 @@ describe("terminal span lifecycle", () => {
     assert.equal(spans[0]?.attributes["http.response.status_code"], 200);
     assert.equal(spans[0]?.attributes["error.type"], "SdkError");
   });
+
+  test("maps OAuth revocation lifecycle diagnostics to a dedicated span", () => {
+    const { tracer: otelTracer, spans } = tracer();
+    const hooks = createOpenTelemetryHooks({ tracer: otelTracer });
+
+    hooks.onDiagnostic({
+      level: "debug",
+      component: "oauth",
+      name: "revoke.request.start",
+      correlationId: "revoke-1",
+      response: {
+        endpoint: "https://exchange.gemini.com/auth/token/revoke",
+        method: "POST",
+        correlationId: "revoke-1",
+        retryCount: 0,
+      },
+    });
+    hooks.onDiagnostic({
+      level: "info",
+      component: "oauth",
+      name: "revoke",
+      correlationId: "revoke-1",
+      response: {
+        endpoint: "https://exchange.gemini.com/auth/token/revoke",
+        method: "POST",
+        correlationId: "revoke-1",
+        retryCount: 0,
+        status: 200,
+      },
+    });
+
+    assert.equal(spans.length, 1);
+    assert.equal(spans[0]?.name, "POST oauth.revoke");
+    assert.equal(spans[0]?.ended, true);
+    assert.equal(spans[0]?.attributes["http.response.status_code"], 200);
+  });
 });
 
 test("keeps subscription spans open through stream diagnostics", () => {

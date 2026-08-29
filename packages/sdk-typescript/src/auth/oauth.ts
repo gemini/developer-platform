@@ -9,10 +9,23 @@ import {
   SdkError,
   serializeError,
 } from "../errors.js";
-import { createResponseMetadata, type DiagnosticEvent, type DiagnosticListener, type ResponseMetadata } from "../observability/diagnostics.js";
+import {
+  createResponseMetadata,
+  sanitizeDiagnosticUrl,
+  type DiagnosticEvent,
+  type DiagnosticListener,
+  type ResponseMetadata,
+} from "../observability/diagnostics.js";
 import { emitDiagnostic, type Logger, NOOP_LOGGER } from "../observability/logging.js";
 import type { Environment } from "../types/client.js";
 import { toBase64, toBase64Url } from "../utils/encoding.js";
+import {
+  createPkceCodeChallenge,
+  generatePkceCodeVerifier,
+  isValidPkceCodeVerifier,
+  type RandomBytes,
+} from "./pkce.js";
+import { validateOAuthToken } from "./token-values.js";
 import {
   isBoundaryFunction,
   isBoundaryNumber,
@@ -22,9 +35,30 @@ import {
   type BoundaryValue,
 } from "../utils/boundary-value.js";
 
-const REVOKE_PATH = "/v1/oauth/revokeByToken";
 const DEFAULT_REFRESH_SKEW_MS = 60_000;
 const DEFAULT_MAX_OAUTH_RESPONSE_SIZE_BYTES = 1 * 1024 * 1024;
+const MAX_OAUTH_STATE_LENGTH = 256;
+const LOCAL_AUTHORIZATION_STATE_TTL_MS = 10 * 60_000;
+const MAX_LOCAL_AUTHORIZATION_STATES = 1_024;
+const UNSAFE_REDIRECT_PROTOCOLS = new Set([
+  "about:",
+  "blob:",
+  "chrome-extension:",
+  "chrome:",
+  "data:",
+  "file:",
+  "ftp:",
+  "ftps:",
+  "intent:",
+  "javascript:",
+  "mailto:",
+  "tel:",
+  "urn:",
+  "vbscript:",
+  "ws:",
+  "wss:",
+]);
+const OAUTH_STATE_PATTERN = new RegExp(`^[A-Za-z0-9_-]{43,${MAX_OAUTH_STATE_LENGTH}}$`);
 const OAUTH_CALLBACK_RESPONSE_PARAMETERS = new Set([
   "code",
   "state",
@@ -38,6 +72,8 @@ export interface OAuthEndpoints {
   api: string;
   authorization: string;
   token: string;
+  /** OAuth token revocation endpoint. Omit to use the environment default. */
+  revocation?: string;
 }
 
 export const DEFAULT_OAUTH_ENDPOINTS = {
@@ -45,11 +81,13 @@ export const DEFAULT_OAUTH_ENDPOINTS = {
     api: "https://api.gemini.com",
     authorization: "https://exchange.gemini.com/auth",
     token: "https://exchange.gemini.com/auth/token",
+    revocation: "https://exchange.gemini.com/auth/token/revoke",
   },
   sandbox: {
     api: "https://api.sandbox.gemini.com",
     authorization: "https://exchange.sandbox.gemini.com/auth",
     token: "https://exchange.sandbox.gemini.com/auth/token",
+    revocation: "https://exchange.sandbox.gemini.com/auth/token/revoke",
   },
 } satisfies Record<Environment, OAuthEndpoints>;
 
@@ -77,20 +115,25 @@ export interface OAuthTokens {
 }
 
 /**
- * Store OAuth tokens.
- * `runExclusive` must serialize operations for all OAuthAuth instances that use the store.
+ * Application-owned OAuth token storage adapter.
+ *
+ * The SDK does not select or manage the underlying storage medium. An
+ * application may back this interface with a keychain, encrypted file,
+ * database, browser secure-storage abstraction, or another store. The
+ * implementation is responsible for serialization and protecting the token
+ * values. `runExclusive` must serialize operations for all OAuthAuth instances
+ * that use the same store.
  */
 export interface OAuthTokenStore<T = OAuthTokens> {
   load(): Promise<T | undefined>;
   save(tokens: T): Promise<void>;
   clear(): Promise<void>;
   /**
-   * Atomically claim an authorization state. Return `true` only for the first
-   * claim and retain the claim for the transaction's short lifetime.
-   * Implement this durably when authorization transactions can cross process
-   * or page boundaries.
+   * Legacy compatibility hook for atomically claiming an authorization state.
+   * Prefer `authorizationTransactionStore` when authorization transactions are
+   * stored separately from tokens.
    */
-  consumeAuthorizationState(state: string): Promise<boolean>;
+  consumeAuthorizationState?(state: string): Promise<boolean>;
   /**
    * Clear the stored record only when it still uses `refreshToken`.
    * A store shared by processes must implement this as a real compare-and-swap operation.
@@ -110,15 +153,34 @@ export interface OAuthAuthorizationRequest {
   transaction: OAuthAuthorizationTransaction;
 }
 
+/**
+ * Store short-lived authorization transactions independently of OAuth tokens.
+ * `consume` must atomically return a transaction only once.
+ */
+export interface OAuthAuthorizationTransactionStore {
+  /** Store this record with a short expiration and keep its verifier confidential. */
+  save(transaction: OAuthAuthorizationTransaction): Promise<void>;
+  /** Atomically return and delete the record for `state`; return undefined on replay or expiry. */
+  consume(state: string): Promise<OAuthAuthorizationTransaction | undefined>;
+}
+
 export interface OAuthAuthOptions {
   client: OAuthClient;
-  tokenStore: OAuthTokenStore;
+  /** Optional when the caller only needs authorization URL and code exchange. */
+  tokenStore?: OAuthTokenStore;
+  /** Optional short-lived store for transactions that span requests or pages. */
+  authorizationTransactionStore?: OAuthAuthorizationTransactionStore;
   /** OAuth environment. Required to prevent accidental live authorization. */
   env: Environment;
-  /** OAuth endpoint overrides for tests, mocks, or proxies. */
+  /**
+   * HTTPS OAuth endpoint overrides for tests, mocks, or proxies. When
+   * overriding `authorization` or `token`, also provide `revocation` so
+   * credentials cannot be sent to a different OAuth authority.
+   */
   endpoints?: Partial<OAuthEndpoints>;
   fetchImpl?: FetchLike;
   now?: () => number;
+  /** Cryptographically secure random source. Override only for deterministic tests. */
   randomBytes?: (size: number) => Uint8Array;
   /** Refresh this many milliseconds before expiry. Default: 60 seconds. */
   refreshSkewMs?: number;
@@ -138,6 +200,70 @@ function requiredString(value: BoundaryValue, name: string): string {
   return value;
 }
 
+function validateRedirectUri(value: string): string {
+  let redirect: URL;
+  try {
+    redirect = new URL(value);
+  } catch {
+    throw new SdkError("redirectUri must be a valid URL");
+  }
+  if (UNSAFE_REDIRECT_PROTOCOLS.has(redirect.protocol)) {
+    throw new SdkError("redirectUri must use a safe URL scheme");
+  }
+  if (redirect.username || redirect.password) {
+    throw new SdkError("redirectUri must not contain URL credentials");
+  }
+  if (redirect.protocol === "http:" && !isLoopbackHost(redirect.hostname)) {
+    throw new SdkError("non-loopback redirectUri must use HTTPS");
+  }
+  return value;
+}
+
+function isLoopbackHost(hostname: string): boolean {
+  const normalized = hostname.toLowerCase();
+  if (normalized === "localhost" || normalized === "[::1]" || normalized === "::1") return true;
+  const octets = normalized.split(".");
+  return octets.length === 4 && octets[0] === "127" &&
+    octets.slice(1).every((octet) => /^\d{1,3}$/.test(octet) && Number(octet) <= 255);
+}
+
+function validateHttpsEndpoint(value: BoundaryValue, name: string): string {
+  const endpoint = requiredString(value, name);
+  let parsed: URL;
+  try {
+    parsed = new URL(endpoint);
+  } catch {
+    throw new SdkError(`${name} must be a valid URL`);
+  }
+  if (parsed.protocol !== "https:") {
+    throw new SdkError(`${name} must use HTTPS`);
+  }
+  if (parsed.username || parsed.password || parsed.hash) {
+    throw new SdkError(`${name} must not contain URL credentials or a fragment`);
+  }
+  return endpoint;
+}
+
+function createAuthorizationState(randomBytes: (size: number) => Uint8Array): string {
+  const bytes = randomBytes(32);
+  if (!(bytes instanceof Uint8Array) || bytes.length < 32) {
+    throw new SdkError("randomBytes must return at least 32 bytes for OAuth state");
+  }
+  const state = toBase64Url(bytes);
+  if (!OAUTH_STATE_PATTERN.test(state)) {
+    throw new SdkError("generated OAuth state is invalid");
+  }
+  return state;
+}
+
+function parseCallback(callback: string | URL): URL {
+  try {
+    return callback instanceof URL ? callback : new URL(callback);
+  } catch {
+    throw new OAuthStateError("OAuth callback is not a valid URL");
+  }
+}
+
 function callbackMatchesRedirect(url: URL, redirect: URL): boolean {
   if (
     url.protocol !== redirect.protocol ||
@@ -147,6 +273,10 @@ function callbackMatchesRedirect(url: URL, redirect: URL): boolean {
     url.pathname !== redirect.pathname ||
     url.hash !== redirect.hash
   ) return false;
+
+  for (const name of OAUTH_CALLBACK_RESPONSE_PARAMETERS) {
+    if (url.searchParams.getAll(name).length > 1) return false;
+  }
 
   const configured = new Map<string, Map<string, number>>();
   for (const [name, value] of redirect.searchParams) {
@@ -176,7 +306,9 @@ function callbackMatchesRedirect(url: URL, redirect: URL): boolean {
 function isAuthorizationTransaction(value: BoundaryValue): value is OAuthAuthorizationTransaction {
   return isBoundaryObject(value) &&
     isBoundaryString(value.state) &&
-    (value.codeVerifier === undefined || isBoundaryString(value.codeVerifier));
+    OAUTH_STATE_PATTERN.test(value.state) &&
+    (value.codeVerifier === undefined ||
+      (isBoundaryString(value.codeVerifier) && isValidPkceCodeVerifier(value.codeVerifier)));
 }
 
 function validateStoredTokens(tokens: BoundaryValue): OAuthTokens | undefined {
@@ -187,8 +319,8 @@ function validateStoredTokens(tokens: BoundaryValue): OAuthTokens | undefined {
     throw new SdkError("stored OAuth tokens must be an object");
   }
   const record = tokens;
-  const accessToken = requiredString(record.accessToken, "stored OAuth accessToken");
-  const refreshToken = requiredString(record.refreshToken, "stored OAuth refreshToken");
+  const accessToken = validateOAuthToken(record.accessToken, "stored OAuth accessToken");
+  const refreshToken = validateOAuthToken(record.refreshToken, "stored OAuth refreshToken");
   if (record.tokenType !== "bearer") {
     throw new SdkError("stored OAuth tokenType must be bearer");
   }
@@ -212,8 +344,9 @@ export class OAuthAuth implements AuthStrategy {
   /** Runtime marker for server OAuth. BrowserOAuthAuth narrows this value. */
   readonly authCapability!: "server" | "browser";
   readonly #client: OAuthClient;
-  readonly #tokenStore: OAuthTokenStore;
-  readonly #endpoints: OAuthEndpoints;
+  readonly #tokenStore?: OAuthTokenStore;
+  readonly #authorizationTransactionStore?: OAuthAuthorizationTransactionStore;
+  readonly #endpoints: Required<OAuthEndpoints>;
   readonly #fetchImpl: FetchLike;
   readonly #now: () => number;
   readonly #randomBytes: (size: number) => Uint8Array;
@@ -223,7 +356,8 @@ export class OAuthAuth implements AuthStrategy {
   readonly #logger: Logger;
   readonly #onDiagnostic?: DiagnosticListener;
   readonly #runExclusive: <T>(operation: () => Promise<T>) => Promise<T>;
-  readonly #consumeAuthorizationState: (state: string) => Promise<boolean>;
+  readonly #legacyConsumeAuthorizationState?: (state: string) => Promise<boolean>;
+  readonly #pendingAuthorizationStates = new Map<string, number>();
 
   constructor(options: OAuthAuthOptions) {
     Object.defineProperty(this, "authCapability", {
@@ -240,21 +374,23 @@ export class OAuthAuth implements AuthStrategy {
     }
     requiredString(options.client.clientId, "clientId");
     requiredString(options.client.redirectUri, "redirectUri");
-    try {
-      new URL(options.client.redirectUri);
-    } catch {
-      throw new SdkError("redirectUri must be a valid URL");
-    }
+    validateRedirectUri(options.client.redirectUri);
     if (options.client.type === "confidential") {
       requiredString(options.client.clientSecret, "clientSecret");
     }
     const tokenStore = options.tokenStore;
     const tokenStoreRecord: BoundaryRecord = isBoundaryObject(tokenStore) ? tokenStore : {};
     const { load, save, clear, consumeAuthorizationState, runExclusive } = tokenStoreRecord;
-    if (!isBoundaryFunction(load) || !isBoundaryFunction(save) ||
-      !isBoundaryFunction(clear) || !isBoundaryFunction(consumeAuthorizationState) ||
-      !isBoundaryFunction(runExclusive)) {
-      throw new SdkError("tokenStore must implement load, save, clear, consumeAuthorizationState, and runExclusive");
+    if (tokenStore !== undefined && (!isBoundaryFunction(load) || !isBoundaryFunction(save) ||
+      !isBoundaryFunction(clear) || !isBoundaryFunction(runExclusive))) {
+      throw new SdkError("tokenStore must implement load, save, clear, and runExclusive");
+    }
+    const transactionStore = options.authorizationTransactionStore;
+    const transactionStoreRecord: BoundaryRecord = isBoundaryObject(transactionStore) ? transactionStore : {};
+    const { save: saveTransaction, consume: consumeTransaction } = transactionStoreRecord;
+    if (transactionStore !== undefined &&
+      (!isBoundaryFunction(saveTransaction) || !isBoundaryFunction(consumeTransaction))) {
+      throw new SdkError("authorizationTransactionStore must implement save and consume");
     }
     const skew = options.refreshSkewMs ?? DEFAULT_REFRESH_SKEW_MS;
     if (!Number.isFinite(skew) || skew < 0) {
@@ -270,15 +406,27 @@ export class OAuthAuth implements AuthStrategy {
       throw new SdkError("randomBytes must be a function");
     }
     this.#client = { ...options.client };
-    this.#tokenStore = options.tokenStore;
-    this.#runExclusive = tokenStore.runExclusive.bind(tokenStore);
-    this.#consumeAuthorizationState = tokenStore.consumeAuthorizationState.bind(tokenStore);
-    if (!options.env) throw new SdkError("env is required; choose \"sandbox\" or \"production\"");
+    this.#tokenStore = tokenStore;
+    this.#authorizationTransactionStore = transactionStore;
+    this.#runExclusive = tokenStore === undefined
+      ? async <T>(operation: () => Promise<T>) => operation()
+      : tokenStore.runExclusive.bind(tokenStore);
+    this.#legacyConsumeAuthorizationState = isBoundaryFunction(consumeAuthorizationState)
+      ? (consumeAuthorizationState as (state: string) => Promise<boolean>).bind(tokenStore)
+      : undefined;
+    if (options.env !== "sandbox" && options.env !== "production") {
+      throw new SdkError("env is required; choose \"sandbox\" or \"production\"");
+    }
+    if ((options.endpoints?.authorization !== undefined || options.endpoints?.token !== undefined) &&
+      options.endpoints?.revocation === undefined) {
+      throw new SdkError("endpoints.revocation is required when overriding endpoints.authorization or endpoints.token");
+    }
     const defaults = DEFAULT_OAUTH_ENDPOINTS[options.env];
     this.#endpoints = {
-      api: options.endpoints?.api ?? defaults.api,
-      authorization: options.endpoints?.authorization ?? defaults.authorization,
-      token: options.endpoints?.token ?? defaults.token,
+      api: validateHttpsEndpoint(options.endpoints?.api ?? defaults.api, "endpoints.api"),
+      authorization: validateHttpsEndpoint(options.endpoints?.authorization ?? defaults.authorization, "endpoints.authorization"),
+      token: validateHttpsEndpoint(options.endpoints?.token ?? defaults.token, "endpoints.token"),
+      revocation: validateHttpsEndpoint(options.endpoints?.revocation ?? defaults.revocation, "endpoints.revocation"),
     };
     // SAFETY: The platform fetch response is adapted to the SDK's deliberately smaller FetchLike contract.
     this.#fetchImpl = options.fetchImpl ??
@@ -320,7 +468,7 @@ export class OAuthAuth implements AuthStrategy {
       scopes.some((scope) => !isBoundaryString(scope) || scope.length === 0)) {
       throw new SdkError("scopes must contain at least one non-empty scope");
     }
-    const state = toBase64Url(this.#randomBytes(32));
+    const state = createAuthorizationState(this.#randomBytes);
     const params = new URLSearchParams({
       client_id: this.#client.clientId,
       response_type: "code",
@@ -331,29 +479,27 @@ export class OAuthAuth implements AuthStrategy {
     const transaction: OAuthAuthorizationTransaction = { state };
 
     if (this.#client.type === "public") {
-      const codeVerifier = toBase64Url(this.#randomBytes(64));
-      if (!/^[A-Za-z0-9._~-]{43,128}$/.test(codeVerifier)) {
-        throw new SdkError("generated PKCE verifier must be 43-128 unreserved characters");
-      }
-      const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(codeVerifier));
-      const challenge = toBase64Url(new Uint8Array(hash));
+      const codeVerifier = generatePkceCodeVerifier(this.#randomBytes as RandomBytes);
+      const challenge = await createPkceCodeChallenge(codeVerifier);
       transaction.codeVerifier = codeVerifier;
       params.set("code_challenge", challenge);
       params.set("code_challenge_method", "S256");
     }
 
-    return { url: `${this.#endpoints.authorization}?${params}`, transaction };
+    await this.#authorizationTransactionStore?.save(transaction);
+    this.#trackLocalAuthorizationState(transaction.state);
+
+    const authorizationUrl = new URL(this.#endpoints.authorization);
+    for (const [name, value] of params) authorizationUrl.searchParams.set(name, value);
+    return { url: authorizationUrl.toString(), transaction };
   }
 
   async completeAuthorization(
     callback: string | URL,
-    transaction: OAuthAuthorizationTransaction | undefined,
+    transaction?: OAuthAuthorizationTransaction,
     options: RequestOptions = {},
   ): Promise<OAuthTokens> {
-    const url = callback instanceof URL ? callback : new URL(callback);
-    if (!isAuthorizationTransaction(transaction)) {
-      throw new OAuthStateError("OAuth authorization transaction is invalid");
-    }
+    const url = parseCallback(callback);
     const redirect = new URL(this.#client.redirectUri);
     if (!callbackMatchesRedirect(url, redirect)) {
       throw new OAuthStateError("OAuth callback does not match the configured redirect URI");
@@ -362,48 +508,101 @@ export class OAuthAuth implements AuthStrategy {
     if (!returnedState) {
       throw new OAuthStateError("OAuth callback is missing state");
     }
-    if (!transaction?.state || returnedState !== transaction.state) {
-      throw new OAuthStateError("OAuth callback state does not match the authorization request");
-    }
-    const callbackError = url.searchParams.get("error");
-    if (callbackError) {
-      throw new OAuthAuthorizationError(
-        callbackError,
-        url.searchParams.get("error_description") ?? undefined,
-      );
-    }
-    const code = url.searchParams.get("code");
-    if (!code) {
-      throw new OAuthAuthorizationError("invalid_response", "OAuth callback is missing code");
-    }
-
-    const body: OAuthTokenRequest = {
-      client_id: this.#client.clientId,
-      code,
-      redirect_uri: this.#client.redirectUri,
-      grant_type: "authorization_code",
-    };
-    if (this.#client.type === "public") {
-      if (!transaction.codeVerifier ||
-        !/^[A-Za-z0-9._~-]{43,128}$/.test(transaction.codeVerifier)) {
-        throw new SdkError("public OAuth transaction is missing a valid PKCE verifier");
+    let resolvedTransaction = transaction;
+    let stateAlreadyConsumed = false;
+    if (this.#authorizationTransactionStore !== undefined) {
+      const storedTransaction = await this.#authorizationTransactionStore.consume(returnedState);
+      stateAlreadyConsumed = true;
+      if (storedTransaction === undefined) {
+        throw new OAuthStateError("OAuth authorization transaction has already been used");
       }
-      body.code_verifier = transaction.codeVerifier;
-    } else {
-      body.client_secret = this.#client.clientSecret;
+      if (!isAuthorizationTransaction(storedTransaction)) {
+        throw new OAuthStateError("OAuth authorization transaction is invalid");
+      }
+      if (resolvedTransaction !== undefined &&
+        (!isAuthorizationTransaction(resolvedTransaction) ||
+          resolvedTransaction.state !== storedTransaction.state ||
+          resolvedTransaction.codeVerifier !== storedTransaction.codeVerifier)) {
+        throw new OAuthStateError("OAuth authorization transaction does not match the stored transaction");
+      }
+      resolvedTransaction = storedTransaction;
+    }
+    if (!isAuthorizationTransaction(resolvedTransaction)) {
+      throw new OAuthStateError("OAuth authorization transaction is invalid");
+    }
+    if (returnedState !== resolvedTransaction.state) {
+      throw new OAuthStateError("OAuth callback state does not match the authorization request");
     }
 
     return this.#runExclusive(async () => {
-      if (!await this.#consumeAuthorizationState(transaction.state)) {
+      if (!stateAlreadyConsumed && !await this.#claimAuthorizationState(resolvedTransaction!.state)) {
         throw new OAuthStateError("OAuth authorization transaction has already been used");
       }
+      const callbackError = url.searchParams.get("error");
+      const code = url.searchParams.get("code");
+      if (callbackError && code) {
+        throw new OAuthAuthorizationError("invalid_response", "OAuth callback contains both code and error");
+      }
+      if (callbackError) {
+        throw new OAuthAuthorizationError(
+          callbackError,
+          url.searchParams.get("error_description") ?? undefined,
+        );
+      }
+      if (!code) {
+        throw new OAuthAuthorizationError("invalid_response", "OAuth callback is missing code");
+      }
+
+      const body: OAuthTokenRequest = {
+        client_id: this.#client.clientId,
+        code,
+        redirect_uri: this.#client.redirectUri,
+        grant_type: "authorization_code",
+      };
+      if (this.#client.type === "public") {
+        if (!resolvedTransaction!.codeVerifier) {
+          throw new SdkError("public OAuth transaction is missing a valid PKCE verifier");
+        }
+        body.code_verifier = resolvedTransaction!.codeVerifier;
+      } else {
+        body.client_secret = this.#client.clientSecret;
+      }
+
       // Claim before the token exchange so concurrent auth instances cannot
       // submit the same authorization code twice. A failed exchange requires
       // starting a fresh authorization flow.
       const tokens = await this.#tokenRequest(body, options);
-      await this.#tokenStore.save(tokens);
+      await this.#tokenStore?.save(tokens);
       return tokens;
     });
+  }
+
+  async #claimAuthorizationState(state: string): Promise<boolean> {
+    if (this.#authorizationTransactionStore !== undefined) {
+      return (await this.#authorizationTransactionStore.consume(state)) !== undefined;
+    }
+    if (this.#legacyConsumeAuthorizationState !== undefined) {
+      return this.#legacyConsumeAuthorizationState(state);
+    }
+    const expiresAt = this.#pendingAuthorizationStates.get(state);
+    this.#pendingAuthorizationStates.delete(state);
+    return expiresAt !== undefined && expiresAt > this.#now();
+  }
+
+  #trackLocalAuthorizationState(state: string): void {
+    if (this.#authorizationTransactionStore !== undefined ||
+      this.#legacyConsumeAuthorizationState !== undefined) return;
+    const now = this.#now();
+    if (!Number.isFinite(now)) return;
+    for (const [pendingState, expiresAt] of this.#pendingAuthorizationStates) {
+      if (expiresAt <= now) this.#pendingAuthorizationStates.delete(pendingState);
+    }
+    this.#pendingAuthorizationStates.set(state, now + LOCAL_AUTHORIZATION_STATE_TTL_MS);
+    while (this.#pendingAuthorizationStates.size > MAX_LOCAL_AUTHORIZATION_STATES) {
+      const oldest = this.#pendingAuthorizationStates.keys().next().value;
+      if (oldest === undefined) break;
+      this.#pendingAuthorizationStates.delete(oldest);
+    }
   }
 
   nextNonce(): undefined {
@@ -416,33 +615,50 @@ export class OAuthAuth implements AuthStrategy {
   }
 
   async revoke(options: RequestOptions = {}): Promise<void> {
+    const tokenStore = this.#requireTokenStore();
     await this.#runExclusive(async () => {
-      const current = validateStoredTokens(await this.#tokenStore.load());
+      const current = validateStoredTokens(await tokenStore.load());
       if (!current) return;
-      try {
-        await this.#revokeRequest(current.accessToken, options);
-      } finally {
-        await this.#clearStoredTokens(current.refreshToken);
+      const tokens = current.accessToken === current.refreshToken
+        ? [current.refreshToken]
+        : [current.refreshToken, current.accessToken];
+      let firstError: unknown;
+      let failed = false;
+      for (const token of tokens) {
+        try {
+          await this.#revokeRequest(token, options);
+        } catch (error) {
+          failed = true;
+          firstError ??= error;
+        }
       }
+      if (failed) throw firstError;
+      await this.#clearStoredTokens(current.refreshToken);
     });
   }
 
-  async #revokeRequest(accessToken: string, options: RequestOptions): Promise<void> {
+  async #revokeRequest(token: string, options: RequestOptions): Promise<void> {
     const execution = deadline(options, this.#timeoutMs);
-    const payload = toBase64(JSON.stringify({ request: REVOKE_PATH }));
-    let response: Awaited<ReturnType<FetchLike>>;
-    let text: string;
+    const correlationId = crypto.randomUUID();
+    const metadata = (status?: number, response?: { headers?: { get(name: string): string | null } }): ResponseMetadata =>
+      createResponseMetadata({ endpoint: sanitizeDiagnosticUrl(this.#endpoints.revocation), method: "POST", correlationId, status, retryCount: 0, headers: response?.headers });
+    const requestBody: Record<string, string> = {
+      client_id: this.#client.clientId,
+      token,
+    };
+    if (this.#client.type === "confidential") requestBody.client_secret = this.#client.clientSecret;
+    this.#emit("debug", "revoke.request.start", metadata());
+    let response: Awaited<ReturnType<FetchLike>> | undefined;
+    let text = "";
+    let successful = false;
     try {
-      response = await withSignal(this.#fetchImpl(`${this.#endpoints.api}${REVOKE_PATH}`, {
+      response = await withSignal(this.#fetchImpl(this.#endpoints.revocation, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${accessToken}`,
           Accept: "application/json",
-          "Content-Length": "0",
-          "Content-Type": "text/plain",
-          "Cache-Control": "no-cache",
-          "X-GEMINI-PAYLOAD": payload,
+          "Content-Type": "application/json",
         },
+        body: JSON.stringify(requestBody),
         signal: execution.signal,
         redirect: "manual",
       }), execution.signal);
@@ -455,13 +671,28 @@ export class OAuthAuth implements AuthStrategy {
         cancelResponseBody(response, error);
         throw error;
       }
-      text = await readBoundedResponseText(response, this.#maxResponseSizeBytes, execution.signal);
+      if (response.status >= 200 && response.status < 300) {
+        successful = true;
+        cancelResponseBody(response, "OAuth token revocation succeeded");
+      } else {
+        text = await readBoundedResponseText(response, this.#maxResponseSizeBytes, execution.signal);
+      }
     } catch (cause) {
-      throw cause instanceof SdkError ? cause : new SdkError("OAuth token revocation failed", { cause });
+      const error = cause instanceof SdkError
+        ? cause
+        : new SdkError("OAuth token revocation failed", { cause, metadata: metadata(response?.status, response) });
+      this.#emit("error", "revoke.request.failure", metadata(response?.status, response), error);
+      throw error;
     } finally {
       execution.cleanup();
     }
-    if (response.status >= 200 && response.status < 300) return;
+    if (response === undefined) {
+      throw new SdkError("OAuth token revocation failed");
+    }
+    if (successful) {
+      this.#emit("info", "revoke", metadata(response.status, response));
+      return;
+    }
     let body: BoundaryValue;
     try {
       body = JSON.parse(text);
@@ -469,16 +700,19 @@ export class OAuthAuth implements AuthStrategy {
       body = undefined;
     }
     const classification = classifyServerError(body, response.status);
-    throw new ApiError({
+    const error = new ApiError({
       status: response.status,
       reason: classification.reason,
       body,
       message: "OAuth token revocation failed",
     });
+    this.#emit("error", "revoke.request.failure", metadata(response.status, response), error);
+    throw error;
   }
 
   async #validTokens(options: RequestOptions = {}): Promise<OAuthTokens> {
-    const tokens = validateStoredTokens(await this.#tokenStore.load());
+    const tokenStore = this.#requireTokenStore();
+    const tokens = validateStoredTokens(await tokenStore.load());
     if (!tokens) {
       throw new SdkError("OAuth tokens are unavailable; complete authorization first");
     }
@@ -487,7 +721,7 @@ export class OAuthAuth implements AuthStrategy {
     }
 
     return this.#runExclusive(async () => {
-      const current = validateStoredTokens(await this.#tokenStore.load());
+      const current = validateStoredTokens(await tokenStore.load());
       if (!current) {
         throw new SdkError("OAuth tokens are unavailable; complete authorization first");
       }
@@ -500,6 +734,7 @@ export class OAuthAuth implements AuthStrategy {
   }
 
   async #refresh(current: OAuthTokens, options: RequestOptions = {}): Promise<OAuthTokens> {
+    const tokenStore = this.#requireTokenStore();
     const body: OAuthTokenRequest = {
       client_id: this.#client.clientId,
       refresh_token: current.refreshToken,
@@ -511,7 +746,7 @@ export class OAuthAuth implements AuthStrategy {
 
     try {
       const tokens = await this.#tokenRequest(body, options);
-      await this.#tokenStore.save(tokens);
+      await tokenStore.save(tokens);
       return tokens;
     } catch (error) {
       if (error instanceof OAuthTokenError && error.error === "invalid_grant") {
@@ -522,19 +757,27 @@ export class OAuthAuth implements AuthStrategy {
   }
 
   async #clearStoredTokens(refreshToken: string): Promise<void> {
-    const clearIfCurrent = this.#tokenStore.clearIfCurrent;
+    const tokenStore = this.#requireTokenStore();
+    const clearIfCurrent = tokenStore.clearIfCurrent;
     if (isBoundaryFunction(clearIfCurrent)) {
-      await clearIfCurrent.call(this.#tokenStore, refreshToken);
+      await clearIfCurrent.call(tokenStore, refreshToken);
       return;
     }
-    await this.#tokenStore.clear();
+    await tokenStore.clear();
+  }
+
+  #requireTokenStore(): OAuthTokenStore {
+    if (this.#tokenStore === undefined) {
+      throw new SdkError("OAuth tokenStore is required for authenticated client requests");
+    }
+    return this.#tokenStore;
   }
 
   async #tokenRequest(body: Record<string, string>, options: RequestOptions = {}): Promise<OAuthTokens> {
     const execution = deadline(options, this.#timeoutMs);
     const correlationId = crypto.randomUUID();
     const metadata = (status?: number, response?: { headers?: { get(name: string): string | null } }): ResponseMetadata =>
-      createResponseMetadata({ endpoint: this.#endpoints.token, method: "POST", correlationId, status, retryCount: 0, headers: response?.headers });
+      createResponseMetadata({ endpoint: sanitizeDiagnosticUrl(this.#endpoints.token), method: "POST", correlationId, status, retryCount: 0, headers: response?.headers });
     const eventName = body.grant_type === "refresh_token" ? "token.refresh" : "token.exchange";
     this.#emit("debug", "token.request.start", metadata());
     let response: Awaited<ReturnType<FetchLike>>;
@@ -596,8 +839,8 @@ export class OAuthAuth implements AuthStrategy {
 
     let tokens: OAuthTokens;
     try {
-      const accessToken = requiredString(parsed.access_token, "access_token");
-      const refreshToken = requiredString(parsed.refresh_token, "refresh_token");
+      const accessToken = validateOAuthToken(parsed.access_token, "access_token");
+      const refreshToken = validateOAuthToken(parsed.refresh_token, "refresh_token");
       const tokenType = requiredString(parsed.token_type, "token_type").toLowerCase();
       if (tokenType !== "bearer") {
         throw new SdkError(`unsupported OAuth token_type ${tokenType}`);
