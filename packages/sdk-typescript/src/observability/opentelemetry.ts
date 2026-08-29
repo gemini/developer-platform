@@ -13,6 +13,7 @@ const DEFAULT_SPAN_NAME_PREFIX = "";
 const START_EVENTS = new Set([
   "request.start",
   "token.request.start",
+  "revoke.request.start",
   "ws.request.start",
   "ws.subscription.start",
   "ws.reconnect",
@@ -22,6 +23,7 @@ const SUCCESS_EVENTS = new Set([
   "request.end",
   "token.exchange",
   "token.refresh",
+  "revoke",
   "ws.request.end",
   "ws.open",
 ]);
@@ -128,7 +130,11 @@ function spanName(event: DiagnosticEvent, prefix: string): string {
     const target = event.operationContext?.operation;
     return qualifyName(prefix, `${event.response.method}${target ? ` ${target}` : ""}`);
   }
-  if (event.component === "oauth") return qualifyName(prefix, "POST oauth.token");
+  if (event.component === "oauth") {
+    return qualifyName(prefix, event.name.startsWith("revoke.") || event.name === "revoke"
+      ? "POST oauth.revoke"
+      : "POST oauth.token");
+  }
   if (event.name.startsWith("ws.request.")) {
     return qualifyName(prefix, `websocket.request ${metadataString(event, "method") ?? "unknown"}`);
   }

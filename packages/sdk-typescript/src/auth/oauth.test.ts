@@ -510,6 +510,23 @@ describe("OAuth diagnostic regressions", () => {
     assert.equal(failure?.level, "error");
     assert.equal(failure?.response?.status, 200);
   });
+
+  void test("OAuth revocation diagnostics expose safe lifecycle metadata", async () => {
+    const events: DiagnosticEvent[] = [];
+    const auth = new OAuthAuth(publicOptions(new MemoryTokenStore(validTokens()), {
+      onDiagnostic: (event: DiagnosticEvent) => events.push(event),
+      fetchImpl: async () => jsonResponse(200, {}),
+    }));
+
+    await auth.revoke();
+
+    assert.equal(events.filter((event) => event.name === "revoke.request.start").length, 2);
+    assert.equal(events.filter((event) => event.name === "revoke" && event.level === "info").length, 2);
+    assert.equal(JSON.stringify(events).includes("access-1"), false);
+    assert.equal(JSON.stringify(events).includes("refresh-1"), false);
+    assert.equal(events.find((event) => event.name === "revoke")?.response?.endpoint,
+      "https://exchange.sandbox.gemini.com/auth/token/revoke");
+  });
 });
 
 void test("PKCE S256 derivation matches the RFC 7636 example vector", async () => {
@@ -1066,32 +1083,39 @@ void test("confidential refresh authenticates with its client secret", async () 
   assert.equal("code_verifier" in body, false);
 });
 
-void test("revocation uses the current token and clears tokens only after success", async () => {
+void test("revocation revokes the refresh and access tokens before clearing local tokens", async () => {
   const store = new MemoryTokenStore(validTokens());
-  let request: Parameters<FetchLike> | undefined;
+  const requests: Parameters<FetchLike>[] = [];
   const auth = new OAuthAuth(publicOptions(store, {
     env: "sandbox",
     fetchImpl: async (...args: Parameters<FetchLike>) => {
-      request = args;
+      requests.push(args);
       return jsonResponse(200, { result: "ok" });
     },
   }));
 
   await auth.revoke();
 
-  assert.equal(request?.[0], "https://exchange.sandbox.gemini.com/auth/token/revoke");
-  assert.deepEqual(JSON.parse(request?.[1].body ?? "{}"), {
+  assert.equal(requests.length, 2);
+  assert.equal(requests[0]?.[0], "https://exchange.sandbox.gemini.com/auth/token/revoke");
+  assert.deepEqual(JSON.parse(requests[0]?.[1].body ?? "{}"), {
+    client_id: "public-client",
+    token: "refresh-1",
+  });
+  assert.deepEqual(JSON.parse(requests[1]?.[1].body ?? "{}"), {
     client_id: "public-client",
     token: "access-1",
   });
-  assert.equal(request?.[1].headers.Authorization, undefined);
-  assert.equal(request?.[1].redirect, "manual");
+  for (const request of requests) {
+    assert.equal(request[1].headers.Authorization, undefined);
+    assert.equal(request[1].redirect, "manual");
+  }
   assert.equal(store.record, undefined);
 });
 
 void test("confidential revocation authenticates with the client secret", async () => {
   const store = new MemoryTokenStore(validTokens());
-  let body: BoundaryRecord = {};
+  const bodies: BoundaryRecord[] = [];
   const auth = new OAuthAuth({
     env: "sandbox",
     client: {
@@ -1102,18 +1126,17 @@ void test("confidential revocation authenticates with the client secret", async 
     },
     tokenStore: store,
     fetchImpl: async (_url, init) => {
-      body = JSON.parse(init.body ?? "{}");
+      bodies.push(JSON.parse(init.body ?? "{}"));
       return jsonResponse(200, {});
     },
   });
 
   await auth.revoke();
 
-  assert.deepEqual(body, {
-    client_id: "server-client",
-    client_secret: "server-secret",
-    token: "access-1",
-  });
+  assert.deepEqual(bodies, [
+    { client_id: "server-client", client_secret: "server-secret", token: "refresh-1" },
+    { client_id: "server-client", client_secret: "server-secret", token: "access-1" },
+  ]);
   assert.equal(store.record, undefined);
 });
 
@@ -1147,7 +1170,7 @@ void test("OAuth revocation rejects redirects before reading the response body",
   }
 });
 
-void test("failed revocation clears the local token record", async () => {
+void test("failed revocation preserves the local token record for retry", async () => {
   const store = new MemoryTokenStore(validTokens());
   const auth = new OAuthAuth(publicOptions(store, {
     fetchImpl: async () => {
@@ -1156,46 +1179,44 @@ void test("failed revocation clears the local token record", async () => {
   }));
 
   await assert.rejects(auth.revoke(), /revoke failed/);
-  assert.equal(store.record, undefined);
+  assert.deepEqual(store.record, validTokens());
 });
 
 void test("revocation uses the stored token without refreshing it", async () => {
   const store = new MemoryTokenStore(validTokens({ accessToken: "short-access", expiresAt: 1_700_000_000_000 }));
-  let refreshCalls = 0;
-  let revokeCalls = 0;
+  const bodies: BoundaryRecord[] = [];
   const auth = new OAuthAuth(publicOptions(store, {
     fetchImpl: async (_url: string, init: Parameters<FetchLike>[1]) => {
-      refreshCalls++;
-      revokeCalls++;
-      assert.deepEqual(JSON.parse(init.body ?? "{}"), {
-        client_id: "public-client",
-        token: "short-access",
-      });
+      bodies.push(JSON.parse(init.body ?? "{}"));
       return jsonResponse(200, {});
     },
   }));
 
   await auth.revoke();
 
-  assert.equal(refreshCalls, 1);
-  assert.equal(revokeCalls, 1);
+  assert.deepEqual(bodies, [
+    { client_id: "public-client", token: "refresh-1" },
+    { client_id: "public-client", token: "short-access" },
+  ]);
   assert.equal(store.record, undefined);
 });
 
 void test("revocation does not re-enter the token-store lock when the clock crosses expiry", async () => {
   const store = new NonReentrantTokenStore(validTokens({ expiresAt: 1_700_000_000_001 }));
+  const bodies: BoundaryRecord[] = [];
   const auth = new OAuthAuth(publicOptions(store, {
     fetchImpl: async (_url: string, init: Parameters<FetchLike>[1]) => {
-      assert.deepEqual(JSON.parse(init.body ?? "{}"), {
-        client_id: "public-client",
-        token: "access-1",
-      });
+      bodies.push(JSON.parse(init.body ?? "{}"));
       return jsonResponse(200, {});
     },
   }));
 
   await auth.revoke();
 
+  assert.deepEqual(bodies, [
+    { client_id: "public-client", token: "refresh-1" },
+    { client_id: "public-client", token: "access-1" },
+  ]);
   assert.equal(store.record, undefined);
 });
 
@@ -1208,22 +1229,25 @@ void test("revocation cannot clear tokens saved by concurrent authorization", as
     announceRevoke = resolve;
   });
   const auth = new OAuthAuth(publicOptions(store, {
-    fetchImpl: async () => {
+    fetchImpl: async (_url: string, init: Parameters<FetchLike>[1]) => {
       fetchCalls++;
+      const body = JSON.parse(init.body ?? "{}");
+      if (body.grant_type === "authorization_code") {
+        return jsonResponse(200, {
+          access_token: "replacement-access",
+          refresh_token: "replacement-refresh",
+          token_type: "bearer",
+          scope: "orders:read",
+          expires_in: 3600,
+        });
+      }
       if (fetchCalls === 1) {
         announceRevoke();
         await new Promise<void>((resolve) => {
           releaseRevoke = resolve;
         });
-        return jsonResponse(200, {});
       }
-      return jsonResponse(200, {
-        access_token: "replacement-access",
-        refresh_token: "replacement-refresh",
-        token_type: "bearer",
-        scope: "orders:read",
-        expires_in: 3600,
-      });
+      return jsonResponse(200, {});
     },
   }));
   const { transaction } = await auth.beginAuthorization(["orders:read"]);
@@ -1242,6 +1266,7 @@ void test("revocation cannot clear tokens saved by concurrent authorization", as
 
 void test("revocation does not clear a replacement token written by another writer", async () => {
   const store = new MemoryTokenStore(validTokens());
+  let fetchCalls = 0;
   let releaseRevoke: () => void = () => undefined;
   let announceRevoke: () => void = () => undefined;
   const revokeStarted = new Promise<void>((resolve) => {
@@ -1249,10 +1274,13 @@ void test("revocation does not clear a replacement token written by another writ
   });
   const auth = new OAuthAuth(publicOptions(store, {
     fetchImpl: async () => {
-      announceRevoke();
-      await new Promise<void>((resolve) => {
-        releaseRevoke = resolve;
-      });
+      fetchCalls++;
+      if (fetchCalls === 1) {
+        announceRevoke();
+        await new Promise<void>((resolve) => {
+          releaseRevoke = resolve;
+        });
+      }
       return jsonResponse(200, {});
     },
   }));

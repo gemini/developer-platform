@@ -72,7 +72,8 @@ export interface OAuthEndpoints {
   api: string;
   authorization: string;
   token: string;
-  revocation: string;
+  /** OAuth token revocation endpoint. Omit to use the environment default. */
+  revocation?: string;
 }
 
 export const DEFAULT_OAUTH_ENDPOINTS = {
@@ -341,7 +342,7 @@ export class OAuthAuth implements AuthStrategy {
   readonly #client: OAuthClient;
   readonly #tokenStore?: OAuthTokenStore;
   readonly #authorizationTransactionStore?: OAuthAuthorizationTransactionStore;
-  readonly #endpoints: OAuthEndpoints;
+  readonly #endpoints: Required<OAuthEndpoints>;
   readonly #fetchImpl: FetchLike;
   readonly #now: () => number;
   readonly #randomBytes: (size: number) => Uint8Array;
@@ -610,22 +611,36 @@ export class OAuthAuth implements AuthStrategy {
     await this.#runExclusive(async () => {
       const current = validateStoredTokens(await tokenStore.load());
       if (!current) return;
-      try {
-        await this.#revokeRequest(current.accessToken, options);
-      } finally {
-        await this.#clearStoredTokens(current.refreshToken);
+      const tokens = current.accessToken === current.refreshToken
+        ? [current.refreshToken]
+        : [current.refreshToken, current.accessToken];
+      let firstError: unknown;
+      let failed = false;
+      for (const token of tokens) {
+        try {
+          await this.#revokeRequest(token, options);
+        } catch (error) {
+          failed = true;
+          firstError ??= error;
+        }
       }
+      if (failed) throw firstError;
+      await this.#clearStoredTokens(current.refreshToken);
     });
   }
 
-  async #revokeRequest(accessToken: string, options: RequestOptions): Promise<void> {
+  async #revokeRequest(token: string, options: RequestOptions): Promise<void> {
     const execution = deadline(options, this.#timeoutMs);
+    const correlationId = crypto.randomUUID();
+    const metadata = (status?: number, response?: { headers?: { get(name: string): string | null } }): ResponseMetadata =>
+      createResponseMetadata({ endpoint: sanitizeDiagnosticUrl(this.#endpoints.revocation), method: "POST", correlationId, status, retryCount: 0, headers: response?.headers });
     const requestBody: Record<string, string> = {
       client_id: this.#client.clientId,
-      token: accessToken,
+      token,
     };
     if (this.#client.type === "confidential") requestBody.client_secret = this.#client.clientSecret;
-    let response: Awaited<ReturnType<FetchLike>>;
+    this.#emit("debug", "revoke.request.start", metadata());
+    let response: Awaited<ReturnType<FetchLike>> | undefined;
     let text: string;
     try {
       response = await withSignal(this.#fetchImpl(this.#endpoints.revocation, {
@@ -649,11 +664,21 @@ export class OAuthAuth implements AuthStrategy {
       }
       text = await readBoundedResponseText(response, this.#maxResponseSizeBytes, execution.signal);
     } catch (cause) {
-      throw cause instanceof SdkError ? cause : new SdkError("OAuth token revocation failed", { cause });
+      const error = cause instanceof SdkError
+        ? cause
+        : new SdkError("OAuth token revocation failed", { cause, metadata: metadata(response?.status, response) });
+      this.#emit("error", "revoke.request.failure", metadata(response?.status, response), error);
+      throw error;
     } finally {
       execution.cleanup();
     }
-    if (response.status >= 200 && response.status < 300) return;
+    if (response === undefined) {
+      throw new SdkError("OAuth token revocation failed");
+    }
+    if (response.status >= 200 && response.status < 300) {
+      this.#emit("info", "revoke", metadata(response.status, response));
+      return;
+    }
     let body: BoundaryValue;
     try {
       body = JSON.parse(text);
@@ -661,12 +686,14 @@ export class OAuthAuth implements AuthStrategy {
       body = undefined;
     }
     const classification = classifyServerError(body, response.status);
-    throw new ApiError({
+    const error = new ApiError({
       status: response.status,
       reason: classification.reason,
       body,
       message: "OAuth token revocation failed",
     });
+    this.#emit("error", "revoke.request.failure", metadata(response.status, response), error);
+    throw error;
   }
 
   async #validTokens(options: RequestOptions = {}): Promise<OAuthTokens> {

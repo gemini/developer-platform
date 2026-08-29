@@ -499,7 +499,7 @@
       {
         "kind": "InterfaceDeclaration",
         "name": "OAuthEndpoints",
-        "declaration": "export interface OAuthEndpoints { api: string; authorization: string; token: string; revocation: string; }"
+        "declaration": "export interface OAuthEndpoints { api: string; authorization: string; token: string; /** OAuth token revocation endpoint. Omit to use the environment default. */ revocation?: string; }"
       },
       {
         "kind": "ClassDeclaration",
@@ -1531,7 +1531,7 @@
       {
         "kind": "InterfaceDeclaration",
         "name": "OAuthEndpoints",
-        "declaration": "export interface OAuthEndpoints { api: string; authorization: string; token: string; revocation: string; }"
+        "declaration": "export interface OAuthEndpoints { api: string; authorization: string; token: string; /** OAuth token revocation endpoint. Omit to use the environment default. */ revocation?: string; }"
       },
       {
         "kind": "ClassDeclaration",

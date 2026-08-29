@@ -117,6 +117,8 @@ For web applications whose callback runs in a different request or process, prov
 
 The token store is intentionally storage-agnostic. `OAuthTokenStore` can be implemented over a keychain, encrypted file, database, or application-controlled browser secure-storage layer. The application owns encryption, access control, serialization, and lifecycle; the SDK only calls the adapter to load, save, clear, and serialize refresh operations.
 
+`auth.revoke()` revokes the long-lived refresh token and the current access token before clearing the application’s local record. If either remote revocation attempt fails, the record is retained so the application can retry; consumers may explicitly clear it when their logout policy requires local-only removal.
+
 If your application already owns token persistence and refresh, omit `tokenStore` for the authorization exchange and initialize the client with the resulting access token:
 
 ```ts
