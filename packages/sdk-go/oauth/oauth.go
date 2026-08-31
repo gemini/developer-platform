@@ -77,7 +77,7 @@ var callbackResponseTemplate = template.Must(template.New("oauth-callback-respon
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Gemini authentication</title>
+  <title>Gemini CLI authentication</title>
   <style>
     :root { color-scheme: light; font-family: Geist, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
     * { box-sizing: border-box; }
@@ -110,9 +110,9 @@ var callbackResponseTemplate = template.Must(template.New("oauth-callback-respon
       <div class="product">Developer Platform</div>
     </div>
     <div class="divider"></div>
-    <h1>Gemini authentication</h1>
+    <h1>Gemini CLI authentication</h1>
     <p>{{.}}</p>
-    <div class="footer">Return to Gemini Markets in your terminal.</div>
+    <div class="footer">Return to Gemini CLI in your terminal.</div>
   </main>
 </body>
 </html>`))
