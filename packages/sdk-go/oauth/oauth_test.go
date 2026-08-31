@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -241,6 +242,60 @@ func TestLoginRejectsInvalidCallbackStateAndThenAcceptsValidCallback(t *testing.
 	}
 }
 
+func TestLoginCompletesAsynchronousBrowserResponseBeforeReturning(t *testing.T) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		writer.Header().Set("Content-Type", "application/json")
+		_, _ = writer.Write([]byte(`{"access_token":"access-token","refresh_token":"refresh-token","token_type":"Bearer"}`))
+	}))
+	defer server.Close()
+
+	port := freeLoopbackPort(t)
+	cfg := validConfig(server.URL)
+	cfg.RedirectURL = fmt.Sprintf("http://127.0.0.1:%d/callback", port)
+	cfg.HTTPClient = server.Client()
+
+	type browserResult struct {
+		status int
+		body   string
+		err    error
+	}
+	browserResultCh := make(chan browserResult, 1)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	token, err := cfg.Login(ctx, func(authURL string) error {
+		parsed, parseErr := url.Parse(authURL)
+		if parseErr != nil {
+			return parseErr
+		}
+		callback := cfg.RedirectURL + "?code=auth-code&state=" + url.QueryEscape(parsed.Query().Get("state"))
+		go func() {
+			response, requestErr := http.Get(callback)
+			if requestErr != nil {
+				browserResultCh <- browserResult{err: requestErr}
+				return
+			}
+			defer response.Body.Close()
+			body, readErr := io.ReadAll(response.Body)
+			browserResultCh <- browserResult{status: response.StatusCode, body: string(body), err: readErr}
+		}()
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("Login() error = %v", err)
+	}
+	if token.AccessToken != "access-token" {
+		t.Fatalf("unexpected token: %+v", token)
+	}
+	select {
+	case result := <-browserResultCh:
+		if result.err != nil || result.status != http.StatusOK || !strings.Contains(result.body, "Authorization complete") {
+			t.Fatalf("browser callback response = status %d, body %q, error %v", result.status, result.body, result.err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("browser callback response did not complete")
+	}
+}
+
 func TestListenLoopbackBindsOnlyLoopbackAddresses(t *testing.T) {
 	listeners, err := listenLoopback("localhost", fmt.Sprintf("%d", freeLoopbackPort(t)))
 	if err != nil {
@@ -269,6 +324,15 @@ func TestWriteCallbackResponseEscapesBody(t *testing.T) {
 	}
 	if !strings.Contains(recorder.Body.String(), "&lt;script&gt;") {
 		t.Fatalf("callback response lost escaped content: %q", recorder.Body.String())
+	}
+	if !strings.Contains(recorder.Body.String(), "<!doctype html>") || !strings.Contains(recorder.Body.String(), "Gemini authentication") {
+		t.Fatalf("callback response omitted branded document structure: %q", recorder.Body.String())
+	}
+	if got := recorder.Header().Get("Content-Type"); got != "text/html; charset=utf-8" {
+		t.Fatalf("Content-Type = %q, want HTML", got)
+	}
+	if recorder.Header().Get("Content-Security-Policy") == "" || recorder.Header().Get("Referrer-Policy") != "no-referrer" || recorder.Header().Get("X-Content-Type-Options") != "nosniff" {
+		t.Fatalf("callback response security headers = %v", recorder.Header())
 	}
 }
 

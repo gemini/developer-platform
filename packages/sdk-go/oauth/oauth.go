@@ -72,7 +72,33 @@ var (
 	ErrTokenEndpoint = errors.New("gemini oauth: token endpoint rejected request")
 )
 
-var callbackResponseTemplate = template.Must(template.New("oauth-callback-response").Parse("{{.}}"))
+var callbackResponseTemplate = template.Must(template.New("oauth-callback-response").Parse(`<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Gemini authentication</title>
+  <style>
+    :root { color-scheme: dark; font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px; color: #f7f7f8; background: radial-gradient(circle at 50% 0%, #25213d 0, #111116 38%, #09090b 75%); }
+    main { width: min(100%, 440px); padding: 42px; border: 1px solid rgba(255,255,255,.11); border-radius: 20px; background: rgba(20,20,24,.86); box-shadow: 0 24px 80px rgba(0,0,0,.45); backdrop-filter: blur(18px); text-align: center; }
+    .mark { width: 52px; height: 52px; margin: 0 auto 28px; display: grid; place-items: center; border-radius: 14px; color: #0b0b0d; background: linear-gradient(135deg, #d9c7ff, #8da2ff 52%, #67e8d1); box-shadow: 0 12px 32px rgba(132,147,255,.26); font-size: 28px; line-height: 1; }
+    h1 { margin: 0; font-size: 25px; font-weight: 650; letter-spacing: -.025em; }
+    p { margin: 14px 0 0; color: #aaaab3; font-size: 15px; line-height: 1.6; }
+    .footer { margin-top: 30px; color: #71717a; font-size: 12px; }
+    @media (max-width: 520px) { main { padding: 34px 24px; border-radius: 16px; } }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="mark" aria-hidden="true">&#10022;</div>
+    <h1>Gemini authentication</h1>
+    <p>{{.}}</p>
+    <div class="footer">You can return to the terminal.</div>
+  </main>
+</body>
+</html>`))
 
 // Endpoint contains the OAuth authorization and token endpoint URLs.
 // Both endpoints must use HTTPS.
@@ -837,7 +863,12 @@ func (c Config) loopbackCallback(ctx context.Context, authURL string, openBrowse
 		}(listener)
 	}
 	defer func() {
-		_ = server.Close()
+		// The callback handler publishes its result before Login exchanges the
+		// authorization code. Shut down gracefully so the browser's success
+		// response is allowed to finish before the one-shot server exits.
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		_ = server.Shutdown(shutdownCtx)
 	}()
 
 	if len(listeners) == 0 {
@@ -927,7 +958,10 @@ func (e *AuthorizationError) Error() string {
 
 func writeCallbackResponse(writer http.ResponseWriter, status int, message string) {
 	writer.Header().Set("Cache-Control", "no-store")
-	writer.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	writer.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
+	writer.Header().Set("Content-Type", "text/html; charset=utf-8")
+	writer.Header().Set("Referrer-Policy", "no-referrer")
+	writer.Header().Set("X-Content-Type-Options", "nosniff")
 	writer.WriteHeader(status)
 	_ = callbackResponseTemplate.Execute(writer, message)
 }
