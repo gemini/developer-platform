@@ -328,8 +328,12 @@ func TestWriteCallbackResponseEscapesBody(t *testing.T) {
 	if !strings.Contains(recorder.Body.String(), "<!doctype html>") ||
 		!strings.Contains(recorder.Body.String(), "Gemini authentication") ||
 		!strings.Contains(recorder.Body.String(), "Gemini Markets") ||
-		!strings.Contains(recorder.Body.String(), "Developer Platform") {
+		!strings.Contains(recorder.Body.String(), "Developer Platform") ||
+		!strings.Contains(recorder.Body.String(), `aria-label="Gemini"`) {
 		t.Fatalf("callback response omitted branded document structure: %q", recorder.Body.String())
+	}
+	if strings.Contains(recorder.Body.String(), "Secure authorization") {
+		t.Fatalf("callback response contains removed authorization tag: %q", recorder.Body.String())
 	}
 	if got := recorder.Header().Get("Content-Type"); got != "text/html; charset=utf-8" {
 		t.Fatalf("Content-Type = %q, want HTML", got)
