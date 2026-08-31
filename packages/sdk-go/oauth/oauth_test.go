@@ -325,7 +325,10 @@ func TestWriteCallbackResponseEscapesBody(t *testing.T) {
 	if !strings.Contains(recorder.Body.String(), "&lt;script&gt;") {
 		t.Fatalf("callback response lost escaped content: %q", recorder.Body.String())
 	}
-	if !strings.Contains(recorder.Body.String(), "<!doctype html>") || !strings.Contains(recorder.Body.String(), "Gemini authentication") {
+	if !strings.Contains(recorder.Body.String(), "<!doctype html>") ||
+		!strings.Contains(recorder.Body.String(), "Gemini authentication") ||
+		!strings.Contains(recorder.Body.String(), "Gemini Markets") ||
+		!strings.Contains(recorder.Body.String(), "Developer Platform") {
 		t.Fatalf("callback response omitted branded document structure: %q", recorder.Body.String())
 	}
 	if got := recorder.Header().Get("Content-Type"); got != "text/html; charset=utf-8" {

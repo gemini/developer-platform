@@ -79,23 +79,43 @@ var callbackResponseTemplate = template.Must(template.New("oauth-callback-respon
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Gemini authentication</title>
   <style>
-    :root { color-scheme: dark; font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    :root { color-scheme: light; font-family: Geist, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
     * { box-sizing: border-box; }
-    body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px; color: #f7f7f8; background: radial-gradient(circle at 50% 0%, #25213d 0, #111116 38%, #09090b 75%); }
-    main { width: min(100%, 440px); padding: 42px; border: 1px solid rgba(255,255,255,.11); border-radius: 20px; background: rgba(20,20,24,.86); box-shadow: 0 24px 80px rgba(0,0,0,.45); backdrop-filter: blur(18px); text-align: center; }
-    .mark { width: 52px; height: 52px; margin: 0 auto 28px; display: grid; place-items: center; border-radius: 14px; color: #0b0b0d; background: linear-gradient(135deg, #d9c7ff, #8da2ff 52%, #67e8d1); box-shadow: 0 12px 32px rgba(132,147,255,.26); font-size: 28px; line-height: 1; }
-    h1 { margin: 0; font-size: 25px; font-weight: 650; letter-spacing: -.025em; }
-    p { margin: 14px 0 0; color: #aaaab3; font-size: 15px; line-height: 1.6; }
-    .footer { margin-top: 30px; color: #71717a; font-size: 12px; }
-    @media (max-width: 520px) { main { padding: 34px 24px; border-radius: 16px; } }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px; color: #010304; background: #f6f7f7; }
+    main { width: min(100%, 448px); padding: 40px; border: 1px solid #e1e4e4; border-radius: 18px; background: #fff; box-shadow: 0 18px 60px rgba(1,3,4,.08); }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .mark { width: 40px; height: 40px; flex: 0 0 40px; display: grid; place-items: center; border-radius: 10px; color: #fff; background: #ff5f00; }
+    .mark svg { width: 28px; height: 28px; display: block; }
+    .wordmark { font-size: 14px; font-weight: 700; letter-spacing: .12em; }
+    .product { margin-top: 2px; color: #676868; font-size: 11px; font-weight: 550; letter-spacing: .025em; }
+    .divider { height: 1px; margin: 30px 0; background: #eceeee; }
+    .status { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 14px; padding: 5px 10px; border: 1px solid rgba(38,221,249,.55); border-radius: 999px; color: #207e8d; background: rgba(38,221,249,.11); font-size: 11px; font-weight: 650; letter-spacing: .025em; }
+    .status::before { width: 6px; height: 6px; border-radius: 50%; background: #26ddf9; content: ""; }
+    h1 { margin: 0; font-size: 26px; font-weight: 650; letter-spacing: -.03em; }
+    p { margin: 12px 0 0; color: #555758; font-size: 15px; line-height: 1.6; }
+    .footer { margin-top: 30px; color: #7b7d7d; font-size: 12px; }
+    @media (max-width: 520px) { main { padding: 30px 24px; border-radius: 14px; } }
   </style>
 </head>
 <body>
   <main>
-    <div class="mark" aria-hidden="true">&#10022;</div>
+    <div class="brand">
+      <div class="mark" aria-hidden="true">
+        <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M16 5.5a10.5 10.5 0 0 0-10.5 10.5h21A10.5 10.5 0 0 0 16 5.5Z" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/>
+          <path d="M16 26.5A10.5 10.5 0 0 0 26.5 16h-21A10.5 10.5 0 0 0 16 26.5Z" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <div>
+        <div class="wordmark">GEMINI</div>
+        <div class="product">Developer Platform</div>
+      </div>
+    </div>
+    <div class="divider"></div>
+    <div class="status">Secure authorization</div>
     <h1>Gemini authentication</h1>
     <p>{{.}}</p>
-    <div class="footer">You can return to the terminal.</div>
+    <div class="footer">Return to Gemini Markets in your terminal.</div>
   </main>
 </body>
 </html>`))
