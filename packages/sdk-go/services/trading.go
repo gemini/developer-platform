@@ -239,3 +239,30 @@ func (s *TradingService) GetPastTradesBySymbol(ctx context.Context, symbol strin
 	}
 	return s.GetPastTrades(ctx, req)
 }
+
+// GetTradingVolume returns the account's per-symbol trading volume. The
+// endpoint accepts an optional account field for Master API keys.
+func (s *TradingService) GetTradingVolume(ctx context.Context, req *trading.GetTradingVolumeJSONRequestBody) ([]trading.TradeVolume, error) {
+	if req == nil {
+		req = &trading.GetTradingVolumeJSONRequestBody{}
+	}
+	var res []trading.TradeVolume
+	if err := s.post(ctx, "/v1/tradevolume", req, &res); err != nil {
+		return nil, err
+	}
+	return res, nil
+}
+
+// GetNotionalTradingVolume returns the account's aggregate volume and fee
+// tier in the requested notional currency. The endpoint accepts an optional
+// account field for Master API keys.
+func (s *TradingService) GetNotionalTradingVolume(ctx context.Context, req *trading.GetNotionalTradingVolumeJSONRequestBody) (*trading.NotionalVolume, error) {
+	if req == nil {
+		req = &trading.GetNotionalTradingVolumeJSONRequestBody{}
+	}
+	var res trading.NotionalVolume
+	if err := s.post(ctx, "/v1/notionalvolume", req, &res); err != nil {
+		return nil, err
+	}
+	return &res, nil
+}

@@ -63,6 +63,10 @@ var (
 	ErrRefreshTokenUnavailable = errors.New("gemini oauth: refresh token unavailable")
 	// ErrTokenRefresh identifies a failed refresh operation.
 	ErrTokenRefresh = errors.New("gemini oauth: token refresh failed")
+	// ErrTokenUpdate identifies a failure in an application-provided token
+	// update callback. The callback error is available through errors.Is, but
+	// is not included in Error output because it may contain token material.
+	ErrTokenUpdate = errors.New("gemini oauth: token update failed")
 	// ErrTokenEndpoint indicates that an OAuth token endpoint rejected a
 	// request.
 	ErrTokenEndpoint = errors.New("gemini oauth: token endpoint rejected request")
@@ -333,6 +337,7 @@ type Source struct {
 	config      Config
 	earlyExpiry time.Duration
 	now         func() time.Time
+	tokenUpdate TokenUpdateFunc
 
 	mu         sync.Mutex
 	token      Token
@@ -349,6 +354,21 @@ var _ auth.TokenSource = (*Source)(nil)
 
 // SourceOption configures a refreshable token source.
 type SourceOption func(*Source) error
+
+// TokenUpdateFunc receives the complete token snapshot after a successful
+// refresh and before the token becomes visible to callers. Returning an error
+// fails the refresh and leaves the previous token in place.
+type TokenUpdateFunc func(context.Context, Token) error
+
+// WithTokenUpdate registers a callback for persisting refreshed tokens. The
+// callback is serialized with refreshes and is called at most once per shared
+// refresh operation.
+func WithTokenUpdate(update TokenUpdateFunc) SourceOption {
+	return func(source *Source) error {
+		source.tokenUpdate = update
+		return nil
+	}
+}
 
 // WithEarlyExpiry refreshes before the token's expiry by d. The default is
 // thirty seconds. A negative value is rejected.
@@ -376,8 +396,8 @@ func WithClock(now func() time.Time) SourceOption {
 
 // NewTokenSource creates a refreshable auth.TokenSource from an OAuth token.
 // The initial token may already be expired if it has a refresh token; the
-// first call then refreshes it. Token persistence is intentionally left to
-// the caller so the SDK never writes credentials unexpectedly.
+// first call then refreshes it. The SDK never persists credentials itself;
+// callers can opt into persistence with WithTokenUpdate.
 func NewTokenSource(config Config, initial Token, opts ...SourceOption) (*Source, error) {
 	if err := config.validateTokenRequest(); err != nil {
 		return nil, err
@@ -466,6 +486,11 @@ func (s *Source) Token(ctx context.Context) (string, error) {
 			if refreshed.TokenType == "" {
 				refreshed.TokenType = "Bearer"
 			}
+			if s.tokenUpdate != nil {
+				if updateErr := s.tokenUpdate(refreshCtx, *refreshed); updateErr != nil {
+					err = &tokenUpdateError{cause: updateErr}
+				}
+			}
 		}
 
 		s.mu.Lock()
@@ -489,6 +514,21 @@ func (s *Source) Token(ctx context.Context) (string, error) {
 	case <-ctx.Done():
 		return "", ctx.Err()
 	}
+}
+
+type tokenUpdateError struct {
+	cause error
+}
+
+func (e *tokenUpdateError) Error() string {
+	return ErrTokenUpdate.Error()
+}
+
+func (e *tokenUpdateError) Unwrap() error {
+	if e == nil {
+		return ErrTokenUpdate
+	}
+	return errors.Join(ErrTokenUpdate, e.cause)
 }
 
 func (c Config) validate() error {
