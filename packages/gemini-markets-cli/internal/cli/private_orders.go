@@ -11,6 +11,7 @@ import (
 	"github.com/gemini/developer-platform/packages/sdk-go/generated/predictions"
 	"github.com/gemini/developer-platform/packages/sdk-go/generated/trading"
 	sdkservices "github.com/gemini/developer-platform/packages/sdk-go/services"
+	sdktypes "github.com/gemini/developer-platform/packages/sdk-go/types"
 	"github.com/spf13/cobra"
 )
 
@@ -29,7 +30,6 @@ type PredictionOrdersClient interface {
 	NewOrder(context.Context, *predictions.OrderRequest) (*predictions.OrderResponse, error)
 	GetActiveOrders(context.Context, *predictions.GetActiveOrdersJSONRequestBody) (*predictions.OrdersResponse, error)
 	GetOrderHistory(context.Context, *predictions.GetOrderHistoryJSONRequestBody) (*predictions.OrdersResponse, error)
-	GetOrderStatus(context.Context, int64) (*predictions.OrderResponse, error)
 	CancelOrder(context.Context, *predictions.CancelOrderJSONRequestBody) (*sdkservices.PredictionOrderOperationResponse, error)
 }
 
@@ -122,7 +122,9 @@ func newSpotPlaceCommand(factory SpotOrdersFactory) *cobra.Command {
 	command := &cobra.Command{
 		Use:   "place",
 		Short: "Place a spot order",
-		Args:  cobra.NoArgs,
+		Example: "  gemini-markets orders spot place --symbol BTCUSD --side buy --amount 0.01 --price 60000 --dry-run\n" +
+			"  gemini-markets --environment sandbox orders spot place --symbol BTCUSD --side sell --amount 0.01 --price 70000",
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			request, err := buildSpotOrderRequest(symbol, side, amount, price, orderType, option, stopPrice, clientOrderID, accountName)
 			if err != nil {
@@ -135,6 +137,12 @@ func newSpotPlaceCommand(factory SpotOrdersFactory) *cobra.Command {
 			client, closer, err := factory(cmd.Context(), Options(cmd))
 			if err != nil {
 				return fmt.Errorf("create spot orders client: %w", err)
+			}
+			if client == nil {
+				if closer != nil {
+					_ = closer.Close()
+				}
+				return fmt.Errorf("spot orders service is unavailable")
 			}
 			if closer != nil {
 				defer func() { _ = closer.Close() }()
@@ -150,7 +158,7 @@ func newSpotPlaceCommand(factory SpotOrdersFactory) *cobra.Command {
 	command.Flags().StringVar(&side, "side", "", "order side (buy or sell)")
 	command.Flags().StringVar(&amount, "amount", "", "base amount")
 	command.Flags().StringVar(&price, "price", "", "price per unit")
-	command.Flags().StringVar(&orderType, "type", string(trading.NewOrderRequestTypeExchangeLimit), "order type (exchange limit, exchange market, or exchange stop limit)")
+	command.Flags().StringVar(&orderType, "type", string(trading.NewOrderRequestTypeExchangeLimit), "order type (exchange limit or exchange stop limit; use --option immediate-or-cancel for IOC)")
 	command.Flags().StringVar(&option, "option", "", "execution option (maker-or-cancel, immediate-or-cancel, or fill-or-kill)")
 	command.Flags().StringVar(&stopPrice, "stop-price", "", "stop trigger price for stop-limit orders")
 	command.Flags().StringVar(&clientOrderID, "client-order-id", "", "client-specified order ID")
@@ -178,20 +186,50 @@ func buildSpotOrderRequest(symbol, side, amount, price, orderType, option, stopP
 	if amount == "" {
 		return nil, fmt.Errorf("amount is required")
 	}
+	if err := validatePositiveDecimal(amount, "amount"); err != nil {
+		return nil, err
+	}
 	if price == "" {
 		return nil, fmt.Errorf("price is required")
 	}
-	if !trading.NewOrderRequestType(orderType).Valid() {
+	limit, err := positiveDecimal(price, "price")
+	if err != nil {
+		return nil, err
+	}
+	orderTypeValue := trading.NewOrderRequestType(orderType)
+	if !orderTypeValue.Valid() || (orderTypeValue != trading.NewOrderRequestTypeExchangeLimit && orderTypeValue != trading.NewOrderRequestTypeExchangeStopLimit) {
+		if orderTypeValue == trading.NewOrderRequestTypeExchangeMarket {
+			return nil, fmt.Errorf("exchange market orders are unsupported; use exchange limit with --option immediate-or-cancel")
+		}
 		return nil, fmt.Errorf("invalid order type %q", orderType)
 	}
 	if accountName == "" {
 		return nil, fmt.Errorf("account is required")
 	}
-	if stopPrice != "" && trading.NewOrderRequestType(orderType) != trading.NewOrderRequestTypeExchangeStopLimit {
+	if stopPrice != "" && orderTypeValue != trading.NewOrderRequestTypeExchangeStopLimit {
 		return nil, fmt.Errorf("stop-price requires exchange stop limit order type")
 	}
-	if trading.NewOrderRequestType(orderType) == trading.NewOrderRequestTypeExchangeStopLimit && stopPrice == "" {
+	if orderTypeValue == trading.NewOrderRequestTypeExchangeStopLimit && stopPrice == "" {
 		return nil, fmt.Errorf("stop-price is required for exchange stop limit orders")
+	}
+	if stopPrice != "" {
+		stop, err := positiveDecimal(stopPrice, "stop-price")
+		if err != nil {
+			return nil, err
+		}
+		if option != "" {
+			return nil, fmt.Errorf("stop-limit orders cannot use execution options")
+		}
+		switch trading.NewOrderRequestSide(side) {
+		case trading.NewOrderRequestSideBuy:
+			if stop.Cmp(limit) >= 0 {
+				return nil, fmt.Errorf("buy stop-price must be less than price")
+			}
+		case trading.NewOrderRequestSideSell:
+			if stop.Cmp(limit) <= 0 {
+				return nil, fmt.Errorf("sell stop-price must be greater than price")
+			}
+		}
 	}
 	request := &trading.NewOrderRequest{
 		Account: stringPointer(accountName),
@@ -200,7 +238,7 @@ func buildSpotOrderRequest(symbol, side, amount, price, orderType, option, stopP
 		Request: "/v1/order/new",
 		Side:    trading.NewOrderRequestSide(side),
 		Symbol:  symbol,
-		Type:    trading.NewOrderRequestType(orderType),
+		Type:    orderTypeValue,
 	}
 	if stopPrice != "" {
 		request.StopPrice = &stopPrice
@@ -232,6 +270,12 @@ func newSpotListCommand(factory SpotOrdersFactory) *cobra.Command {
 			client, closer, err := factory(cmd.Context(), Options(cmd))
 			if err != nil {
 				return fmt.Errorf("create spot orders client: %w", err)
+			}
+			if client == nil {
+				if closer != nil {
+					_ = closer.Close()
+				}
+				return fmt.Errorf("spot orders service is unavailable")
 			}
 			if closer != nil {
 				defer func() { _ = closer.Close() }()
@@ -279,6 +323,12 @@ func newSpotGetCommand(factory SpotOrdersFactory) *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("create spot orders client: %w", err)
 			}
+			if client == nil {
+				if closer != nil {
+					_ = closer.Close()
+				}
+				return fmt.Errorf("spot orders service is unavailable")
+			}
 			if closer != nil {
 				defer func() { _ = closer.Close() }()
 			}
@@ -318,6 +368,12 @@ func newSpotCancelCommand(factory SpotOrdersFactory) *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("create spot orders client: %w", err)
 			}
+			if client == nil {
+				if closer != nil {
+					_ = closer.Close()
+				}
+				return fmt.Errorf("spot orders service is unavailable")
+			}
 			if closer != nil {
 				defer func() { _ = closer.Close() }()
 			}
@@ -338,7 +394,6 @@ func newPredictionOrdersCommand(factory PredictionOrdersFactory) *cobra.Command 
 	command.AddCommand(
 		newPredictionPlaceCommand(factory),
 		newPrivatePredictionListCommand(factory),
-		newPrivatePredictionGetCommand(factory),
 		newPredictionCancelCommand(factory),
 	)
 	return command
@@ -360,7 +415,9 @@ func newPredictionPlaceCommand(factory PredictionOrdersFactory) *cobra.Command {
 	command := &cobra.Command{
 		Use:   "place",
 		Short: "Place a prediction-market order",
-		Args:  cobra.NoArgs,
+		Example: "  gemini-markets orders prediction place --symbol GEMI-FEDJAN26-DN25 --side buy --outcome yes --quantity 10 --price 0.65 --dry-run\n" +
+			"  gemini-markets --environment sandbox orders prediction place --symbol GEMI-FEDJAN26-DN25 --side buy --outcome yes --quantity 10 --price 0.65",
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			request, err := buildPredictionOrderRequest(symbol, side, outcome, quantity, price, orderType, stopPrice, timeInForce, makerOrCancel)
 			if err != nil {
@@ -373,6 +430,12 @@ func newPredictionPlaceCommand(factory PredictionOrdersFactory) *cobra.Command {
 			client, closer, err := factory(cmd.Context(), Options(cmd))
 			if err != nil {
 				return fmt.Errorf("create prediction orders client: %w", err)
+			}
+			if client == nil {
+				if closer != nil {
+					_ = closer.Close()
+				}
+				return fmt.Errorf("prediction orders service is unavailable")
 			}
 			if closer != nil {
 				defer func() { _ = closer.Close() }()
@@ -418,20 +481,44 @@ func buildPredictionOrderRequest(symbol, side, outcome, quantity, price, orderTy
 	if quantity == "" {
 		return nil, fmt.Errorf("quantity is required")
 	}
+	if err := validatePositiveDecimal(quantity, "quantity"); err != nil {
+		return nil, err
+	}
 	if price == "" {
 		return nil, fmt.Errorf("price is required")
 	}
-	if !predictions.OrderType(orderType).Valid() {
+	limit, err := predictionPrice(price, "price")
+	if err != nil {
+		return nil, err
+	}
+	orderTypeValue := predictions.OrderType(orderType)
+	if !orderTypeValue.Valid() {
 		return nil, fmt.Errorf("invalid order type %q (want limit or stop-limit)", orderType)
 	}
-	if stopPrice != "" && predictions.OrderType(orderType) != predictions.OrderTypeStopLimit {
+	if stopPrice != "" && orderTypeValue != predictions.OrderTypeStopLimit {
 		return nil, fmt.Errorf("stop-price requires stop-limit order type")
 	}
-	if predictions.OrderType(orderType) == predictions.OrderTypeStopLimit && stopPrice == "" {
+	if orderTypeValue == predictions.OrderTypeStopLimit && stopPrice == "" {
 		return nil, fmt.Errorf("stop-price is required for stop-limit orders")
 	}
+	if stopPrice != "" {
+		stop, err := predictionPrice(stopPrice, "stop-price")
+		if err != nil {
+			return nil, err
+		}
+		switch predictions.OrderSide(side) {
+		case predictions.OrderSideBuy:
+			if stop.Cmp(limit) > 0 {
+				return nil, fmt.Errorf("buy stop-price must be less than or equal to price")
+			}
+		case predictions.OrderSideSell:
+			if stop.Cmp(limit) < 0 {
+				return nil, fmt.Errorf("sell stop-price must be greater than or equal to price")
+			}
+		}
+	}
 	request := &predictions.OrderRequest{
-		OrderType: predictions.OrderType(orderType),
+		OrderType: orderTypeValue,
 		Outcome:   predictions.Outcome(outcome),
 		Price:     price,
 		Quantity:  quantity,
@@ -489,6 +576,12 @@ func newPrivatePredictionListCommand(factory PredictionOrdersFactory) *cobra.Com
 				if err != nil {
 					return fmt.Errorf("create prediction orders client: %w", err)
 				}
+				if client == nil {
+					if closer != nil {
+						_ = closer.Close()
+					}
+					return fmt.Errorf("prediction orders service is unavailable")
+				}
 				if closer != nil {
 					defer func() { _ = closer.Close() }()
 				}
@@ -535,6 +628,12 @@ func newPrivatePredictionListCommand(factory PredictionOrdersFactory) *cobra.Com
 			if err != nil {
 				return fmt.Errorf("create prediction orders client: %w", err)
 			}
+			if client == nil {
+				if closer != nil {
+					_ = closer.Close()
+				}
+				return fmt.Errorf("prediction orders service is unavailable")
+			}
 			if closer != nil {
 				defer func() { _ = closer.Close() }()
 			}
@@ -555,35 +654,6 @@ func newPrivatePredictionListCommand(factory PredictionOrdersFactory) *cobra.Com
 	return command
 }
 
-func newPrivatePredictionGetCommand(factory PredictionOrdersFactory) *cobra.Command {
-	var orderID string
-	command := &cobra.Command{
-		Use:   "get",
-		Short: "Get a prediction-market order status",
-		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			id, err := requiredInt64(orderID, "order-id")
-			if err != nil {
-				return err
-			}
-			client, closer, err := factory(cmd.Context(), Options(cmd))
-			if err != nil {
-				return fmt.Errorf("create prediction orders client: %w", err)
-			}
-			if closer != nil {
-				defer func() { _ = closer.Close() }()
-			}
-			response, err := client.GetOrderStatus(cmd.Context(), id)
-			if err != nil {
-				return fmt.Errorf("get prediction order: %w", err)
-			}
-			return writePredictionOrderResponse(cmd.OutOrStdout(), response, Options(cmd).Format)
-		},
-	}
-	command.Flags().StringVar(&orderID, "order-id", "", "numeric prediction order ID")
-	return command
-}
-
 func newPredictionCancelCommand(factory PredictionOrdersFactory) *cobra.Command {
 	var orderID string
 	command := &cobra.Command{
@@ -598,6 +668,12 @@ func newPredictionCancelCommand(factory PredictionOrdersFactory) *cobra.Command 
 			client, closer, err := factory(cmd.Context(), Options(cmd))
 			if err != nil {
 				return fmt.Errorf("create prediction orders client: %w", err)
+			}
+			if client == nil {
+				if closer != nil {
+					_ = closer.Close()
+				}
+				return fmt.Errorf("prediction orders service is unavailable")
 			}
 			if closer != nil {
 				defer func() { _ = closer.Close() }()
@@ -648,6 +724,27 @@ func requiredInt64(value, name string) (int64, error) {
 	return parsed, nil
 }
 
+func validatePositiveDecimal(value, name string) error {
+	_, err := positiveDecimal(value, name)
+	return err
+}
+
+func positiveDecimal(value, name string) (sdktypes.Decimal, error) {
+	decimal, err := sdktypes.ParseDecimal(value)
+	if err != nil || !decimal.IsPositive() {
+		return sdktypes.Decimal{}, fmt.Errorf("%s must be a positive decimal", name)
+	}
+	return decimal, nil
+}
+
+func predictionPrice(value, name string) (sdktypes.Decimal, error) {
+	decimal, err := sdktypes.ParseDecimal(value)
+	if err != nil || decimal.Cmp(sdktypes.MustParseDecimal("0.01")) < 0 || decimal.Cmp(sdktypes.MustParseDecimal("0.99")) > 0 {
+		return sdktypes.Decimal{}, fmt.Errorf("%s must be a decimal between 0.01 and 0.99", name)
+	}
+	return decimal, nil
+}
+
 func stringPointer(value string) *string { return &value }
 
 func optionalString(value string) *string {
@@ -671,6 +768,7 @@ func writeSpotOrderRequest(w io.Writer, value *trading.NewOrderRequest, format o
 	return output.Write(w, output.TableData{Headers: []string{"FIELD", "VALUE"}, Rows: [][]string{
 		{"account", privateStringValue(value.Account)}, {"symbol", value.Symbol}, {"side", string(value.Side)},
 		{"type", string(value.Type)}, {"amount", value.Amount}, {"price", value.Price},
+		{"option", spotOrderOptionsString(value.Options)},
 		{"stop-price", privateStringValue(value.StopPrice)}, {"client-order-id", privateStringValue(value.ClientOrderId)},
 	}}, format)
 }
@@ -683,7 +781,19 @@ func writePredictionOrderRequest(w io.Writer, value *predictions.OrderRequest, f
 		{"symbol", value.Symbol}, {"side", string(value.Side)}, {"outcome", string(value.Outcome)},
 		{"order-type", string(value.OrderType)}, {"quantity", value.Quantity}, {"price", value.Price},
 		{"stop-price", privateStringValue(value.StopPrice)}, {"time-in-force", predictionTimeInForceString(value.TimeInForce)},
+		{"maker-or-cancel", boolValue(value.MakerOrCancel)},
 	}}, format)
+}
+
+func spotOrderOptionsString(value *[]trading.NewOrderRequestOptions) string {
+	if value == nil {
+		return ""
+	}
+	options := make([]string, 0, len(*value))
+	for _, option := range *value {
+		options = append(options, string(option))
+	}
+	return strings.Join(options, ",")
 }
 
 func writeSpotOrderResponse(w io.Writer, value any, format output.Format) error {

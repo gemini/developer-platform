@@ -85,6 +85,12 @@ func newBalancesCommand(factory AccountBalancesFactory) *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("create account client: %w", err)
 			}
+			if client == nil {
+				if closer != nil {
+					_ = closer.Close()
+				}
+				return fmt.Errorf("account service is unavailable")
+			}
 			if closer != nil {
 				defer func() { _ = closer.Close() }()
 			}

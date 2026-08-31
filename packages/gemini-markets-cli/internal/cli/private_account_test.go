@@ -33,7 +33,7 @@ func TestAccountBalancesMapsRequestAndJSONOutput(t *testing.T) {
 	var out bytes.Buffer
 	fake := &privateAccountFake{}
 	closed := &privateNopCloser{}
-	root := NewRootCommand(&out, &out)
+	root := newTestRootCommand(&out, &out)
 	root.AddCommand(NewAccountCommandWithFactory(func(_ context.Context, options GlobalOptions) (AccountBalancesClient, io.Closer, error) {
 		if options.Environment != "sandbox" || options.Profile != "trader" {
 			t.Fatalf("options = %#v", options)
@@ -62,7 +62,7 @@ func TestAccountBalancesTableOutput(t *testing.T) {
 	amount := sdktypes.NewDecimalNumber(125, 2)
 	available := sdktypes.NewDecimalNumber(100, 2)
 	fake := &privateAccountFake{value: []account.Balance{{Currency: &currency, Amount: &amount, Available: &available}}}
-	root := NewRootCommand(&out, &out)
+	root := newTestRootCommand(&out, &out)
 	root.AddCommand(NewAccountCommandWithFactory(func(context.Context, GlobalOptions) (AccountBalancesClient, io.Closer, error) {
 		return fake, nil, nil
 	}))
