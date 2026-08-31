@@ -4,8 +4,7 @@
 /.github/workflows/publish-typescript-sdk.yml @gemini/principal-engineers
 /SECURITY.md @fuller @ximt
 
-# Published TypeScript SDK source, packaging, and release metadata.
-/packages/sdk-typescript/** @fuller @ximt
+# Published TypeScript SDK release metadata.
 /packages/sdk-typescript/package.json @gemini/principal-engineers
 /packages/sdk-typescript/package-lock.json @gemini/principal-engineers
 
