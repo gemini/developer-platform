@@ -182,20 +182,33 @@ func TestPublicSymbolsJSONOutput(t *testing.T) {
 }
 
 func TestCandlesValidatesOfficialTimeframes(t *testing.T) {
-	var out bytes.Buffer
-	fake := &publicFakeServices{candles: marketdata.CandleResponse{{1, 2, 3, 4, 5, 6}}}
-	root := testPublicRoot(&out, func(context.Context, GlobalOptions) (PublicServices, error) {
-		return PublicServices{MarketData: fake}, nil
-	})
-	root.SetArgs([]string{"markets", "candles", "BTCUSD", "1h"})
-	if err := root.Execute(); err != nil {
-		t.Fatalf("Execute() error = %v", err)
+	tests := map[string]string{
+		"1m": "1m", "5m": "5m", "15m": "15m", "30m": "30m",
+		"1h": "1hr", "1hr": "1hr", "6h": "6hr", "6hr": "6hr",
+		"1d": "1day", "1day": "1day",
 	}
-	if fake.candleSymbol != "BTCUSD" || fake.candleTimeframe != "1h" {
-		t.Fatalf("candle request = (%q, %q)", fake.candleSymbol, fake.candleTimeframe)
+	for input, want := range tests {
+		t.Run(input, func(t *testing.T) {
+			var out bytes.Buffer
+			fake := &publicFakeServices{candles: marketdata.CandleResponse{{1, 2, 3, 4, 5, 6}}}
+			root := testPublicRoot(&out, func(context.Context, GlobalOptions) (PublicServices, error) {
+				return PublicServices{MarketData: fake}, nil
+			})
+			root.SetArgs([]string{"markets", "candles", "BTCUSD", input})
+			if err := root.Execute(); err != nil {
+				t.Fatalf("Execute() error = %v", err)
+			}
+			if fake.candleSymbol != "BTCUSD" || fake.candleTimeframe != want {
+				t.Fatalf("candle request = (%q, %q), want (BTCUSD, %s)", fake.candleSymbol, fake.candleTimeframe, want)
+			}
+		})
 	}
 
-	root.SetArgs([]string{"markets", "candles", "BTCUSD", "1hr"})
+	var out bytes.Buffer
+	root := testPublicRoot(&out, func(context.Context, GlobalOptions) (PublicServices, error) {
+		return PublicServices{MarketData: &publicFakeServices{}}, nil
+	})
+	root.SetArgs([]string{"markets", "candles", "BTCUSD", "2h"})
 	if err := root.Execute(); err == nil || !strings.Contains(err.Error(), "invalid timeframe") {
 		t.Fatalf("Execute() error = %v, want invalid timeframe", err)
 	}

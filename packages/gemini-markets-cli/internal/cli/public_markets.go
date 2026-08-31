@@ -107,14 +107,15 @@ func newMarketCandlesCommand(factory PublicServiceFactory) *cobra.Command {
 		Args:    twoNonEmptyArguments("symbol", "timeframe"),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			symbol, timeframe := strings.TrimSpace(args[0]), strings.TrimSpace(args[1])
-			if err := validateCandleTimeframe(timeframe); err != nil {
+			apiTimeframe, err := normalizeCandleTimeframe(timeframe)
+			if err != nil {
 				return err
 			}
 			return withPublicServices(cmd, factory, func(services PublicServices) error {
 				if services.MarketData == nil {
 					return fmt.Errorf("market data service is unavailable")
 				}
-				candles, err := services.MarketData.GetCandles(cmd.Context(), symbol, timeframe)
+				candles, err := services.MarketData.GetCandles(cmd.Context(), symbol, apiTimeframe)
 				if err != nil {
 					return fmt.Errorf("get candles for %s (%s): %w", symbol, timeframe, err)
 				}
@@ -125,11 +126,19 @@ func newMarketCandlesCommand(factory PublicServiceFactory) *cobra.Command {
 	return command
 }
 
-func validateCandleTimeframe(timeframe string) error {
-	if !marketdata.ListCandlesParamsTimeFrame(timeframe).Valid() {
-		return fmt.Errorf("invalid timeframe %q (want 1m, 5m, 15m, 30m, 1h, 6h, or 1d)", timeframe)
+func normalizeCandleTimeframe(timeframe string) (string, error) {
+	switch strings.ToLower(strings.TrimSpace(timeframe)) {
+	case "1m", "5m", "15m", "30m":
+		return strings.ToLower(strings.TrimSpace(timeframe)), nil
+	case "1h", "1hr":
+		return "1hr", nil
+	case "6h", "6hr":
+		return "6hr", nil
+	case "1d", "1day":
+		return "1day", nil
+	default:
+		return "", fmt.Errorf("invalid timeframe %q (want 1m, 5m, 15m, 30m, 1h, 6h, or 1d)", timeframe)
 	}
-	return nil
 }
 
 func writePublicResult(cmd *cobra.Command, value any, table output.TableData) error {

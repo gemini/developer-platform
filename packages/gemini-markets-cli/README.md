@@ -54,8 +54,9 @@ require credentials accepted by the selected SDK service. Stream commands emit
 NDJSON (one JSON event per line); the global `--output` flag does not apply to
 streams.
 
-`markets candles` accepts the official timeframes `1m`, `5m`, `15m`, `30m`,
-`1h`, `6h`, and `1d`.
+`markets candles` accepts `1m`, `5m`, `15m`, `30m`, `1h`, `6h`, and `1d`.
+The canonical API spellings `1hr`, `6hr`, and `1day` are also accepted; the CLI
+normalizes the shorter forms before calling the SDK.
 Spot orders are limit orders (or limit orders with `--option immediate-or-cancel`
 for IOC); direct `exchange market` orders are not supported by this CLI.
 Prediction-market terms are never accepted automatically: check
