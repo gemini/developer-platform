@@ -1,6 +1,8 @@
 name: Tag TypeScript SDK
 
 on:
+  # Use the trusted base-branch workflow after merge; never execute PR code
+  # while handling the release credentials.
   pull_request_target:
     types:
       - closed
@@ -38,6 +40,8 @@ jobs:
         run: |
           set -euo pipefail
 
+          # A package.json change is not enough to release; the version line
+          # must change, and all metadata comes from the exact merge commit.
           test "$REPOSITORY" = "gemini/developer-platform"
           [[ "$PR_NUMBER" =~ ^[0-9]+$ ]]
           [[ "$MERGE_SHA" =~ ^[0-9a-f]{40}$ ]]
@@ -92,8 +96,9 @@ jobs:
           printf 'tag=typescript-sdk-v%s\n' "$version" >> "$GITHUB_OUTPUT"
           printf 'commit=%s\n' "$MERGE_SHA" >> "$GITHUB_OUTPUT"
 
-      # GITHUB_TOKEN-created refs do not trigger the tag-based publish workflow.
-      # Use a narrowly scoped App token so this tag creates the release event.
+      # This token both authorizes the protected tag creation and allows the
+      # resulting tag push to start the tag-based publish workflow. Refs made
+      # with GITHUB_TOKEN do not start another workflow.
       - name: Create GitHub App token
         id: app-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
@@ -113,6 +118,8 @@ jobs:
         run: |
           set -euo pipefail
 
+          # GitHub creates an annotated tag in two steps: first the tag object,
+          # then refs/tags/<tag>. Creating the ref emits the publish push event.
           node <<'NODE'
           (async () => {
           const apiUrl = process.env.API_URL;

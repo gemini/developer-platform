@@ -1,6 +1,7 @@
 name: Publish TypeScript SDK
 
 on:
+  # The release workflow starts from the tag push created by tag-typescript-sdk.
   push:
     tags:
       - "typescript-sdk-v*"
@@ -37,6 +38,8 @@ jobs:
           RELEASE_TAG_CREATED: ${{ github.event.created }}
           RELEASE_TAG_FORCED: ${{ github.event.forced }}
         run: |
+          # Only a new, immutable annotated tag for this exact commit may
+          # publish; no manual workflow dispatch is involved.
           test "$RELEASE_TAG_CREATED" = "true"
           test "$RELEASE_TAG_FORCED" = "false"
           test "$(git cat-file -t "$GITHUB_REF_NAME")" = "tag"
