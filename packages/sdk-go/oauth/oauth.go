@@ -83,12 +83,8 @@ var callbackResponseTemplate = template.Must(template.New("oauth-callback-respon
     * { box-sizing: border-box; }
     body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px; color: #010304; background: #f6f7f7; }
     main { width: min(100%, 448px); padding: 40px; border: 1px solid #e1e4e4; border-radius: 18px; background: #fff; box-shadow: 0 18px 60px rgba(1,3,4,.08); }
-    .brand { display: flex; align-items: center; gap: 12px; }
-    .brand-logo { width: 113px; height: 24px; display: block; }
-    .brand-divider { width: 1px; height: 22px; background: #d8dada; }
-    .product { color: #676868; font-size: 12px; font-weight: 550; letter-spacing: .01em; }
-    .divider { height: 1px; margin: 30px 0; background: #eceeee; }
-    h1 { margin: 0; font-size: 26px; font-weight: 650; letter-spacing: -.03em; }
+    .brand-logo { width: 32px; height: 32px; display: block; margin-bottom: 30px; }
+    h1 { margin: 0; font-size: 26px; font-weight: 650; letter-spacing: .005em; }
     p { margin: 12px 0 0; color: #555758; font-size: 15px; line-height: 1.6; }
     .footer { margin-top: 30px; color: #7b7d7d; font-size: 12px; }
     @media (max-width: 520px) { main { padding: 30px 24px; border-radius: 14px; } }
@@ -96,20 +92,9 @@ var callbackResponseTemplate = template.Must(template.New("oauth-callback-respon
 </head>
 <body>
   <main>
-    <div class="brand">
-      <svg class="brand-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 94 20" role="img" aria-label="Gemini">
-        <path d="M32.2084 10.9592H36.0419V13.5021C35.2164 14.0003 34.0861 14.2976 33.0189 14.2976C31.6777 14.2976 30.5336 13.8776 29.7099 13.0828C28.8863 12.2885 28.4513 11.1845 28.4513 9.8914C28.4513 8.59834 28.88 7.48615 29.6911 6.68252C30.5048 5.87638 31.6307 5.45078 32.947 5.45078C34.389 5.45078 35.5538 5.88202 36.6128 6.80769L36.7686 6.94351L37.8676 5.18479L37.7494 5.08652C36.343 3.90862 34.7595 3.33594 32.9094 3.33594C31.0593 3.33594 29.3413 3.95055 28.1302 5.06587C26.8378 6.25441 26.1543 7.92301 26.1543 9.8914C26.1543 11.7484 26.824 13.4176 28.0407 14.5918C29.2574 15.7659 30.9873 16.4124 32.9125 16.4124C34.8378 16.4124 36.9745 15.709 38.2213 14.7401L38.2907 14.6882V8.95384H32.2097V10.9585L32.2084 10.9592Z"/>
-        <path d="M40.9688 16.2328H50.9202V14.2075H43.1412V10.6869H49.5927V8.66155H43.1412V5.54279H50.9202V3.51807H40.9688V16.2328Z"/>
-        <path d="M60.3431 9.47144L55.408 3.51807H53.4233V16.2328H55.6652V7.18322L60.0802 12.5038H60.6097L65.0215 7.18322V16.2328H67.2634V3.51807H65.2963L60.3431 9.47144Z"/>
-        <path d="M72.8091 3.51807H70.5647V16.2328H72.8091V3.51807Z"/>
-        <path d="M85.6373 12.5874L78.0948 3.57849L78.0428 3.51465H76.1101V16.2325H78.3551V7.19482L85.9151 16.1687L85.9671 16.2325H87.8792V3.51465H85.6373V12.5874Z"/>
-        <path d="M93.4252 3.51807H91.1802V16.2328H93.4252V3.51807Z"/>
-        <path d="M18.374 6.14489H7.7678C8.15271 3.5212 10.3977 1.56533 13.0709 1.56533C15.744 1.56533 17.9922 3.5212 18.374 6.14489ZM12.2898 12.2867H7.71022V7.70709H12.2898V12.2867ZM12.2316 13.8545C11.8467 16.4788 9.60162 18.434 6.92849 18.434C4.25536 18.434 2.01033 16.4782 1.62541 13.8545H12.2316ZM1.62291 12.2867C1.96401 9.96652 3.82475 8.1089 6.14489 7.7678V12.2867H1.62291ZM18.374 7.71022C18.0329 10.0304 16.1721 11.888 13.8551 12.2291V7.71022H18.374ZM13.0709 0C9.55594 0 6.5586 2.70505 6.18557 6.18557C2.70505 6.5586 0 9.55594 0 13.0709C0 16.8894 3.10687 20 6.92599 20C10.4409 20 13.4383 17.2949 13.8113 13.8144C17.2918 13.4414 19.9969 10.4441 19.9969 6.92912C20 3.1075 16.89 0 13.0709 0Z"/>
-      </svg>
-      <div class="brand-divider" aria-hidden="true"></div>
-      <div class="product">Developer Platform</div>
-    </div>
-    <div class="divider"></div>
+    <svg class="brand-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" role="img" aria-label="Gemini">
+      <path d="M18.374 6.14489H7.7678C8.15271 3.5212 10.3977 1.56533 13.0709 1.56533C15.744 1.56533 17.9922 3.5212 18.374 6.14489ZM12.2898 12.2867H7.71022V7.70709H12.2898V12.2867ZM12.2316 13.8545C11.8467 16.4788 9.60162 18.434 6.92849 18.434C4.25536 18.434 2.01033 16.4782 1.62541 13.8545H12.2316ZM1.62291 12.2867C1.96401 9.96652 3.82475 8.1089 6.14489 7.7678V12.2867H1.62291ZM18.374 7.71022C18.0329 10.0304 16.1721 11.888 13.8551 12.2291V7.71022H18.374ZM13.0709 0C9.55594 0 6.5586 2.70505 6.18557 6.18557C2.70505 6.5586 0 9.55594 0 13.0709C0 16.8894 3.10687 20 6.92599 20C10.4409 20 13.4383 17.2949 13.8113 13.8144C17.2918 13.4414 19.9969 10.4441 19.9969 6.92912C20 3.1075 16.89 0 13.0709 0Z"/>
+    </svg>
     <h1>Gemini CLI authentication</h1>
     <p>{{.}}</p>
     <div class="footer">Return to Gemini CLI in your terminal.</div>
