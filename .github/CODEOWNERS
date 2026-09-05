@@ -1,10 +1,12 @@
 # Release and security-sensitive repository controls.
 /.github/CODEOWNERS @fuller @ximt
 /.github/workflows/** @fuller @ximt
+/.github/workflows/publish-typescript-sdk.yml @gemini/principal-engineers
 /SECURITY.md @fuller @ximt
 
-# Published TypeScript SDK source, packaging, and release metadata.
-/packages/sdk-typescript/** @fuller @ximt
+# Published TypeScript SDK release metadata.
+/packages/sdk-typescript/package.json @gemini/principal-engineers
+/packages/sdk-typescript/package-lock.json @gemini/principal-engineers
 
 # Published Go SDK source, module metadata, and release workflow.
 /packages/sdk-go/** @fuller @ximt
