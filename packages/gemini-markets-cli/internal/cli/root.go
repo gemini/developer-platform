@@ -119,6 +119,18 @@ func Options(command *cobra.Command) GlobalOptions {
 	return options
 }
 
+func credentialProfile(options GlobalOptions) string {
+	profile := strings.TrimSpace(options.Profile)
+	if profile == "" {
+		profile = "default"
+	}
+	environment := strings.ToLower(strings.TrimSpace(options.Environment))
+	if environment == "" {
+		environment = "production"
+	}
+	return profile + "@" + environment
+}
+
 type formatValue struct{ value *output.Format }
 
 func (f formatValue) String() string { return string(*f.value) }

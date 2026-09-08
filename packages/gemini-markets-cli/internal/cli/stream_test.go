@@ -247,3 +247,12 @@ func TestConsumeStreamPropagatesSDKTerminalError(t *testing.T) {
 		t.Fatalf("consumeStream() error = %v, want terminal error %v", err, terminalErr)
 	}
 }
+
+func TestConsumeStreamTreatsClosedLifecycleChannelAsError(t *testing.T) {
+	events := make(chan *ws.TradeEvent)
+	connectionEvents := make(chan ws.ConnectionEvent)
+	close(connectionEvents)
+	if err := consumeStream(context.Background(), io.Discard, events, connectionEvents); err == nil {
+		t.Fatal("consumeStream() error = nil, want lifecycle closure error")
+	}
+}

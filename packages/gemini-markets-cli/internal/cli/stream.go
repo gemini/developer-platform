@@ -384,8 +384,10 @@ func consumeStream[T any](ctx context.Context, output io.Writer, events <-chan *
 			}
 		case lifecycleEvent, ok := <-lifecycleEvents:
 			if !ok {
-				lifecycleEvents = nil
-				continue
+				if ctx.Err() != nil {
+					return nil
+				}
+				return errors.New("WebSocket lifecycle event stream closed unexpectedly")
 			}
 			if ctx.Err() != nil {
 				return nil

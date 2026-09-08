@@ -261,6 +261,23 @@ func TestPredictionOrderCommandsMapListCancel(t *testing.T) {
 	}
 }
 
+func TestPredictionListRejectsMisleadingHistoryFlags(t *testing.T) {
+	for _, flag := range []string{"status", "from", "to"} {
+		root := newTestRootCommand(io.Discard, io.Discard)
+		root.AddCommand(NewOrdersCommandWithFactories(nil, predictionFactory(&privatePredictionFake{})))
+		root.SetArgs([]string{"orders", "prediction", "list", "--" + flag, map[string]string{"status": "filled", "from": "1", "to": "2"}[flag]})
+		if err := root.Execute(); err == nil {
+			t.Fatalf("flag --%s was accepted without --history", flag)
+		}
+	}
+	root := newTestRootCommand(io.Discard, io.Discard)
+	root.AddCommand(NewOrdersCommandWithFactories(nil, predictionFactory(&privatePredictionFake{})))
+	root.SetArgs([]string{"orders", "prediction", "list", "--history", "--offset", "1", "--from", "2"})
+	if err := root.Execute(); err == nil {
+		t.Fatal("offset with time bounds was accepted")
+	}
+}
+
 func TestPrivateRequestValidation(t *testing.T) {
 	if _, err := buildSpotOrderRequest("BTCUSD", "buy", "1", "100", "exchange limit", "", "99", "", "primary"); err == nil {
 		t.Fatal("expected stop-price validation error")
@@ -277,8 +294,16 @@ func TestPrivateRequestValidation(t *testing.T) {
 	if _, err := buildPredictionOrderRequest("GEMI", "buy", "yes", "0", "0.5", "limit", "", "", false); err == nil {
 		t.Fatal("expected positive quantity validation error")
 	}
-	if _, err := buildPredictionOrderRequest("GEMI", "buy", "yes", "1", "0.005", "limit", "", "", false); err == nil {
-		t.Fatal("expected prediction price range validation error")
+	if _, err := buildPredictionOrderRequest("GEMI", "buy", "yes", "1", "1.01", "limit", "", "", false); err == nil {
+		t.Fatal("expected prediction price upper-bound validation error")
+	}
+	if request, err := buildPredictionOrderRequest("GEMI", "buy", "yes", "1", "0.0001", "limit", "", "", false); err != nil || request.Price != "0.0001" {
+		t.Fatalf("fine-grid prediction price rejected: request=%#v err=%v", request, err)
+	}
+	for _, value := range []string{"+0.5", "1e-1"} {
+		if _, err := buildPredictionOrderRequest("GEMI", "buy", "yes", "1", value, "limit", "", "", false); err == nil {
+			t.Fatalf("non-canonical prediction price %q was accepted", value)
+		}
 	}
 	if _, err := buildSpotOrderRequest("BTCUSD", "buy", "1", "100", "exchange stop limit", "", "101", "", "primary"); err == nil {
 		t.Fatal("expected spot buy stop direction validation error")

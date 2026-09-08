@@ -142,7 +142,7 @@ The CLI is pre-release: it is not available from the Go proxy, has no
 published binary release, and is not ready for `go install`. There is no CLI
 release workflow yet.
 
-Both SDK modules are publicly available from `proxy.golang.org` at signed
+Both SDK modules are publicly available from `proxy.golang.org` at annotated
 `v0.1.0` tags:
 
 ```text

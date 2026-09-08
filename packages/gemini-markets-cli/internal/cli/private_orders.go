@@ -558,6 +558,14 @@ func newPrivatePredictionListCommand(factory PredictionOrdersFactory) *cobra.Com
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			symbol = strings.TrimSpace(symbol)
 			format := Options(cmd).Format
+			for _, flag := range []string{"status", "from", "to"} {
+				if !history && cmd.Flags().Changed(flag) {
+					return fmt.Errorf("--%s requires --history", flag)
+				}
+			}
+			if cmd.Flags().Changed("offset") && (cmd.Flags().Changed("from") || cmd.Flags().Changed("to")) {
+				return fmt.Errorf("--offset cannot be combined with --from or --to")
+			}
 			if !history {
 				request := &predictions.GetActiveOrdersJSONRequestBody{Symbol: optionalString(symbol)}
 				if cmd.Flags().Changed("limit") {
@@ -730,6 +738,9 @@ func validatePositiveDecimal(value, name string) error {
 }
 
 func positiveDecimal(value, name string) (sdktypes.Decimal, error) {
+	if !plainUnsignedDecimal(value) {
+		return sdktypes.Decimal{}, fmt.Errorf("%s must be a positive decimal", name)
+	}
 	decimal, err := sdktypes.ParseDecimal(value)
 	if err != nil || !decimal.IsPositive() {
 		return sdktypes.Decimal{}, fmt.Errorf("%s must be a positive decimal", name)
@@ -738,11 +749,33 @@ func positiveDecimal(value, name string) (sdktypes.Decimal, error) {
 }
 
 func predictionPrice(value, name string) (sdktypes.Decimal, error) {
-	decimal, err := sdktypes.ParseDecimal(value)
-	if err != nil || decimal.Cmp(sdktypes.MustParseDecimal("0.01")) < 0 || decimal.Cmp(sdktypes.MustParseDecimal("0.99")) > 0 {
-		return sdktypes.Decimal{}, fmt.Errorf("%s must be a decimal between 0.01 and 0.99", name)
+	decimal, err := positiveDecimal(value, name)
+	if err != nil || decimal.Cmp(sdktypes.MustParseDecimal("1")) > 0 {
+		return sdktypes.Decimal{}, fmt.Errorf("%s must be greater than 0 and no greater than 1", name)
 	}
 	return decimal, nil
+}
+
+func plainUnsignedDecimal(value string) bool {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return false
+	}
+	hasDigit, hasDot := false, false
+	for i := 0; i < len(value); i++ {
+		switch value[i] {
+		case '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
+			hasDigit = true
+		case '.':
+			if hasDot {
+				return false
+			}
+			hasDot = true
+		default:
+			return false
+		}
+	}
+	return hasDigit
 }
 
 func stringPointer(value string) *string { return &value }

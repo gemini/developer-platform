@@ -122,7 +122,7 @@ func newAuthLoginCommand(dependency AuthCommandDependencies) *cobra.Command {
 				OAuthClientSecret: config.ClientSecret,
 				ExpiresAt:         token.ExpiresAt,
 			}
-			if err := keyring.Set(command.Context(), options.Profile, value); err != nil {
+			if err := keyring.Set(command.Context(), credentialProfile(options), value); err != nil {
 				return fmt.Errorf("save credentials: %w", err)
 			}
 			return writeAuthMessage(command.OutOrStdout(), options.Format, authMessage{
@@ -154,7 +154,7 @@ func newAuthLogoutCommand(dependency AuthCommandDependencies) *cobra.Command {
 					return fmt.Errorf("open credential keyring: %w", err)
 				}
 			}
-			err := keyring.Delete(command.Context(), options.Profile)
+			err := keyring.Delete(command.Context(), credentialProfile(options))
 			if err != nil && !errors.Is(err, credentials.ErrNotFound) {
 				return fmt.Errorf("remove saved credentials: %w", err)
 			}
@@ -173,7 +173,7 @@ func newAuthStatusCommand(dependency AuthCommandDependencies) *cobra.Command {
 		Args:  cobra.NoArgs,
 		RunE: func(command *cobra.Command, _ []string) error {
 			options := Options(command)
-			loadOptions := credentials.LoadOptions{Profile: options.Profile}
+			loadOptions := credentials.LoadOptions{Profile: credentialProfile(options)}
 			if dependency.Keyring != nil {
 				loadOptions.Keyring = dependency.Keyring
 			}

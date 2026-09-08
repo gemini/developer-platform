@@ -25,7 +25,8 @@ func newPrivateSession(ctx context.Context, options GlobalOptions) (*session.Ses
 
 func privateSessionConfig(ctx context.Context, options GlobalOptions) (session.Config, error) {
 	keyring := credentials.NewDefaultKeyring()
-	value, origin, err := credentials.LoadWithOrigin(ctx, credentials.LoadOptions{Profile: options.Profile, Keyring: keyring})
+	profile := credentialProfile(options)
+	value, origin, err := credentials.LoadWithOrigin(ctx, credentials.LoadOptions{Profile: profile, Keyring: keyring})
 	if err != nil {
 		return session.Config{}, fmt.Errorf("load credentials: %w", err)
 	}
@@ -38,7 +39,7 @@ func privateSessionConfig(ctx context.Context, options GlobalOptions) (session.C
 	config := session.Config{Environment: gemini.Environment(options.Environment), Credentials: value}
 	if origin == credentials.OriginKeyring {
 		config.CredentialStore = keyring
-		config.CredentialProfile = options.Profile
+		config.CredentialProfile = profile
 	}
 	return config, nil
 }

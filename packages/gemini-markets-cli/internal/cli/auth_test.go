@@ -97,7 +97,7 @@ func TestAuthLoginUsesSDKOAuthAndStoresOnlyAfterSuccess(t *testing.T) {
 	if keyring.sets != 1 {
 		t.Fatalf("keyring.Set calls = %d, want 1", keyring.sets)
 	}
-	got := keyring.values["work"]
+	got := keyring.values["work@sandbox"]
 	if got.AccessToken != "access-secret" || got.RefreshToken != "refresh-secret" || got.OAuthClientID != "client-id" || got.OAuthClientSecret != "client-secret" || got.ExpiresAt.IsZero() {
 		t.Fatalf("stored credentials = %#v", got)
 	}
@@ -126,7 +126,7 @@ func TestAuthLoginDoesNotPersistFailedOAuth(t *testing.T) {
 
 func TestAuthStatusIsSecretFree(t *testing.T) {
 	keyring := &memoryCredentialsKeyring{values: map[string]credentials.Credentials{
-		"default": {AccessToken: "access-secret", RefreshToken: "refresh-secret", OAuthClientID: "client-id"},
+		"default@production": {AccessToken: "access-secret", RefreshToken: "refresh-secret", OAuthClientID: "client-id"},
 	}}
 	command := authTestCommand(AuthCommandDependencies{Keyring: keyring})
 	var output strings.Builder
@@ -149,7 +149,7 @@ func TestAuthStatusIsSecretFree(t *testing.T) {
 
 func TestAuthStatusReportsHMACPresenceWithoutValues(t *testing.T) {
 	keyring := &memoryCredentialsKeyring{values: map[string]credentials.Credentials{
-		"default": {APIKey: "api-key-secret", APISecret: "api-secret"},
+		"default@production": {APIKey: "api-key-secret", APISecret: "api-secret"},
 	}}
 	command := authTestCommand(AuthCommandDependencies{Keyring: keyring})
 	var output strings.Builder
@@ -172,7 +172,7 @@ func TestAuthStatusDoesNotTreatOAuthClientMetadataAsLogin(t *testing.T) {
 
 func TestAuthLogoutRemovesSelectedProfile(t *testing.T) {
 	keyring := &memoryCredentialsKeyring{values: map[string]credentials.Credentials{
-		"work": {AccessToken: "access-secret"},
+		"work@production": {AccessToken: "access-secret"},
 	}}
 	command := authTestCommand(AuthCommandDependencies{Keyring: keyring})
 	var output strings.Builder
@@ -184,11 +184,27 @@ func TestAuthLogoutRemovesSelectedProfile(t *testing.T) {
 	if keyring.deletes != 1 {
 		t.Fatalf("keyring.Delete calls = %d, want 1", keyring.deletes)
 	}
-	if _, ok := keyring.values["work"]; ok {
+	if _, ok := keyring.values["work@production"]; ok {
 		t.Fatal("logout left selected profile credentials")
 	}
 	if strings.Contains(output.String(), "access-secret") {
 		t.Fatalf("logout output exposed secret: %q", output.String())
+	}
+}
+
+func TestAuthStatusDoesNotCrossEnvironmentNamespaces(t *testing.T) {
+	keyring := &memoryCredentialsKeyring{values: map[string]credentials.Credentials{
+		"default@sandbox": {AccessToken: "sandbox-token"},
+	}}
+	command := authTestCommand(AuthCommandDependencies{Keyring: keyring})
+	command.SetArgs([]string{"--environment", "production", "status"})
+	var output strings.Builder
+	command.SetOut(&output)
+	if err := command.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if strings.Contains(output.String(), "oauth") || strings.Contains(output.String(), "bearer") {
+		t.Fatalf("status crossed environment namespace: %q", output.String())
 	}
 }
 
