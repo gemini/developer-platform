@@ -79,11 +79,13 @@ func (s *PredictionsService) GetCategories(ctx context.Context) ([]string, error
 // the optional event status values defined by the API contract.
 func (s *PredictionsService) GetCategoriesWithParams(ctx context.Context, params *predictions.GetCategoriesParams) ([]string, error) {
 	path := withQuery("/v1/prediction-markets/categories", getCategoriesQuery(params))
-	var res []string
+	var res struct {
+		Categories []string `json:"categories"`
+	}
 	if err := s.public.get(ctx, path, &res); err != nil {
 		return nil, err
 	}
-	return res, nil
+	return res.Categories, nil
 }
 
 // GetEvents lists prediction market events with optional spec-defined filters.

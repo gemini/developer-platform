@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -241,6 +242,60 @@ func TestLoginRejectsInvalidCallbackStateAndThenAcceptsValidCallback(t *testing.
 	}
 }
 
+func TestLoginCompletesAsynchronousBrowserResponseBeforeReturning(t *testing.T) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		writer.Header().Set("Content-Type", "application/json")
+		_, _ = writer.Write([]byte(`{"access_token":"access-token","refresh_token":"refresh-token","token_type":"Bearer"}`))
+	}))
+	defer server.Close()
+
+	port := freeLoopbackPort(t)
+	cfg := validConfig(server.URL)
+	cfg.RedirectURL = fmt.Sprintf("http://127.0.0.1:%d/callback", port)
+	cfg.HTTPClient = server.Client()
+
+	type browserResult struct {
+		status int
+		body   string
+		err    error
+	}
+	browserResultCh := make(chan browserResult, 1)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	token, err := cfg.Login(ctx, func(authURL string) error {
+		parsed, parseErr := url.Parse(authURL)
+		if parseErr != nil {
+			return parseErr
+		}
+		callback := cfg.RedirectURL + "?code=auth-code&state=" + url.QueryEscape(parsed.Query().Get("state"))
+		go func() {
+			response, requestErr := http.Get(callback)
+			if requestErr != nil {
+				browserResultCh <- browserResult{err: requestErr}
+				return
+			}
+			defer response.Body.Close()
+			body, readErr := io.ReadAll(response.Body)
+			browserResultCh <- browserResult{status: response.StatusCode, body: string(body), err: readErr}
+		}()
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("Login() error = %v", err)
+	}
+	if token.AccessToken != "access-token" {
+		t.Fatalf("unexpected token: %+v", token)
+	}
+	select {
+	case result := <-browserResultCh:
+		if result.err != nil || result.status != http.StatusOK || !strings.Contains(result.body, "Authorization complete") {
+			t.Fatalf("browser callback response = status %d, body %q, error %v", result.status, result.body, result.err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("browser callback response did not complete")
+	}
+}
+
 func TestListenLoopbackBindsOnlyLoopbackAddresses(t *testing.T) {
 	listeners, err := listenLoopback("localhost", fmt.Sprintf("%d", freeLoopbackPort(t)))
 	if err != nil {
@@ -270,6 +325,24 @@ func TestWriteCallbackResponseEscapesBody(t *testing.T) {
 	if !strings.Contains(recorder.Body.String(), "&lt;script&gt;") {
 		t.Fatalf("callback response lost escaped content: %q", recorder.Body.String())
 	}
+	if !strings.Contains(recorder.Body.String(), "<!doctype html>") ||
+		!strings.Contains(recorder.Body.String(), "Gemini CLI authentication") ||
+		!strings.Contains(recorder.Body.String(), "Return to Gemini CLI") ||
+		!strings.Contains(recorder.Body.String(), `aria-label="Gemini"`) {
+		t.Fatalf("callback response omitted branded document structure: %q", recorder.Body.String())
+	}
+	if strings.Contains(recorder.Body.String(), "Secure authorization") {
+		t.Fatalf("callback response contains removed authorization tag: %q", recorder.Body.String())
+	}
+	if strings.Contains(recorder.Body.String(), "Developer Platform") {
+		t.Fatalf("callback response contains removed product label: %q", recorder.Body.String())
+	}
+	if got := recorder.Header().Get("Content-Type"); got != "text/html; charset=utf-8" {
+		t.Fatalf("Content-Type = %q, want HTML", got)
+	}
+	if recorder.Header().Get("Content-Security-Policy") == "" || recorder.Header().Get("Referrer-Policy") != "no-referrer" || recorder.Header().Get("X-Content-Type-Options") != "nosniff" {
+		t.Fatalf("callback response security headers = %v", recorder.Header())
+	}
 }
 
 func TestLoginRequiresLoopbackCallbackAndBrowserOpener(t *testing.T) {
@@ -286,6 +359,7 @@ func TestLoginRequiresLoopbackCallbackAndBrowserOpener(t *testing.T) {
 
 func TestTokenSourceRefreshesOnceForConcurrentCallers(t *testing.T) {
 	var refreshes atomic.Int32
+	updates := make(chan Token, 1)
 	server := httptest.NewTLSServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		refreshes.Add(1)
 		if err := request.ParseForm(); err != nil {
@@ -295,7 +369,7 @@ func TestTokenSourceRefreshesOnceForConcurrentCallers(t *testing.T) {
 			t.Errorf("unexpected refresh form: %v", request.Form)
 		}
 		writer.Header().Set("Content-Type", "application/json")
-		_, _ = writer.Write([]byte(`{"access_token":"refreshed-token","token_type":"Bearer","expires_in":3600}`))
+		_, _ = writer.Write([]byte(`{"access_token":"refreshed-token","refresh_token":"rotated-token","token_type":"Bearer","expires_in":3600}`))
 	}))
 	defer server.Close()
 
@@ -305,7 +379,10 @@ func TestTokenSourceRefreshesOnceForConcurrentCallers(t *testing.T) {
 		AccessToken:  "expired-token",
 		RefreshToken: "refresh-token",
 		ExpiresAt:    time.Now().Add(-time.Hour),
-	}, WithEarlyExpiry(0))
+	}, WithEarlyExpiry(0), WithTokenUpdate(func(_ context.Context, token Token) error {
+		updates <- token
+		return nil
+	}))
 	if err != nil {
 		t.Fatalf("NewTokenSource() error = %v", err)
 	}
@@ -338,6 +415,60 @@ func TestTokenSourceRefreshesOnceForConcurrentCallers(t *testing.T) {
 	}
 	if refreshes.Load() != 1 {
 		t.Fatalf("refresh endpoint called %d times, want 1", refreshes.Load())
+	}
+	select {
+	case updated := <-updates:
+		if updated.AccessToken != "refreshed-token" || updated.RefreshToken != "rotated-token" || updated.ExpiresAt.IsZero() {
+			t.Fatalf("updated token = %+v, want complete rotated token", updated)
+		}
+	default:
+		t.Fatal("token update callback was not called")
+	}
+}
+
+func TestTokenSourceUpdateFailureIsSanitizedAndLeavesTokenUnchanged(t *testing.T) {
+	var refreshes atomic.Int32
+	server := httptest.NewTLSServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		refreshes.Add(1)
+		writer.Header().Set("Content-Type", "application/json")
+		_, _ = writer.Write([]byte(`{"access_token":"refreshed-token","refresh_token":"rotated-token","token_type":"Bearer","expires_in":3600}`))
+	}))
+	defer server.Close()
+
+	cfg := validConfig(server.URL)
+	cfg.HTTPClient = server.Client()
+	persistenceErr := errors.New("keyring failure containing secret-token-material")
+	var failUpdate atomic.Bool
+	failUpdate.Store(true)
+	source, err := NewTokenSource(cfg, Token{
+		AccessToken:  "expired-token",
+		RefreshToken: "refresh-token",
+		ExpiresAt:    time.Now().Add(-time.Hour),
+	}, WithEarlyExpiry(0), WithTokenUpdate(func(_ context.Context, _ Token) error {
+		if failUpdate.Load() {
+			return persistenceErr
+		}
+		return nil
+	}))
+	if err != nil {
+		t.Fatalf("NewTokenSource() error = %v", err)
+	}
+
+	_, err = source.Token(context.Background())
+	if !errors.Is(err, ErrTokenRefresh) || !errors.Is(err, ErrTokenUpdate) || !errors.Is(err, persistenceErr) {
+		t.Fatalf("Token() error = %v, want refresh, update, and persistence errors", err)
+	}
+	if strings.Contains(err.Error(), "secret-token-material") {
+		t.Fatalf("Token() error exposed callback details: %v", err)
+	}
+
+	failUpdate.Store(false)
+	got, err := source.Token(context.Background())
+	if err != nil || got != "refreshed-token" {
+		t.Fatalf("retry Token() = %q, %v; want refreshed-token, nil", got, err)
+	}
+	if refreshes.Load() != 2 {
+		t.Fatalf("refresh endpoint called %d times, want 2 after failed persistence", refreshes.Load())
 	}
 }
 

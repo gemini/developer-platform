@@ -281,3 +281,58 @@ func TestTradingService_CancelAllRequiresExplicitConfirmation(t *testing.T) {
 		t.Fatalf("unconfirmed CancelAllOrders reached the server %d times", requests)
 	}
 }
+
+func TestTradingService_VolumeMethodsUseCanonicalEndpoints(t *testing.T) {
+	var paths []string
+	var requests []map[string]any
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.URL.Path)
+		var request map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			t.Errorf("decode request body: %v", err)
+		}
+		requests = append(requests, request)
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/v1/tradevolume":
+			symbol, total := "BTCUSD", "125.50"
+			_ = json.NewEncoder(w).Encode([]trading.TradeVolume{{Symbol: &symbol, TotalVolumeBase: &total}})
+		case "/v1/notionalvolume":
+			volume := "250.75"
+			_ = json.NewEncoder(w).Encode(trading.NotionalVolume{Notional30dVolume: &volume})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	service := services.NewTradingService(transport.NewClient(transport.WithHTTPClient(server.Client())), server.URL)
+	account := "primary"
+	tradeVolume, err := service.GetTradingVolume(context.Background(), &trading.GetTradingVolumeJSONRequestBody{
+		Account: &account,
+		Request: "/v1/tradevolume",
+	})
+	if err != nil {
+		t.Fatalf("GetTradingVolume() error = %v", err)
+	}
+	if len(tradeVolume) != 1 || tradeVolume[0].Symbol == nil || *tradeVolume[0].Symbol != "BTCUSD" || tradeVolume[0].TotalVolumeBase == nil || *tradeVolume[0].TotalVolumeBase != "125.50" {
+		t.Fatalf("GetTradingVolume() = %+v", tradeVolume)
+	}
+
+	notionalVolume, err := service.GetNotionalTradingVolume(context.Background(), &trading.GetNotionalTradingVolumeJSONRequestBody{
+		Account: &account,
+		Request: "/v1/notionalvolume",
+	})
+	if err != nil {
+		t.Fatalf("GetNotionalTradingVolume() error = %v", err)
+	}
+	if notionalVolume.Notional30dVolume == nil || *notionalVolume.Notional30dVolume != "250.75" {
+		t.Fatalf("GetNotionalTradingVolume() = %+v", notionalVolume)
+	}
+	if len(paths) != 2 || paths[0] != "/v1/tradevolume" || paths[1] != "/v1/notionalvolume" {
+		t.Fatalf("volume request paths = %v", paths)
+	}
+	if requests[0]["account"] != "primary" || requests[1]["account"] != "primary" {
+		t.Fatalf("volume request accounts = %v", requests)
+	}
+}

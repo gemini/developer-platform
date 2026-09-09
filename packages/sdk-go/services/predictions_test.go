@@ -123,7 +123,7 @@ func TestPredictionsService_ReadEndpoints(t *testing.T) {
 			_, _ = w.Write([]byte(`{"acceptedVersion":2,"hasAcceptedLatest":false,"latestVersion":3}`))
 		case "/v1/prediction-markets/categories":
 			categoryStatus = append([]string(nil), r.URL.Query()["status"]...)
-			_, _ = w.Write([]byte(`["crypto","sports"]`))
+			_, _ = w.Write([]byte(`{"categories":["crypto","sports"]}`))
 		case "/v1/prediction-markets/events":
 			query := r.URL.Query()
 			want := map[string][]string{

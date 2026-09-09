@@ -1,0 +1,10 @@
+go 1.25.13
+
+use (
+	./packages/gemini-markets-cli
+	./packages/sdk-go
+	./packages/sdk-go/cmd/demo
+	./packages/sdk-go/scripts
+	./packages/sdk-go/websocket/gorilla
+	./samples/go
+)

@@ -19,7 +19,6 @@ var sdkWebSocketCoverage = map[string]websocketCoverage{
 	"stream:orders@account":      {method: "websocket.Client.SubscribeOrderEvents"},
 	"stream:balances@account":    {method: "websocket.Client.SubscribeBalances"},
 	"stream:positions@account":   {method: "websocket.Client.SubscribePositions"},
-	"stream:settlements@account": {method: "websocket.Client.SubscribeSettlements"},
 
 	"stream:{symbol}@depth5":         {method: "websocket.Client.SubscribePartialDepth"},
 	"stream:{symbol}@depth10":        {method: "websocket.Client.SubscribePartialDepth"},

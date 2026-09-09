@@ -63,12 +63,44 @@ var (
 	ErrRefreshTokenUnavailable = errors.New("gemini oauth: refresh token unavailable")
 	// ErrTokenRefresh identifies a failed refresh operation.
 	ErrTokenRefresh = errors.New("gemini oauth: token refresh failed")
+	// ErrTokenUpdate identifies a failure in an application-provided token
+	// update callback. The callback error is available through errors.Is, but
+	// is not included in Error output because it may contain token material.
+	ErrTokenUpdate = errors.New("gemini oauth: token update failed")
 	// ErrTokenEndpoint indicates that an OAuth token endpoint rejected a
 	// request.
 	ErrTokenEndpoint = errors.New("gemini oauth: token endpoint rejected request")
 )
 
-var callbackResponseTemplate = template.Must(template.New("oauth-callback-response").Parse("{{.}}"))
+var callbackResponseTemplate = template.Must(template.New("oauth-callback-response").Parse(`<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Gemini CLI authentication</title>
+  <style>
+    :root { color-scheme: light; font-family: Geist, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px; color: #010304; background: #f6f7f7; }
+    main { width: min(100%, 448px); padding: 40px; border: 1px solid #e1e4e4; border-radius: 18px; background: #fff; box-shadow: 0 18px 60px rgba(1,3,4,.08); }
+    .brand-logo { width: 32px; height: 32px; display: block; margin-bottom: 30px; }
+    h1 { margin: 0; font-size: 26px; font-weight: 650; letter-spacing: .005em; }
+    p { margin: 12px 0 0; color: #555758; font-size: 15px; line-height: 1.6; }
+    .footer { margin-top: 30px; color: #7b7d7d; font-size: 12px; }
+    @media (max-width: 520px) { main { padding: 30px 24px; border-radius: 14px; } }
+  </style>
+</head>
+<body>
+  <main>
+    <svg class="brand-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" role="img" aria-label="Gemini">
+      <path d="M18.374 6.14489H7.7678C8.15271 3.5212 10.3977 1.56533 13.0709 1.56533C15.744 1.56533 17.9922 3.5212 18.374 6.14489ZM12.2898 12.2867H7.71022V7.70709H12.2898V12.2867ZM12.2316 13.8545C11.8467 16.4788 9.60162 18.434 6.92849 18.434C4.25536 18.434 2.01033 16.4782 1.62541 13.8545H12.2316ZM1.62291 12.2867C1.96401 9.96652 3.82475 8.1089 6.14489 7.7678V12.2867H1.62291ZM18.374 7.71022C18.0329 10.0304 16.1721 11.888 13.8551 12.2291V7.71022H18.374ZM13.0709 0C9.55594 0 6.5586 2.70505 6.18557 6.18557C2.70505 6.5586 0 9.55594 0 13.0709C0 16.8894 3.10687 20 6.92599 20C10.4409 20 13.4383 17.2949 13.8113 13.8144C17.2918 13.4414 19.9969 10.4441 19.9969 6.92912C20 3.1075 16.89 0 13.0709 0Z"/>
+    </svg>
+    <h1>Gemini CLI authentication</h1>
+    <p>{{.}}</p>
+    <div class="footer">Return to Gemini CLI in your terminal.</div>
+  </main>
+</body>
+</html>`))
 
 // Endpoint contains the OAuth authorization and token endpoint URLs.
 // Both endpoints must use HTTPS.
@@ -333,6 +365,7 @@ type Source struct {
 	config      Config
 	earlyExpiry time.Duration
 	now         func() time.Time
+	tokenUpdate TokenUpdateFunc
 
 	mu         sync.Mutex
 	token      Token
@@ -349,6 +382,21 @@ var _ auth.TokenSource = (*Source)(nil)
 
 // SourceOption configures a refreshable token source.
 type SourceOption func(*Source) error
+
+// TokenUpdateFunc receives the complete token snapshot after a successful
+// refresh and before the token becomes visible to callers. Returning an error
+// fails the refresh and leaves the previous token in place.
+type TokenUpdateFunc func(context.Context, Token) error
+
+// WithTokenUpdate registers a callback for persisting refreshed tokens. The
+// callback is serialized with refreshes and is called at most once per shared
+// refresh operation.
+func WithTokenUpdate(update TokenUpdateFunc) SourceOption {
+	return func(source *Source) error {
+		source.tokenUpdate = update
+		return nil
+	}
+}
 
 // WithEarlyExpiry refreshes before the token's expiry by d. The default is
 // thirty seconds. A negative value is rejected.
@@ -376,8 +424,8 @@ func WithClock(now func() time.Time) SourceOption {
 
 // NewTokenSource creates a refreshable auth.TokenSource from an OAuth token.
 // The initial token may already be expired if it has a refresh token; the
-// first call then refreshes it. Token persistence is intentionally left to
-// the caller so the SDK never writes credentials unexpectedly.
+// first call then refreshes it. The SDK never persists credentials itself;
+// callers can opt into persistence with WithTokenUpdate.
 func NewTokenSource(config Config, initial Token, opts ...SourceOption) (*Source, error) {
 	if err := config.validateTokenRequest(); err != nil {
 		return nil, err
@@ -466,6 +514,11 @@ func (s *Source) Token(ctx context.Context) (string, error) {
 			if refreshed.TokenType == "" {
 				refreshed.TokenType = "Bearer"
 			}
+			if s.tokenUpdate != nil {
+				if updateErr := s.tokenUpdate(refreshCtx, *refreshed); updateErr != nil {
+					err = &tokenUpdateError{cause: updateErr}
+				}
+			}
 		}
 
 		s.mu.Lock()
@@ -489,6 +542,21 @@ func (s *Source) Token(ctx context.Context) (string, error) {
 	case <-ctx.Done():
 		return "", ctx.Err()
 	}
+}
+
+type tokenUpdateError struct {
+	cause error
+}
+
+func (e *tokenUpdateError) Error() string {
+	return ErrTokenUpdate.Error()
+}
+
+func (e *tokenUpdateError) Unwrap() error {
+	if e == nil {
+		return ErrTokenUpdate
+	}
+	return errors.Join(ErrTokenUpdate, e.cause)
 }
 
 func (c Config) validate() error {
@@ -797,7 +865,12 @@ func (c Config) loopbackCallback(ctx context.Context, authURL string, openBrowse
 		}(listener)
 	}
 	defer func() {
-		_ = server.Close()
+		// The callback handler publishes its result before Login exchanges the
+		// authorization code. Shut down gracefully so the browser's success
+		// response is allowed to finish before the one-shot server exits.
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		_ = server.Shutdown(shutdownCtx)
 	}()
 
 	if len(listeners) == 0 {
@@ -887,7 +960,10 @@ func (e *AuthorizationError) Error() string {
 
 func writeCallbackResponse(writer http.ResponseWriter, status int, message string) {
 	writer.Header().Set("Cache-Control", "no-store")
-	writer.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	writer.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
+	writer.Header().Set("Content-Type", "text/html; charset=utf-8")
+	writer.Header().Set("Referrer-Policy", "no-referrer")
+	writer.Header().Set("X-Content-Type-Options", "nosniff")
 	writer.WriteHeader(status)
 	_ = callbackResponseTemplate.Execute(writer, message)
 }

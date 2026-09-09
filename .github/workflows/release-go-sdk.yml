@@ -9,6 +9,11 @@ on:
 permissions:
   contents: read
 
+env:
+  # Release checks must exercise the tagged modules exactly as consumers see
+  # them, without resolving sibling modules through the repository workspace.
+  GOWORK: "off"
+
 concurrency:
   group: release-go-sdk-${{ github.ref_name }}
   cancel-in-progress: false

@@ -225,7 +225,13 @@ token, err := oauthConfig.Login(ctx, openBrowser)
 if err != nil {
     log.Fatal(err)
 }
-source, err := oauth.NewTokenSource(oauthConfig, *token)
+source, err := oauth.NewTokenSource(
+    oauthConfig,
+    *token,
+    oauth.WithTokenUpdate(func(ctx context.Context, updated oauth.Token) error {
+        return secureTokenStore.Save(ctx, updated)
+    }),
+)
 if err != nil {
     log.Fatal(err)
 }
@@ -235,8 +241,10 @@ client := gemini.NewClient(gemini.WithTokenSource(source))
 `oauth.Source` refreshes once for concurrent callers, honors cancellation
 while waiting for another refresh, and preserves a refresh token when the
 provider omits it from a rotation response. It does not write credentials to
-disk or a keychain; callers may load and persist tokens through their own
-secure storage.
+disk or a keychain. Applications that need durable refresh-token rotation can
+pass `oauth.WithTokenUpdate`; the callback receives the complete refreshed
+token before it becomes visible to callers. If persistence fails, the refresh
+fails and the previous in-memory token remains in place.
 If a token source fails during an automatic WebSocket reconnect, the SDK stops
 that reconnect loop, reports the underlying error through connection events,
 and leaves the client disconnected so the source can be repaired before a

@@ -36,7 +36,7 @@ const (
 var publishedSpecSHA256 = map[string]string{
 	restSpecURL:              "79a0dc4061f3942dca8b30a589bbd406c781d2c6c19283d87cb21177afdcab5e",
 	predictionMarketsSpecURL: "0c70a976f4553ae39d14d6851416cb974f081919216b94ebd851f044d108cfe7",
-	websocketSpecURL:         "904160ee9d2f5ba4c4a789e0173877ca936019fefa83a2eba1dcf2a1fef2a796",
+	websocketSpecURL:         "d83c624336f16542c3f1f4554101e7fa19bbc703012ae7bcd780c401667a5def",
 }
 
 var (
