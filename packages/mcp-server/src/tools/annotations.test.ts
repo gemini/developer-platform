@@ -32,6 +32,7 @@ const allTools: ToolDefinition[] = [
 // `mutates` migration: dropping a tool from it would silently publish a
 // money-moving call as read-only and skip its confirmation prompt.
 const EXPECTED_DESTRUCTIVE = [
+  'gemini_accept_prediction_terms',
   'gemini_cancel_all_active_orders',
   'gemini_cancel_all_session_orders',
   'gemini_cancel_order',

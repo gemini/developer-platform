@@ -111,6 +111,27 @@ export interface PositionsResponse {
   positions: PredictionPosition[];
 }
 
+export interface PredictionMarketsTerms {
+  // Full terms-of-service content to show the user before accepting. This is
+  // long-form legal prose, not a summary — the terms tool raises wrapHandler's
+  // stringCap so this survives sanitization intact rather than being cut off
+  // mid-agreement.
+  content: string;
+  termsType: string;
+  updatedAt: string;
+  version: number;
+}
+
+export interface PredictionMarketsTermsStatus {
+  hasAcceptedLatest: boolean;
+  acceptedVersion?: number;
+  latestVersion?: number;
+}
+
+export interface AcceptTermsResponse {
+  success: boolean;
+}
+
 export interface CancelOrderResponse {
   result: string;
   message: string;

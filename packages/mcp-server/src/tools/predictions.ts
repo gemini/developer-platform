@@ -94,11 +94,63 @@ export function createPredictionTools(client: GeminiHttpClient): ToolDefinition[
       handler: wrapHandler(({ status }) => predictions.listCategories(client, status)),
     },
     {
+      name: 'gemini_get_prediction_terms',
+      description:
+        'Get the current prediction markets terms of service. ' +
+        'Quote the returned `content` to the user verbatim and in full — do not paraphrase, ' +
+        'summarize, or truncate it — before ever calling gemini_accept_prediction_terms on ' +
+        'their behalf. `content` is sometimes a short reference (e.g. pointing to terms ' +
+        "embedded in Gemini's web or mobile app) rather than the complete terms text; if it " +
+        'reads that way rather than as a full agreement, tell the user so explicitly and point ' +
+        "them to Gemini's app or website to review the actual terms — do not present that " +
+        'reference sentence to the user as if it were the terms itself. ' +
+        'New accounts must accept the latest terms before placing prediction market orders; ' +
+        'check gemini_get_prediction_terms_status to see whether that is still needed.',
+      inputSchema: z.object({}),
+      // Terms content is long-form legal prose, not a short API field — raise
+      // the sanitizer's default 2000-char cap so it reaches the user intact.
+      handler: wrapHandler(() => predictions.getTerms(client), { stringCap: 40_000 }),
+    },
+    {
+      name: 'gemini_get_prediction_terms_status',
+      description:
+        "Check whether the authenticated account group has accepted the latest prediction " +
+        'markets terms of service. Call this before placing a prediction market order for a ' +
+        'new or unfamiliar account — an order placed before acceptance fails with an ' +
+        'accept-terms error.',
+      inputSchema: z.object({}),
+      handler: wrapHandler(() => predictions.getTermsStatus(client)),
+    },
+    {
+      name: 'gemini_accept_prediction_terms',
+      description:
+        'Explicitly accept the latest prediction markets terms of service on behalf of the ' +
+        'authenticated account group. This is a legally binding action taken in the user\'s ' +
+        'name and cannot be undone from this API. Before calling this, fetch the terms with ' +
+        'gemini_get_prediction_terms and quote the returned content to the user verbatim. ' +
+        'If that content is a complete agreement, obtain the user\'s explicit approval of ' +
+        "that text before calling this. If it is instead a short reference (e.g. pointing to " +
+        "terms embedded in Gemini's app rather than the full text), `confirm: true` alone is " +
+        'not sufficient consent — tell the user the real terms are not retrievable through ' +
+        "this API, direct them to review the terms in Gemini's app or website, and obtain " +
+        'their explicit confirmation that they have done so and approve accepting, before ' +
+        'calling this. Do not call this automatically in response to an order being rejected ' +
+        'for unaccepted terms.',
+      inputSchema: z.object({
+        confirm: confirmField,
+      }),
+      handler: wrapHandler(() => predictions.acceptTerms(client)),
+      mutates: 'destructive',
+    },
+    {
       name: 'gemini_place_prediction_order',
       description:
         'Place a limit order on a prediction market contract. ' +
         'Each contract has YES and NO sides; price represents implied probability (0.01–0.99). ' +
-        'Winning contracts pay out $1.00.',
+        'Winning contracts pay out $1.00. ' +
+        'If this fails with an accept-terms error, do not retry automatically — check ' +
+        'gemini_get_prediction_terms_status and, with the user\'s explicit approval, use ' +
+        'gemini_accept_prediction_terms.',
       inputSchema: z.object({
         symbol: z.string().describe('Contract instrument symbol (e.g. GEMI-PRES2028-VANCE)'),
         side: z.enum(['buy', 'sell']).describe('Order side'),
