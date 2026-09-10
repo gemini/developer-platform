@@ -6,8 +6,17 @@ import type {
   WSDepthMessage,
   WSBookTickerMessage,
   WSTickerMessage,
+  WSContractStatusMessage,
   WSSubscribeResponse,
 } from '../types/websocket.js';
+
+// Contract IDs can be 17-18 digits, exceeding Number.MAX_SAFE_INTEGER — the
+// same class of precision loss already guarded against for REST order IDs
+// (see client/http.ts). Re-extracting just this field from the raw payload
+// (rather than switching the whole-message parser to a big-int-safe one)
+// keeps every other channel's parsing — including nanosecond `E` timestamps
+// on trade/depth/bookTicker/ticker — completely unchanged.
+const CONTRACT_ID_PATTERN = /"i"\s*:\s*(\d+)/;
 
 export type WSEventHandler = (message: WSMessage) => void;
 
@@ -62,7 +71,14 @@ export class GeminiWebSocketClient {
 
       this.ws.on('message', (data: WebSocket.Data) => {
         try {
-          const message = JSON.parse(data.toString()) as WSMessage;
+          const raw = data.toString();
+          const message = JSON.parse(raw) as WSMessage;
+          if (isContractStatusMessage(message)) {
+            const idMatch = raw.match(CONTRACT_ID_PATTERN);
+            if (idMatch) {
+              message.i = idMatch[1];
+            }
+          }
           this.handleMessage(message);
         } catch (err) {
           console.error('[WS] Failed to parse message:', err);
@@ -334,4 +350,12 @@ export function isTickerMessage(msg: WSMessage): msg is WSTickerMessage {
  */
 export function isSubscribeResponse(msg: WSMessage): msg is WSSubscribeResponse {
   return 'id' in msg && ('result' in msg || 'error' in msg);
+}
+
+/**
+ * Helper to check if message is a contract status message. `k` (event
+ * ticker) and `i` (contract ID) appear only on this message type.
+ */
+export function isContractStatusMessage(msg: WSMessage): msg is WSContractStatusMessage {
+  return 'k' in msg && 'i' in msg;
 }

@@ -23,8 +23,48 @@ test('onUpdate fires for each update method exactly once', () => {
   store.updateOrderBook('ETHUSD', [['2999', '1']], [['3001', '1']]);
   store.addTrade('ETHUSD', '3000', '0.1', false, 1);
   store.updateBookTicker('ETHUSD', '2999', '1', '3001', '1');
+  store.updateContractStatus('ETHUSD', 'EVT', 'ETHUSD', '1', 'active', 'settled', undefined, 1);
 
-  assert.deepStrictEqual(kinds, ['price', 'orderBook', 'trade', 'bookTicker']);
+  assert.deepStrictEqual(kinds, ['price', 'orderBook', 'trade', 'bookTicker', 'contractStatus']);
+});
+
+test('updateContractStatus stores the latest event, keyed by symbol', () => {
+  const store = new MarketDataStore();
+  store.updateContractStatus(
+    'gemi-pres2028-vance',
+    'PRES2028',
+    'GEMI-PRES2028-VANCE',
+    '145828833218573125',
+    'active',
+    'settled',
+    '0.50',
+    1_700_000_000_000
+  );
+
+  const status = store.getContractStatus('GEMI-PRES2028-VANCE');
+  assert.strictEqual(status?.symbol, 'GEMI-PRES2028-VANCE');
+  assert.strictEqual(status?.contractId, '145828833218573125');
+  assert.strictEqual(status?.newStatus, 'settled');
+  assert.strictEqual(status?.eventTimeMs, 1_700_000_000_000);
+});
+
+test('getContractStatus returns undefined for a symbol with no events yet', () => {
+  const store = new MarketDataStore();
+  assert.strictEqual(store.getContractStatus('GEMI-UNKNOWN'), undefined);
+});
+
+test('clear() removes contract status data for a symbol', () => {
+  const store = new MarketDataStore();
+  store.updateContractStatus('GEMI-X', 'X', 'GEMI-X', '1', 'active', 'settled', undefined, 1);
+  store.clear('GEMI-X');
+  assert.strictEqual(store.getContractStatus('GEMI-X'), undefined);
+});
+
+test('getStats() counts contract statuses', () => {
+  const store = new MarketDataStore();
+  store.updateContractStatus('GEMI-X', 'X', 'GEMI-X', '1', 'active', 'settled', undefined, 1);
+  store.updateContractStatus('GEMI-Y', 'Y', 'GEMI-Y', '2', 'active', 'settled', undefined, 1);
+  assert.strictEqual(store.getStats().contractStatusCount, 2);
 });
 
 test('onUpdate is symbol-scoped — other symbols do not fire', () => {

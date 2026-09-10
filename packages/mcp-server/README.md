@@ -163,6 +163,7 @@ See [ALERTS.md](ALERTS.md) for the full example queries (category-by-category) a
 - `gemini_get_price_feed` - All symbols price feed
 - `gemini_get_funding_amounts` - Perpetual funding amounts
 - `gemini_get_book_ticker` - Live best bid/ask via WebSocket (`{symbol}@bookTicker`), instead of polling REST. Works for spot and prediction-market contract symbols.
+- `gemini_get_contract_status` - React to prediction-market contract lifecycle events (strike set, market opened, settled) via the WebSocket `contractStatus` feed, instead of polling event endpoints.
 
 ### Other Tools
 

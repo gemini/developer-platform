@@ -1,4 +1,4 @@
-import { GeminiWebSocketClient, isTradeMessage, isDepthMessage, isBookTickerMessage, isTickerMessage, isSubscribeResponse } from '../client/websocket.js';
+import { GeminiWebSocketClient, isTradeMessage, isDepthMessage, isBookTickerMessage, isTickerMessage, isContractStatusMessage, isSubscribeResponse } from '../client/websocket.js';
 import { MarketDataStore } from '../store/index.js';
 import type { WSMessage, WSConnectionStatus, WSManagerState, WSChannel } from '../types/websocket.js';
 
@@ -144,12 +144,57 @@ export class WebSocketManager {
   }
 
   /**
+   * Subscribe to the global contractStatus channel (prediction-market
+   * strike/settlement lifecycle events). Unlike bookTicker/trade/depth,
+   * this has no per-symbol wire subscription — Gemini pushes every
+   * contract's status changes on one shared channel (confirmed against
+   * sdk-go's SubscribeContractStatus, which sends the literal channel name
+   * "contractStatus" regardless of the symbol callers filter by). Callers
+   * read a specific symbol's latest status back out of the store.
+   */
+  async subscribeContractStatus(): Promise<void> {
+    const channel = 'contractStatus';
+
+    if (this.store.hasSubscription(channel)) {
+      console.error('[WSManager] Already subscribed to contractStatus');
+      return;
+    }
+
+    try {
+      await this.client.subscribe([channel]);
+      this.store.addSubscription(channel);
+      console.error('[WSManager] Subscribed to contractStatus');
+    } catch (err) {
+      console.error('[WSManager] Failed to subscribe to contractStatus:', err);
+      throw err;
+    }
+  }
+
+  /**
    * Handle incoming WebSocket message
    */
   private handleMessage(message: WSMessage): void {
     try {
       // Skip subscription responses
       if (isSubscribeResponse(message)) {
+        return;
+      }
+
+      // Handle contract status messages (checked ahead of the legacy
+      // duck-typed guards below on principle — see toChannelSymbol's sibling
+      // fix for why an unrelated guard silently swallowing a new message
+      // shape is the kind of bug worth guarding against up front).
+      if (isContractStatusMessage(message)) {
+        this.store.updateContractStatus(
+          message.s,
+          message.k,
+          message.c,
+          message.i,
+          message.o,
+          message.n,
+          message.p,
+          message.E
+        );
         return;
       }
 
