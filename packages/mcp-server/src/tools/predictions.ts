@@ -111,7 +111,7 @@ export function createPredictionTools(client: GeminiHttpClient): ToolDefinition[
         confirm: confirmField,
       }),
       handler: wrapHandler((args) => predictions.placeOrder(client, args)),
-      destructive: true,
+      mutates: 'destructive',
     },
     {
       name: 'gemini_cancel_prediction_order',

@@ -23,7 +23,7 @@ export function createOrderTools(client: GeminiHttpClient): ToolDefinition[] {
         symbol: string; amount: string; price: string; side: 'buy' | 'sell';
         type: string; options?: string[]; clientOrderId?: string;
       }) => orders.newOrder(client, symbol, amount, price, side, type, options, clientOrderId)),
-      destructive: true,
+      mutates: 'destructive',
     },
     {
       name: 'gemini_cancel_order',
@@ -33,7 +33,7 @@ export function createOrderTools(client: GeminiHttpClient): ToolDefinition[] {
         confirm: confirmField,
       }),
       handler: wrapHandler(({ orderId }: { orderId: string }) => orders.cancelOrder(client, orderId)),
-      destructive: true,
+      mutates: 'destructive',
     },
     {
       name: 'gemini_cancel_all_session_orders',
@@ -46,7 +46,7 @@ export function createOrderTools(client: GeminiHttpClient): ToolDefinition[] {
       description: 'Cancel all active orders',
       inputSchema: z.object({ confirm: confirmField }),
       handler: wrapHandler(() => orders.cancelAllActiveOrders(client)),
-      destructive: true,
+      mutates: 'destructive',
     },
     {
       name: 'gemini_get_order_status',

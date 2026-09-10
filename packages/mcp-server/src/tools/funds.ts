@@ -60,7 +60,7 @@ export function createFundTools(client: GeminiHttpClient): ToolDefinition[] {
       handler: wrapHandler(async ({ currency, address, amount, memo }: {
         currency: string; address: string; amount: string; memo?: string;
       }) => redactWithdrawalResult(await funds.cryptoWithdrawal(client, currency, address, amount, memo))),
-      destructive: true,
+      mutates: 'destructive',
     },
     {
       name: 'gemini_internal_transfer',
@@ -75,7 +75,7 @@ export function createFundTools(client: GeminiHttpClient): ToolDefinition[] {
       handler: wrapHandler(({ currency, sourceAccount, targetAccount, amount }: {
         currency: string; sourceAccount: string; targetAccount: string; amount: string;
       }) => funds.internalTransfer(client, currency, sourceAccount, targetAccount, amount)),
-      destructive: true,
+      mutates: 'destructive',
     },
     {
       name: 'gemini_add_bank',
@@ -118,7 +118,7 @@ export function createFundTools(client: GeminiHttpClient): ToolDefinition[] {
       handler: wrapHandler(({ accountId, amount, currency }: { accountId: string; amount: string; currency: string }) =>
         funds.fiatWithdrawal(client, accountId, amount, currency)
       ),
-      destructive: true,
+      mutates: 'destructive',
     },
   ];
 }
