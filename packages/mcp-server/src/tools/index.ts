@@ -74,3 +74,4 @@ export { createMarginTools } from './margin.js';
 export { createStakingTools } from './staking.js';
 export { createPredictionTools } from './predictions.js';
 export { createAlertTools } from './alerts.js';
+export { createMarketStreamTools } from './marketStream.js';
