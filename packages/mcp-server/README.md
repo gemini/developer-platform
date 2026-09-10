@@ -173,7 +173,7 @@ See [ALERTS.md](ALERTS.md) for the full example queries (category-by-category) a
 | **Account**     | Account details, sub-accounts, roles, approved addresses                  | Yes           |
 | **Margin**      | Margin account, preview, positions, funding payments                      | Yes           |
 | **Staking**     | Balances, history, rates, stake, unstake                                  | Yes           |
-| **Predictions** | Prediction market symbols, contracts, and prices                          | No            |
+| **Predictions** | Market discovery, terms of service, trading, positions, volume           | Mixed         |
 
 **Total: 50+ tools**
 
