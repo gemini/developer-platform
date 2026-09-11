@@ -33,6 +33,7 @@ const allTools: ToolDefinition[] = [
 // money-moving call as read-only and skip its confirmation prompt.
 const EXPECTED_DESTRUCTIVE = [
   'gemini_cancel_all_active_orders',
+  'gemini_cancel_all_session_orders',
   'gemini_cancel_order',
   'gemini_clearing_broker_new_order',
   'gemini_clearing_new_order',

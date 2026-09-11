@@ -87,6 +87,7 @@ export function createFundTools(client: GeminiHttpClient): ToolDefinition[] {
         name: z.string().describe('Account holder name'),
       }),
       handler: wrapHandler((body: Record<string, unknown>) => funds.addBank(client, body)),
+      mutates: 'write',
     },
     {
       name: 'gemini_get_bank_payment_methods',

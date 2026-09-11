@@ -38,8 +38,9 @@ export function createOrderTools(client: GeminiHttpClient): ToolDefinition[] {
     {
       name: 'gemini_cancel_all_session_orders',
       description: 'Cancel all orders in the current session',
-      inputSchema: z.object({}),
+      inputSchema: z.object({ confirm: confirmField }),
       handler: wrapHandler(() => orders.cancelAllSessionOrders(client)),
+      mutates: 'destructive',
     },
     {
       name: 'gemini_cancel_all_active_orders',
