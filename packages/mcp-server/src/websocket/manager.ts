@@ -3,6 +3,17 @@ import { MarketDataStore } from '../store/index.js';
 import type { WSMessage, WSConnectionStatus, WSManagerState, WSChannel } from '../types/websocket.js';
 
 /**
+ * Normalize a symbol into the casing Gemini's WS channel names expect.
+ * Spot pairs are lowercase (`btcusd@bookTicker`), but prediction-market
+ * contract tickers are uppercase with hyphens (`GEMI-PRES2028-VANCE@bookTicker`)
+ * and matched case-sensitively server-side — lowercasing them sends a channel
+ * name that never matches, so the caller silently never gets a tick.
+ */
+export function toChannelSymbol(symbol: string): string {
+  return symbol.toUpperCase().startsWith('GEMI-') ? symbol.toUpperCase() : symbol.toLowerCase();
+}
+
+/**
  * WebSocket manager that integrates client and store
  */
 export class WebSocketManager {
@@ -44,7 +55,7 @@ export class WebSocketManager {
    * Subscribe to a channel
    */
   async subscribe(symbol: string, channel: WSChannel): Promise<void> {
-    const channelStr = `${symbol.toLowerCase()}@${channel}`;
+    const channelStr = `${toChannelSymbol(symbol)}@${channel}`;
 
     if (this.store.hasSubscription(channelStr)) {
       console.error(`[WSManager] Already subscribed to ${channelStr}`);
@@ -65,7 +76,7 @@ export class WebSocketManager {
    * Subscribe to multiple symbols for a channel
    */
   async subscribeMultiple(symbols: string[], channel: WSChannel): Promise<void> {
-    const channels = symbols.map((s) => `${s.toLowerCase()}@${channel}`);
+    const channels = symbols.map((s) => `${toChannelSymbol(s)}@${channel}`);
     const newChannels = channels.filter((ch) => !this.store.hasSubscription(ch));
 
     if (newChannels.length === 0) {
@@ -89,7 +100,7 @@ export class WebSocketManager {
    * Unsubscribe from a channel
    */
   async unsubscribe(symbol: string, channel: WSChannel): Promise<void> {
-    const channelStr = `${symbol.toLowerCase()}@${channel}`;
+    const channelStr = `${toChannelSymbol(symbol)}@${channel}`;
 
     if (!this.store.hasSubscription(channelStr)) {
       console.error(`[WSManager] Not subscribed to ${channelStr}`);
@@ -110,9 +121,9 @@ export class WebSocketManager {
    * Unsubscribe from all channels for a symbol
    */
   async unsubscribeSymbol(symbol: string): Promise<void> {
-    const lowerSymbol = symbol.toLowerCase();
+    const normalizedSymbol = toChannelSymbol(symbol);
     const subscriptions = this.store.getSubscriptions();
-    const symbolChannels = subscriptions.filter((ch) => ch.startsWith(`${lowerSymbol}@`));
+    const symbolChannels = subscriptions.filter((ch) => ch.startsWith(`${normalizedSymbol}@`));
 
     if (symbolChannels.length === 0) {
       console.error(`[WSManager] No subscriptions for ${symbol}`);

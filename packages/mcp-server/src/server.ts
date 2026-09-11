@@ -5,6 +5,8 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import { GeminiHttpClient } from './client/http.js';
+import { WebSocketManager } from './websocket/manager.js';
+import { config } from './config.js';
 import {
   createMarketTools,
   createOrderTools,
@@ -14,6 +16,7 @@ import {
   createStakingTools,
   createPredictionTools,
   createAlertTools,
+  createMarketStreamTools,
 } from './tools/index.js';
 import type { ToolDefinition } from './tools/index.js';
 
@@ -55,6 +58,7 @@ export function createServer(): Server {
   );
 
   const client = new GeminiHttpClient();
+  const wsManager = new WebSocketManager(config.wsUrl);
 
   const allTools: ToolDefinition[] = [
     ...createMarketTools(client),
@@ -65,6 +69,7 @@ export function createServer(): Server {
     ...createStakingTools(client),
     ...createPredictionTools(client),
     ...createAlertTools(),
+    ...createMarketStreamTools(wsManager),
   ];
 
   const toolMap = new Map<string, ToolDefinition>(allTools.map((t) => [t.name, t]));
