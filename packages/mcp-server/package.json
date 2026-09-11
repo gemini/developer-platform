@@ -16,7 +16,8 @@
     "build": "tsc",
     "dev": "tsx src/index.ts",
     "start": "node dist/index.js",
-    "test": "tsx --test 'src/**/*.test.ts'"
+    "test": "tsx --test 'src/**/*.test.ts'",
+    "typecheck": "tsc -p tsconfig.test.json"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",
