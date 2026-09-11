@@ -124,8 +124,10 @@ export function createPredictionTools(client: GeminiHttpClient): ToolDefinition[
         // the API with the wrong ID and gets back a 404. Spot orders
         // (orders.ts) use the same string-typed pattern.
         orderId: z.string().describe('Order ID to cancel'),
+        confirm: confirmField,
       }),
       handler: wrapHandler(({ orderId }) => predictions.cancelOrder(client, orderId)),
+      mutates: 'destructive',
     },
     {
       name: 'gemini_get_prediction_active_orders',
