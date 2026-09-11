@@ -10,6 +10,8 @@ import type {
   CancelOrderResponse,
   VolumeMetrics,
   TimeInForce,
+  PlaceOrderBatchResponse,
+  CancelOrderBatchResponse,
 } from '../types/predictions.js';
 
 export async function listEvents(
@@ -116,6 +118,40 @@ export async function cancelOrder(
   return client.authenticatedPost<CancelOrderResponse>('/v1/prediction-markets/order/cancel', {
     orderId,
   });
+}
+
+export async function placeOrderBatch(
+  client: GeminiHttpClient,
+  orders: Array<{
+    symbol: string;
+    side: 'buy' | 'sell';
+    outcome: 'yes' | 'no';
+    quantity: string;
+    price: string;
+    timeInForce?: TimeInForce;
+  }>
+): Promise<PlaceOrderBatchResponse> {
+  return client.authenticatedPost<PlaceOrderBatchResponse>('/v1/prediction-markets/order/batch', {
+    orders: orders.map((order) => ({
+      symbol: order.symbol,
+      orderType: 'limit',
+      side: order.side,
+      outcome: order.outcome,
+      quantity: order.quantity,
+      price: order.price,
+      ...(order.timeInForce ? { timeInForce: order.timeInForce } : {}),
+    })),
+  });
+}
+
+export async function cancelOrderBatch(
+  client: GeminiHttpClient,
+  orderIds: string[]
+): Promise<CancelOrderBatchResponse> {
+  return client.authenticatedPost<CancelOrderBatchResponse>(
+    '/v1/prediction-markets/order/batch/cancel',
+    { orderIds }
+  );
 }
 
 export async function getActiveOrders(
