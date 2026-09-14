@@ -1,4 +1,4 @@
-import { GeminiWebSocketClient, isTradeMessage, isDepthMessage, isBookTickerMessage, isTickerMessage, isSubscribeResponse } from '../client/websocket.js';
+import { GeminiWebSocketClient, isTradeMessage, isDepthMessage, isBookTickerMessage, isTickerMessage, isContractStatusMessage, isSubscribeResponse } from '../client/websocket.js';
 import { MarketDataStore } from '../store/index.js';
 import type { WSMessage, WSConnectionStatus, WSManagerState, WSChannel } from '../types/websocket.js';
 
@@ -23,6 +23,12 @@ export class WebSocketManager {
   private lastConnected?: number;
   private lastError?: string;
   private reconnectAttempts = 0;
+  // Tracks in-flight subscribe() calls per channel. Without this, two
+  // concurrent callers for the same channel both see no subscription yet
+  // (the store isn't updated until the wire call resolves), so both send a
+  // subscribe request — Gemini can deliver duplicate events or reject the
+  // second one. Concurrent callers now await the same in-flight promise.
+  private pendingSubscriptions: Map<string, Promise<void>> = new Map();
 
   constructor(wsUrl: string, store?: MarketDataStore) {
     this.client = new GeminiWebSocketClient(wsUrl);
@@ -52,24 +58,41 @@ export class WebSocketManager {
   }
 
   /**
+   * Subscribe to a single channel, deduplicating concurrent callers and
+   * recording the subscription only once the wire call actually succeeds.
+   */
+  private subscribeOnce(channelStr: string): Promise<void> {
+    if (this.store.hasSubscription(channelStr)) {
+      console.error(`[WSManager] Already subscribed to ${channelStr}`);
+      return Promise.resolve();
+    }
+
+    const pending = this.pendingSubscriptions.get(channelStr);
+    if (pending) return pending;
+
+    const promise = this.client
+      .subscribe([channelStr])
+      .then(() => {
+        this.store.addSubscription(channelStr);
+        console.error(`[WSManager] Subscribed to ${channelStr}`);
+      })
+      .catch((err) => {
+        console.error('[WSManager] Failed to subscribe to %s:', channelStr, err);
+        throw err;
+      })
+      .finally(() => {
+        this.pendingSubscriptions.delete(channelStr);
+      });
+
+    this.pendingSubscriptions.set(channelStr, promise);
+    return promise;
+  }
+
+  /**
    * Subscribe to a channel
    */
   async subscribe(symbol: string, channel: WSChannel): Promise<void> {
-    const channelStr = `${toChannelSymbol(symbol)}@${channel}`;
-
-    if (this.store.hasSubscription(channelStr)) {
-      console.error(`[WSManager] Already subscribed to ${channelStr}`);
-      return;
-    }
-
-    try {
-      await this.client.subscribe([channelStr]);
-      this.store.addSubscription(channelStr);
-      console.error(`[WSManager] Subscribed to ${channelStr}`);
-    } catch (err) {
-      console.error('[WSManager] Failed to subscribe to %s:', channelStr, err);
-      throw err;
-    }
+    return this.subscribeOnce(`${toChannelSymbol(symbol)}@${channel}`);
   }
 
   /**
@@ -144,12 +167,43 @@ export class WebSocketManager {
   }
 
   /**
+   * Subscribe to the global contractStatus channel (prediction-market
+   * strike/settlement lifecycle events). Unlike bookTicker/trade/depth,
+   * this has no per-symbol wire subscription — Gemini pushes every
+   * contract's status changes on one shared channel (confirmed against
+   * sdk-go's SubscribeContractStatus, which sends the literal channel name
+   * "contractStatus" regardless of the symbol callers filter by). Callers
+   * read a specific symbol's latest status back out of the store.
+   */
+  async subscribeContractStatus(): Promise<void> {
+    return this.subscribeOnce('contractStatus');
+  }
+
+  /**
    * Handle incoming WebSocket message
    */
   private handleMessage(message: WSMessage): void {
     try {
       // Skip subscription responses
       if (isSubscribeResponse(message)) {
+        return;
+      }
+
+      // Handle contract status messages (checked ahead of the legacy
+      // duck-typed guards below on principle — see toChannelSymbol's sibling
+      // fix for why an unrelated guard silently swallowing a new message
+      // shape is the kind of bug worth guarding against up front).
+      if (isContractStatusMessage(message)) {
+        this.store.updateContractStatus(
+          message.s,
+          message.k,
+          message.c,
+          message.i,
+          message.o,
+          message.n,
+          message.p,
+          message.E
+        );
         return;
       }
 
