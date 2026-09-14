@@ -55,6 +55,32 @@ test('exactly the money-moving tools are annotated destructive', () => {
   assert.deepStrictEqual(destructive, EXPECTED_DESTRUCTIVE);
 });
 
+// Tools that change real state but move no funds and aren't gated behind
+// confirm. Mirrors EXPECTED_DESTRUCTIVE above: without this exhaustive list,
+// a tool losing its `mutates: 'write'` field (e.g. gemini_add_bank, which
+// registers a real bank account) would silently start publishing
+// `readOnlyHint: true` with every other test in this suite still green.
+const EXPECTED_WRITE = ['gemini_add_bank'];
+
+test('exactly the state-changing-but-not-destructive tools are annotated write', () => {
+  const write = allTools
+    .filter((t) => t.mutates === 'write')
+    .map((t) => t.name)
+    .sort();
+  assert.deepStrictEqual(write, EXPECTED_WRITE);
+});
+
+test('every write tool publishes readOnlyHint: false and destructiveHint: false, and is not confirm-gated', () => {
+  for (const name of EXPECTED_WRITE) {
+    const tool = allTools.find((t) => t.name === name);
+    assert.ok(tool, `${name} is missing from the tool list`);
+    const a = annotationsFor(tool);
+    assert.strictEqual(a.readOnlyHint, false, `${name} must not be annotated read-only`);
+    assert.strictEqual(a.destructiveHint, false, `${name} must not be annotated destructive`);
+    assert.strictEqual(requiresConfirmation(tool), false, `${name} must not require confirm`);
+  }
+});
+
 test('every destructive tool is confirm-gated and every other tool is not', () => {
   for (const tool of allTools) {
     assert.strictEqual(

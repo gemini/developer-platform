@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createHmac } from 'crypto';
 
 // config.ts snapshots process.env when the module is first imported, so the
 // credentials have to be in place before the module graph loads — hence the
@@ -17,6 +18,9 @@ interface CapturedCall {
   url: string;
   method: string;
   headers: Record<string, string>;
+  // `undefined` when no body was sent at all — distinct from an empty
+  // string, which `fetch` would still have been given explicitly.
+  body: string | undefined;
 }
 
 function stubFetch(body = '{}', status = 200) {
@@ -27,6 +31,7 @@ function stubFetch(body = '{}', status = 200) {
       url: String(input),
       method: (init.method as string) ?? 'GET',
       headers: { ...((init.headers as Record<string, string>) ?? {}) },
+      body: init.body as string | undefined,
     });
     return new Response(body, { status });
   }) as unknown as typeof fetch;
@@ -42,6 +47,25 @@ function signedPayload(headers: Record<string, string>): Record<string, unknown>
   const encoded = headers['X-GEMINI-PAYLOAD'];
   assert.ok(encoded, 'X-GEMINI-PAYLOAD header is missing');
   return JSON.parse(Buffer.from(encoded, 'base64').toString('utf8')) as Record<string, unknown>;
+}
+
+// Recomputes the signature independently from the actual encoded payload
+// that was sent, using the same HMAC-SHA384 algorithm buildSignedHeaders
+// uses — rather than only checking that a signature is present. Deliberately
+// does not import buildSignedHeaders itself: reusing the function under test
+// to verify its own output would prove nothing if it signed the wrong data
+// consistently. Combined with signedPayload()'s check on the decoded
+// content, this proves both that the right thing was signed and that the
+// signature over it is cryptographically correct.
+function assertValidSignature(headers: Record<string, string>, secret: string): void {
+  const payload = headers['X-GEMINI-PAYLOAD'];
+  assert.ok(payload, 'X-GEMINI-PAYLOAD header is missing');
+  const expected = createHmac('sha384', secret).update(payload).digest('hex');
+  assert.strictEqual(
+    headers['X-GEMINI-SIGNATURE'],
+    expected,
+    'X-GEMINI-SIGNATURE is not the HMAC-SHA384 of the encoded payload under the test secret'
+  );
 }
 
 // ----------------------------------------------------------------------------
@@ -61,7 +85,8 @@ test('authenticatedGet issues a GET carrying the signed Gemini headers', async (
     assert.strictEqual(call.method, 'GET');
     assert.strictEqual(call.url, 'https://api.gemini.invalid/v1/prediction-markets/terms/status');
     assert.strictEqual(call.headers['X-GEMINI-APIKEY'], 'test-api-key');
-    assert.ok(call.headers['X-GEMINI-SIGNATURE']);
+    assert.strictEqual(call.body, undefined, 'a signed GET must not send a request body');
+    assertValidSignature(call.headers, 'test-api-secret');
     assert.strictEqual(signedPayload(call.headers)['request'], '/v1/prediction-markets/terms/status');
     assert.strictEqual(res.hasAcceptedLatest, true);
   } finally {
@@ -101,6 +126,7 @@ test('authenticatedPost puts params in the query string and signs the bare path'
       'signed request path must not carry a query string'
     );
     assert.ok(!('eventTicker' in payload), 'query params must not leak into the signed body');
+    assertValidSignature(call.headers, 'test-api-secret');
   } finally {
     f.restore();
   }
