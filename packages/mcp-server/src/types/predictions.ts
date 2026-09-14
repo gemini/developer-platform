@@ -172,6 +172,62 @@ export interface PositionsResponse {
   positions: PredictionPosition[];
 }
 
+export interface ComboLeg {
+  comboId: Int64;
+  contract?: ContractMetadata;
+  // Decimal string per spec, NOT Int64 — the underlying contract's ID as a
+  // literal decimal string, distinct from comboId's int64 encoding.
+  contractId: string;
+  legIndex: number;
+  // Capitalized per the actual API wire format — NOT the lowercase 'yes'/'no'
+  // used everywhere else in this codebase. See the gotcha note above.
+  requiredOutcome: 'Yes' | 'No';
+  // The outcome this leg has settled to, if resolved. Null/absent while active.
+  legOutcome?: 'Yes' | 'No';
+  resolvedAt?: string;
+}
+
+export interface ComboResponse {
+  contract: ContractMetadata;
+  legs: ComboLeg[];
+}
+
+export interface ListCombosResponse {
+  combos: ComboResponse[];
+  pagination: Pagination;
+}
+
+// The exact shape of a leg nested inside ComboSummary.legs (the create/register
+// response) is not confirmed from the generated spec available in this project
+// — only the top-level ComboSummary fields and the request-side leg shape are.
+// Modeled loosely here as the subset we're confident about (contractId,
+// requiredOutcome — same wire format as ComboLeg above) rather than guessing
+// fields with no evidence. Extend once the actual response shape is confirmed.
+export interface ComboSummaryLeg {
+  contractId: string;
+  requiredOutcome: 'Yes' | 'No';
+}
+
+export interface ComboSummary {
+  canonicalLegKey: string;
+  createdAt?: string;
+  displayName?: string;
+  id: Int64;
+  instrumentId?: Int64;
+  instrumentRegistered: boolean;
+  instrumentSymbol?: string;
+  latestExpiryDate?: string;
+  legCount: number;
+  legs: ComboSummaryLeg[];
+  status?: string;
+  updatedAt?: string;
+}
+
+export interface CreateComboResponse {
+  alreadyExisted: boolean;
+  combo: ComboSummary;
+}
+
 export interface CancelOrderResponse {
   result: string;
   message: string;
