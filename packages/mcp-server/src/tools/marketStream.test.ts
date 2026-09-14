@@ -7,20 +7,27 @@ function textOf(result: { content: { type: string; text: string }[] }): string {
   return result.content[0]!.text;
 }
 
-function fakeSource(store: MarketDataStore, opts: { connected?: boolean } = {}): MarketStreamSource {
+function fakeSource(
+  store: MarketDataStore,
+  opts: { connected?: boolean } = {}
+): MarketStreamSource & { calls: { subscribe: number; subscribeContractStatus: number } } {
   let connected = opts.connected ?? false;
+  const calls = { subscribe: 0, subscribeContractStatus: 0 };
   return {
     isConnected: () => connected,
     initialize: async () => {
       connected = true;
     },
     subscribe: async () => {
+      calls.subscribe++;
       store.addSubscription('btcusd@bookTicker');
     },
     subscribeContractStatus: async () => {
+      calls.subscribeContractStatus++;
       store.addSubscription('contractStatus');
     },
     getStore: () => store,
+    calls,
   };
 }
 
@@ -37,6 +44,7 @@ test('gemini_get_book_ticker returns a cached tick immediately', async () => {
   assert.match(text, /"bestBid": "99"/);
   assert.match(text, /"bestAsk": "101"/);
   assert.doesNotMatch(text, /subscribed_no_data_yet/);
+  assert.strictEqual(source.calls.subscribe, 1);
 });
 
 test('gemini_get_book_ticker connects lazily on first call', async () => {
@@ -71,6 +79,7 @@ test('gemini_get_book_ticker reports no data yet, then returns it once a tick ar
   const result = await pending;
 
   assert.match(textOf(result), /"bestBid": "20"/);
+  assert.strictEqual(source.calls.subscribe, 2);
 });
 
 test('gemini_get_book_ticker times out cleanly when no tick ever arrives', async () => {
@@ -105,6 +114,9 @@ test('gemini_get_contract_status returns a cached event immediately', async () =
   // 17-18 digit contract IDs exceed Number.MAX_SAFE_INTEGER — must survive as a string, exact.
   assert.match(text, /"contractId": "145828833218573125"/);
   assert.doesNotMatch(text, /subscribed_no_data_yet/);
+  // Proves the tool actually calls through to the feed subscription, not
+  // just reading whatever happens to already be in the store.
+  assert.strictEqual(source.calls.subscribeContractStatus, 1);
 });
 
 test('gemini_get_contract_status reports no data yet, then returns it once an event arrives', async () => {
@@ -133,6 +145,7 @@ test('gemini_get_contract_status reports no data yet, then returns it once an ev
   const result = await pending;
 
   assert.match(textOf(result), /"newStatus": "active"/);
+  assert.strictEqual(source.calls.subscribeContractStatus, 2);
 });
 
 test('gemini_get_contract_status is unaffected by unrelated symbols', async () => {

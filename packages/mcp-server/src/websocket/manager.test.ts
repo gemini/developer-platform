@@ -2,7 +2,36 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { WebSocketServer, type RawData } from 'ws';
 import { WebSocketManager, toChannelSymbol } from './manager.js';
+import type { MarketDataStore } from '../store/index.js';
 import type { CachedContractStatus } from '../types/websocket.js';
+
+// Shared by the wire-level contractStatus tests below: the server sends its
+// fixture synchronously right after acking the subscribe request, so it may
+// already be in the store by the time subscribeContractStatus() resolves —
+// check directly first, and only fall back to waiting on the next onUpdate
+// (with a bounded timeout, so a real regression fails fast instead of
+// hanging) if it genuinely hasn't arrived yet.
+function waitForContractStatus(
+  store: MarketDataStore,
+  symbol: string,
+  timeoutMs = 2000
+): Promise<CachedContractStatus | undefined> {
+  const existing = store.getContractStatus(symbol);
+  if (existing) return Promise.resolve(existing);
+
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      stop();
+      resolve(undefined);
+    }, timeoutMs);
+    const stop = store.onUpdate(symbol, (event) => {
+      if (event.kind !== 'contractStatus') return;
+      clearTimeout(timer);
+      stop();
+      resolve(store.getContractStatus(symbol));
+    });
+  });
+}
 
 test('toChannelSymbol preserves case and hyphens for prediction-market symbols', () => {
   assert.strictEqual(toChannelSymbol('GEMI-PRES2028-VANCE'), 'GEMI-PRES2028-VANCE');
@@ -66,6 +95,18 @@ test('subscribeContractStatus() is idempotent — a second call does not re-subs
   });
 });
 
+test('subscribeContractStatus() deduplicates truly concurrent callers', async () => {
+  await withEchoServer(async (manager, receivedParams) => {
+    // Both calls start before either has awaited anything, so both would
+    // observe "not subscribed yet" without the pendingSubscriptions guard —
+    // this is the race the fix in subscribeOnce() targets, distinct from
+    // the sequential idempotency case above.
+    await Promise.all([manager.subscribeContractStatus(), manager.subscribeContractStatus()]);
+
+    assert.deepStrictEqual(receivedParams, ['contractStatus']);
+  });
+});
+
 test('a real contractStatus wire message lands in the store with the contract ID intact', async () => {
   const wss = new WebSocketServer({ port: 0 });
   await new Promise<void>((resolve) => wss.once('listening', resolve));
@@ -95,27 +136,8 @@ test('a real contractStatus wire message lands in the store with the contract ID
     await manager.initialize();
     await manager.subscribeContractStatus();
 
-    // The server sends the contractStatus event synchronously right after
-    // acking the subscribe request, so it may already be in the store by
-    // the time subscribe() resolves — check directly first. Only fall back
-    // to waiting on the next onUpdate if it genuinely hasn't arrived yet,
-    // with a bounded timeout so a real regression fails fast instead of
-    // hanging forever waiting for an event that will never come.
     const store = manager.getStore();
-    const status =
-      store.getContractStatus('GEMI-PRES2028-VANCE') ??
-      (await new Promise((resolve) => {
-        const timer = setTimeout(() => {
-          stop();
-          resolve(undefined);
-        }, 2000);
-        const stop = store.onUpdate('GEMI-PRES2028-VANCE', (event) => {
-          if (event.kind !== 'contractStatus') return;
-          clearTimeout(timer);
-          stop();
-          resolve(store.getContractStatus('GEMI-PRES2028-VANCE'));
-        });
-      }));
+    const status = await waitForContractStatus(store, 'GEMI-PRES2028-VANCE');
 
     const afterIngestion = Date.now();
     const { timestamp, ...rest } = status as CachedContractStatus;
@@ -134,6 +156,38 @@ test('a real contractStatus wire message lands in the store with the contract ID
     // ingestion), distinct from the exchange's `eventTimeMs` — assert it
     // against a real bound instead of comparing the object to itself.
     assert.ok(timestamp >= beforeIngestion && timestamp <= afterIngestion);
+  } finally {
+    manager.disconnect();
+    await new Promise<void>((resolve, reject) => wss.close((err) => (err ? reject(err) : resolve())));
+  }
+});
+
+test('a contractStatus wire message without a strike price leaves strikePrice unset', async () => {
+  const wss = new WebSocketServer({ port: 0 });
+  await new Promise<void>((resolve) => wss.once('listening', resolve));
+
+  wss.on('connection', (socket) => {
+    socket.on('message', (data: RawData) => {
+      const msg = JSON.parse(data.toString()) as { id: string; params: string[] };
+      socket.send(JSON.stringify({ id: msg.id, result: msg.params }));
+      // A real settlement event omits `p` entirely — only strike-setting
+      // events (and some contract types) carry a strike price.
+      socket.send('{"e":"contractStatus","E":1700000000000,"s":"GEMI-NOSTRIKE","k":"NS","c":"GEMI-NOSTRIKE","i":2,"o":"active","n":"settled"}');
+    });
+  });
+
+  const { port } = wss.address() as { port: number };
+  const manager = new WebSocketManager(`ws://localhost:${port}`);
+
+  try {
+    await manager.initialize();
+    await manager.subscribeContractStatus();
+
+    const store = manager.getStore();
+    const status = await waitForContractStatus(store, 'GEMI-NOSTRIKE');
+
+    assert.strictEqual(status?.newStatus, 'settled');
+    assert.strictEqual(status?.strikePrice, undefined);
   } finally {
     manager.disconnect();
     await new Promise<void>((resolve, reject) => wss.close((err) => (err ? reject(err) : resolve())));
