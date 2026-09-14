@@ -166,7 +166,15 @@ test('gemini_get_prediction_settled_positions calls the settled endpoint with th
   const tool = toolNamed(client, 'gemini_get_prediction_settled_positions');
 
   await tool.handler(
-    tool.inputSchema.parse({ eventTicker: 'FEDJAN26', limit: 25, offset: 0, sort: '-payout' })
+    tool.inputSchema.parse({
+      eventTicker: 'FEDJAN26',
+      limit: 25,
+      offset: 0,
+      sort: '-payout',
+      search: 'fed',
+      category: 'Politics',
+      withCashOuts: true,
+    })
   );
 
   assert.strictEqual(calls.length, 1);
@@ -176,6 +184,9 @@ test('gemini_get_prediction_settled_positions calls the settled endpoint with th
     limit: '25',
     offset: '0',
     sort: '-payout',
+    search: 'fed',
+    category: 'Politics',
+    withCashOuts: 'true',
   });
 });
 
