@@ -10,7 +10,30 @@ import type {
   CancelOrderResponse,
   VolumeMetrics,
   TimeInForce,
+  PredictionMarketsTerms,
+  PredictionMarketsTermsStatus,
+  AcceptTermsResponse,
 } from '../types/predictions.js';
+
+// Onboarding: the prediction markets terms of service. New agent accounts
+// must accept the latest version before any order/positions call will
+// succeed — the API rejects those with an accept-terms error until then.
+
+export async function getTerms(client: GeminiHttpClient): Promise<PredictionMarketsTerms> {
+  return client.publicGet<PredictionMarketsTerms>('/v1/prediction-markets/terms');
+}
+
+export async function getTermsStatus(
+  client: GeminiHttpClient
+): Promise<PredictionMarketsTermsStatus> {
+  return client.authenticatedGet<PredictionMarketsTermsStatus>(
+    '/v1/prediction-markets/terms/status'
+  );
+}
+
+export async function acceptTerms(client: GeminiHttpClient): Promise<AcceptTermsResponse> {
+  return client.authenticatedPost<AcceptTermsResponse>('/v1/prediction-markets/terms/accept');
+}
 
 export async function listEvents(
   client: GeminiHttpClient,
