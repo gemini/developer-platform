@@ -6,12 +6,36 @@ import { createPredictionTools } from './predictions.js';
 // Requests never leave this test — every terms call in these tests is
 // intercepted by the fake client before it reaches GeminiHttpClient's real
 // networking code.
+//
+// Each method is distinguished (not just given the same canned response) and
+// every invocation is recorded with the endpoint it was called on. Without
+// this, a tool accidentally wired to the wrong datasource function — e.g.
+// gemini_get_prediction_terms_status calling getTerms instead of
+// getTermsStatus — would still pass every assertion below that only checks
+// the returned value, since all three methods would hand back the same
+// generic response regardless of which one actually ran.
+interface RecordedCall {
+  method: 'publicGet' | 'authenticatedGet' | 'authenticatedPost';
+  endpoint: string;
+}
+
 function fakeClient(response: unknown = {}) {
-  return {
-    publicGet: async () => response,
-    authenticatedGet: async () => response,
-    authenticatedPost: async () => response,
+  const calls: RecordedCall[] = [];
+  const client = {
+    publicGet: async (endpoint: string) => {
+      calls.push({ method: 'publicGet', endpoint });
+      return response;
+    },
+    authenticatedGet: async (endpoint: string) => {
+      calls.push({ method: 'authenticatedGet', endpoint });
+      return response;
+    },
+    authenticatedPost: async (endpoint: string) => {
+      calls.push({ method: 'authenticatedPost', endpoint });
+      return response;
+    },
   } as unknown as GeminiHttpClient;
+  return { client, calls };
 }
 
 function toolNamed(client: GeminiHttpClient, name: string) {
@@ -29,7 +53,8 @@ function textOf(result: { content: { type: string; text?: string }[] }): string 
 }
 
 test('gemini_get_prediction_terms takes no arguments and is read-only', () => {
-  const tool = toolNamed(fakeClient(), 'gemini_get_prediction_terms');
+  const { client } = fakeClient();
+  const tool = toolNamed(client, 'gemini_get_prediction_terms');
   assert.strictEqual(tool.mutates, undefined);
   assert.deepStrictEqual(tool.inputSchema.safeParse({}), tool.inputSchema.safeParse({}));
   assert.strictEqual(tool.inputSchema.safeParse({}).success, true);
@@ -46,7 +71,8 @@ test('gemini_get_prediction_terms surfaces long-form content without truncation'
   };
   assert.ok(longTerms.content.length > 2000);
 
-  const tool = toolNamed(fakeClient(longTerms), 'gemini_get_prediction_terms');
+  const { client } = fakeClient(longTerms);
+  const tool = toolNamed(client, 'gemini_get_prediction_terms');
   const parsed = tool.inputSchema.parse({});
   const result = await tool.handler(parsed);
 
@@ -56,13 +82,15 @@ test('gemini_get_prediction_terms surfaces long-form content without truncation'
 });
 
 test('gemini_get_prediction_terms_status takes no arguments and is read-only', () => {
-  const tool = toolNamed(fakeClient({ hasAcceptedLatest: true }), 'gemini_get_prediction_terms_status');
+  const { client } = fakeClient({ hasAcceptedLatest: true });
+  const tool = toolNamed(client, 'gemini_get_prediction_terms_status');
   assert.strictEqual(tool.mutates, undefined);
   assert.strictEqual(tool.inputSchema.safeParse({}).success, true);
 });
 
 test('gemini_accept_prediction_terms is destructive and requires confirm: true', () => {
-  const tool = toolNamed(fakeClient(), 'gemini_accept_prediction_terms');
+  const { client } = fakeClient();
+  const tool = toolNamed(client, 'gemini_accept_prediction_terms');
   assert.strictEqual(tool.mutates, 'destructive');
   assert.strictEqual(tool.inputSchema.safeParse({}).success, false, 'missing confirm must be rejected');
   assert.strictEqual(tool.inputSchema.safeParse({ confirm: false }).success, false);
@@ -70,7 +98,8 @@ test('gemini_accept_prediction_terms is destructive and requires confirm: true',
 });
 
 test('gemini_accept_prediction_terms returns the API success flag', async () => {
-  const tool = toolNamed(fakeClient({ success: true }), 'gemini_accept_prediction_terms');
+  const { client } = fakeClient({ success: true });
+  const tool = toolNamed(client, 'gemini_accept_prediction_terms');
   const parsed = tool.inputSchema.parse({ confirm: true });
   const result = await tool.handler(parsed);
   assert.match(textOf(result), /"success": true/);
@@ -88,7 +117,8 @@ test('gemini_get_prediction_terms strips control bytes and bidi overrides even u
     version: 1,
   };
 
-  const tool = toolNamed(fakeClient(dirty), 'gemini_get_prediction_terms');
+  const { client } = fakeClient(dirty);
+  const tool = toolNamed(client, 'gemini_get_prediction_terms');
   const result = await tool.handler(tool.inputSchema.parse({}));
   const text = textOf(result);
 
@@ -113,15 +143,62 @@ test('gemini_get_prediction_terms strips control bytes and bidi overrides even u
 // ----------------------------------------------------------------------------
 
 test('gemini_get_prediction_terms instructs verbatim quoting and flags placeholder content', () => {
-  const tool = toolNamed(fakeClient(), 'gemini_get_prediction_terms');
+  const { client } = fakeClient();
+  const tool = toolNamed(client, 'gemini_get_prediction_terms');
   assert.match(tool.description, /verbatim/);
   assert.match(tool.description, /do not paraphrase/);
   assert.match(tool.description, /short reference/);
 });
 
 test('gemini_accept_prediction_terms treats confirm:true as insufficient for placeholder content', () => {
-  const tool = toolNamed(fakeClient(), 'gemini_accept_prediction_terms');
+  const { client } = fakeClient();
+  const tool = toolNamed(client, 'gemini_accept_prediction_terms');
   assert.match(tool.description, /confirm: true.*not sufficient consent/s);
   assert.match(tool.description, /short reference/);
   assert.match(tool.description, /not retrievable through/);
+});
+
+// ----------------------------------------------------------------------------
+// Endpoint dispatch — each tool must call the datasource function its name
+// promises, not just return *some* value. Without recording which client
+// method actually ran, a tool accidentally wired to the wrong datasource
+// call (e.g. gemini_get_prediction_terms_status calling getTerms instead of
+// getTermsStatus) would pass every test above unnoticed, since all three
+// fake methods hand back the same response regardless of which one fires.
+// ----------------------------------------------------------------------------
+
+test('gemini_get_prediction_terms dispatches to a public GET on /v1/prediction-markets/terms', async () => {
+  const { client, calls } = fakeClient({ content: 'x', termsType: 't', updatedAt: 'now', version: 1 });
+  const tool = toolNamed(client, 'gemini_get_prediction_terms');
+  await tool.handler(tool.inputSchema.parse({}));
+
+  assert.strictEqual(calls.length, 1);
+  assert.deepStrictEqual(calls[0], {
+    method: 'publicGet',
+    endpoint: '/v1/prediction-markets/terms',
+  });
+});
+
+test('gemini_get_prediction_terms_status dispatches to a signed GET on /v1/prediction-markets/terms/status', async () => {
+  const { client, calls } = fakeClient({ hasAcceptedLatest: true });
+  const tool = toolNamed(client, 'gemini_get_prediction_terms_status');
+  await tool.handler(tool.inputSchema.parse({}));
+
+  assert.strictEqual(calls.length, 1);
+  assert.deepStrictEqual(calls[0], {
+    method: 'authenticatedGet',
+    endpoint: '/v1/prediction-markets/terms/status',
+  });
+});
+
+test('gemini_accept_prediction_terms dispatches to a signed POST on /v1/prediction-markets/terms/accept', async () => {
+  const { client, calls } = fakeClient({ success: true });
+  const tool = toolNamed(client, 'gemini_accept_prediction_terms');
+  await tool.handler(tool.inputSchema.parse({ confirm: true }));
+
+  assert.strictEqual(calls.length, 1);
+  assert.deepStrictEqual(calls[0], {
+    method: 'authenticatedPost',
+    endpoint: '/v1/prediction-markets/terms/accept',
+  });
 });
