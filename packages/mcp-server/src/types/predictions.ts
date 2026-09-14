@@ -120,7 +120,7 @@ export interface BatchOrderResult {
   // String, not number: same 17-18 digit precision reasoning as
   // PredictionOrder.orderId above.
   orderId: string;
-  hashOrderId: string;
+  hashOrderId?: string;
   clientOrderId?: string;
   globalOrderId?: string;
   // The batch API's status enum has one more value than the single-order
