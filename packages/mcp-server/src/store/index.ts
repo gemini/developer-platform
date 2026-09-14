@@ -3,9 +3,10 @@ import type {
   CachedOrderBook,
   CachedTrade,
   CachedBookTicker,
+  CachedContractStatus,
 } from '../types/websocket.js';
 
-export type MarketUpdateKind = 'price' | 'orderBook' | 'trade' | 'bookTicker';
+export type MarketUpdateKind = 'price' | 'orderBook' | 'trade' | 'bookTicker' | 'contractStatus';
 
 export interface MarketUpdateEvent {
   symbol: string;
@@ -23,6 +24,7 @@ export class MarketDataStore {
   private orderBooks: Map<string, CachedOrderBook> = new Map();
   private trades: Map<string, CachedTrade[]> = new Map();
   private bookTickers: Map<string, CachedBookTicker> = new Map();
+  private contractStatuses: Map<string, CachedContractStatus> = new Map();
   private subscriptions: Set<string> = new Set();
   private lastUpdate: Map<string, number> = new Map();
   private listeners: Map<string, Set<MarketUpdateListener>> = new Map();
@@ -158,6 +160,36 @@ export class MarketDataStore {
   }
 
   /**
+   * Update contract status (prediction-market strike/settlement lifecycle event)
+   */
+  updateContractStatus(
+    symbol: string,
+    eventTicker: string,
+    contractTicker: string,
+    contractId: string,
+    previousStatus: string,
+    newStatus: string,
+    strikePrice: string | undefined,
+    eventTimeMs: number
+  ): void {
+    const upperSymbol = symbol.toUpperCase();
+    const timestamp = Date.now();
+    this.contractStatuses.set(upperSymbol, {
+      symbol: upperSymbol,
+      eventTicker,
+      contractTicker,
+      contractId,
+      previousStatus,
+      newStatus,
+      strikePrice,
+      eventTimeMs,
+      timestamp,
+    });
+    this.lastUpdate.set(upperSymbol, timestamp);
+    this.emit({ symbol: upperSymbol, kind: 'contractStatus', timestamp });
+  }
+
+  /**
    * Get current price for a symbol
    */
   getPrice(symbol: string): CachedPriceData | undefined {
@@ -187,6 +219,13 @@ export class MarketDataStore {
    */
   getBookTicker(symbol: string): CachedBookTicker | undefined {
     return this.bookTickers.get(symbol.toUpperCase());
+  }
+
+  /**
+   * Get the latest known contract status for a symbol
+   */
+  getContractStatus(symbol: string): CachedContractStatus | undefined {
+    return this.contractStatuses.get(symbol.toUpperCase());
   }
 
   /**
@@ -225,6 +264,7 @@ export class MarketDataStore {
     this.orderBooks.delete(upperSymbol);
     this.trades.delete(upperSymbol);
     this.bookTickers.delete(upperSymbol);
+    this.contractStatuses.delete(upperSymbol);
     this.lastUpdate.delete(upperSymbol);
   }
 
@@ -236,6 +276,7 @@ export class MarketDataStore {
     this.orderBooks.clear();
     this.trades.clear();
     this.bookTickers.clear();
+    this.contractStatuses.clear();
     this.lastUpdate.clear();
   }
 
@@ -294,6 +335,7 @@ export class MarketDataStore {
     tradeSymbolCount: number;
     totalTradeCount: number;
     bookTickerCount: number;
+    contractStatusCount: number;
     subscriptionCount: number;
   } {
     let totalTradeCount = 0;
@@ -308,6 +350,7 @@ export class MarketDataStore {
       tradeSymbolCount: this.trades.size,
       totalTradeCount,
       bookTickerCount: this.bookTickers.size,
+      contractStatusCount: this.contractStatuses.size,
       subscriptionCount: this.subscriptions.size,
     };
   }
