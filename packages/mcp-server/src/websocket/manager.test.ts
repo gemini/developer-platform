@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { WebSocketServer, type RawData } from 'ws';
 import { WebSocketManager, toChannelSymbol } from './manager.js';
+import { config } from '../config.js';
 import type { MarketDataStore } from '../store/index.js';
 import type { CachedContractStatus } from '../types/websocket.js';
 
@@ -192,4 +193,107 @@ test('a contractStatus wire message without a strike price leaves strikePrice un
     manager.disconnect();
     await new Promise<void>((resolve, reject) => wss.close((err) => (err ? reject(err) : resolve())));
   }
+});
+
+function withCredentials(apiKey: string, apiSecret: string, run: () => Promise<void>): Promise<void> {
+  const saved = { key: config.apiKey, secret: config.apiSecret };
+  config.apiKey = apiKey;
+  config.apiSecret = apiSecret;
+  return run().finally(() => {
+    config.apiKey = saved.key;
+    config.apiSecret = saved.secret;
+  });
+}
+
+test('subscribeAccountOrders() sends the literal global channel name, with no symbol prefix', async () => {
+  await withCredentials('test-key', 'test-secret', () =>
+    withEchoServer(async (manager, receivedParams) => {
+      await manager.subscribeAccountOrders();
+      assert.deepStrictEqual(receivedParams, ['orders@account']);
+    })
+  );
+});
+
+test('subscribeAccountOrders() throws clearly, without touching the wire, when credentials are not configured', async () => {
+  await withCredentials('', '', () =>
+    withEchoServer(async (manager, receivedParams) => {
+      await assert.rejects(() => manager.subscribeAccountOrders(), /GEMINI_API_KEY and GEMINI_API_SECRET/);
+      assert.deepStrictEqual(receivedParams, []);
+    })
+  );
+});
+
+test('subscribeAccountOrders() deduplicates truly concurrent callers', async () => {
+  await withCredentials('test-key', 'test-secret', () =>
+    withEchoServer(async (manager, receivedParams) => {
+      await Promise.all([manager.subscribeAccountOrders(), manager.subscribeAccountOrders()]);
+      assert.deepStrictEqual(receivedParams, ['orders@account']);
+    })
+  );
+});
+
+test('a fill-shaped orderUpdate wire message lands in the order store, not the trade store', async () => {
+  const BIG_ORDER_ID = '145828833218573125'; // exceeds Number.MAX_SAFE_INTEGER
+  const BIG_TRADE_ID = '298374652910473625';
+
+  await withCredentials('test-key', 'test-secret', async () => {
+    const wss = new WebSocketServer({ port: 0 });
+    await new Promise<void>((resolve) => wss.once('listening', resolve));
+
+    wss.on('connection', (socket) => {
+      socket.on('message', (data: RawData) => {
+        const msg = JSON.parse(data.toString()) as { id: string; params: string[] };
+        socket.send(JSON.stringify({ id: msg.id, result: msg.params }));
+        // A fill event: e:'orderUpdate' but ALSO carries t/q/m — the exact
+        // fields isTradeMessage duck-types on. This is the end-to-end proof
+        // that the ordering fix in handleMessage actually holds, not just
+        // the isOrderUpdateMessage guard in isolation.
+        socket.send(
+          `{"e":"orderUpdate","E":1700000000000,"T":1700000000000,` +
+            `"s":"GEMI-PRES2028-VANCE","i":${BIG_ORDER_ID},"c":"my-client-id",` +
+            `"S":"BUY","o":"LIMIT","X":"FILLED","O":"YES","p":"0.27","q":"100",` +
+            `"z":"0","Z":"100","L":"0.27","t":${BIG_TRADE_ID},"n":"0.01","m":true}`
+        );
+      });
+    });
+
+    const { port } = wss.address() as { port: number };
+    const manager = new WebSocketManager(`ws://localhost:${port}`);
+
+    try {
+      await manager.initialize();
+      await manager.subscribeAccountOrders();
+
+      const store = manager.getStore();
+      const order =
+        store.getOrder(BIG_ORDER_ID) ??
+        (await new Promise((resolve) => {
+          const timer = setTimeout(() => {
+            stop();
+            resolve(undefined);
+          }, 2000);
+          const stop = store.onOrderUpdate(BIG_ORDER_ID, (update) => {
+            clearTimeout(timer);
+            stop();
+            resolve(update);
+          });
+        }));
+
+      assert.ok(order, 'order update must have been captured');
+      assert.strictEqual(order?.orderId, BIG_ORDER_ID);
+      assert.strictEqual(order?.tradeId, BIG_TRADE_ID);
+      assert.strictEqual(order?.status, 'FILLED');
+      assert.strictEqual(order?.outcome, 'YES');
+      assert.strictEqual(order?.symbol, 'GEMI-PRES2028-VANCE');
+      assert.strictEqual(order?.isMaker, true);
+
+      // The actual regression check: this must NOT have also landed in the
+      // trade/price cache via isTradeMessage's duck-typed match.
+      assert.strictEqual(store.getTrades('GEMI-PRES2028-VANCE').length, 0);
+      assert.strictEqual(store.getPrice('GEMI-PRES2028-VANCE'), undefined);
+    } finally {
+      manager.disconnect();
+      await new Promise<void>((resolve, reject) => wss.close((err) => (err ? reject(err) : resolve())));
+    }
+  });
 });

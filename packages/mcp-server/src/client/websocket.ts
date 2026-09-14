@@ -1,4 +1,6 @@
 import WebSocket from 'ws';
+import { config } from '../config.js';
+import { buildWsAuthHeaders } from '../auth/signer.js';
 import type {
   WSSubscribeRequest,
   WSMessage,
@@ -7,16 +9,19 @@ import type {
   WSBookTickerMessage,
   WSTickerMessage,
   WSContractStatusMessage,
+  WSOrderUpdateMessage,
   WSSubscribeResponse,
 } from '../types/websocket.js';
 
-// Contract IDs can be 17-18 digits, exceeding Number.MAX_SAFE_INTEGER — the
-// same class of precision loss already guarded against for REST order IDs
-// (see client/http.ts). Re-extracting just this field from the raw payload
-// (rather than switching the whole-message parser to a big-int-safe one)
-// keeps every other channel's parsing — including nanosecond `E` timestamps
-// on trade/depth/bookTicker/ticker — completely unchanged.
-const CONTRACT_ID_PATTERN = /"i"\s*:\s*(\d+)/;
+// Contract/order/trade IDs can be 17-18 digits, exceeding
+// Number.MAX_SAFE_INTEGER — the same class of precision loss already
+// guarded against for REST order IDs (see client/http.ts). Re-extracting
+// just these fields from the raw payload (rather than switching the
+// whole-message parser to a big-int-safe one) keeps every other channel's
+// parsing — including nanosecond `E` timestamps on trade/depth/bookTicker/
+// ticker — completely unchanged.
+const ID_FIELD_PATTERN = /"i"\s*:\s*(\d+)/;
+const TRADE_ID_FIELD_PATTERN = /"t"\s*:\s*(\d+)/;
 
 export type WSEventHandler = (message: WSMessage) => void;
 
@@ -51,7 +56,14 @@ export class GeminiWebSocketClient {
       }
 
       this.isManualClose = false;
-      this.ws = new WebSocket(this.url);
+      // Gemini requires auth at the connection-upgrade handshake — there's
+      // no post-connect auth step. Headers are recomputed on every connect
+      // (including reconnects) since the nonce is time-based. Harmless to
+      // send even when only subscribing to public channels — one connection
+      // serves both, matching samples/typescript/src/pmOrder.ts.
+      const authHeaders =
+        config.apiKey && config.apiSecret ? buildWsAuthHeaders(config.apiKey, config.apiSecret) : undefined;
+      this.ws = authHeaders ? new WebSocket(this.url, { headers: authHeaders }) : new WebSocket(this.url);
 
       this.ws.on('open', () => {
         console.error('[WS] Connected to', this.url);
@@ -74,9 +86,18 @@ export class GeminiWebSocketClient {
           const raw = data.toString();
           const message = JSON.parse(raw) as WSMessage;
           if (isContractStatusMessage(message)) {
-            const idMatch = raw.match(CONTRACT_ID_PATTERN);
+            const idMatch = raw.match(ID_FIELD_PATTERN);
             if (idMatch) {
               message.i = idMatch[1];
+            }
+          } else if (isOrderUpdateMessage(message)) {
+            const idMatch = raw.match(ID_FIELD_PATTERN);
+            if (idMatch) {
+              message.i = idMatch[1];
+            }
+            const tradeIdMatch = raw.match(TRADE_ID_FIELD_PATTERN);
+            if (tradeIdMatch) {
+              message.t = tradeIdMatch[1];
             }
           }
           this.handleMessage(message);
@@ -358,4 +379,16 @@ export function isSubscribeResponse(msg: WSMessage): msg is WSSubscribeResponse 
  */
 export function isContractStatusMessage(msg: WSMessage): msg is WSContractStatusMessage {
   return 'k' in msg && 'i' in msg;
+}
+
+/**
+ * Helper to check if message is an authenticated order lifecycle event.
+ * The spec documents only "orderUpdate", but sdk-go's dispatcher explicitly
+ * also treats "order" as valid (see the note on WSOrderUpdateMessage) — this
+ * check is placed ahead of isTradeMessage in WebSocketManager.handleMessage
+ * specifically because a fill event's t/q/m fields would otherwise duck-type
+ * match as a trade.
+ */
+export function isOrderUpdateMessage(msg: WSMessage): msg is WSOrderUpdateMessage {
+  return 'e' in msg && ((msg as WSOrderUpdateMessage).e === 'order' || (msg as WSOrderUpdateMessage).e === 'orderUpdate');
 }
