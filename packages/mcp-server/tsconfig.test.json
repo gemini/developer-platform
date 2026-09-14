@@ -1,0 +1,9 @@
+{
+  "// Typecheck-only project": "The build tsconfig excludes *.test.ts so tests never reached tsc. This project includes them and emits nothing, wired up as `npm run typecheck`.",
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "include": ["src/**/*"],
+  "exclude": []
+}

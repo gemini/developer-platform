@@ -55,7 +55,7 @@ export function createMarginTools(client: GeminiHttpClient): ToolDefinition[] {
         confirm: confirmField,
       }),
       handler: wrapHandler((body: Record<string, unknown>) => margin.clearingNewOrder(client, body)),
-      destructive: true,
+      mutates: 'destructive',
     },
     {
       name: 'gemini_clearing_broker_new_order',
@@ -69,7 +69,7 @@ export function createMarginTools(client: GeminiHttpClient): ToolDefinition[] {
         confirm: confirmField,
       }),
       handler: wrapHandler((body: Record<string, unknown>) => margin.clearingBrokerNewOrder(client, body)),
-      destructive: true,
+      mutates: 'destructive',
     },
     {
       name: 'gemini_clearing_order_status',

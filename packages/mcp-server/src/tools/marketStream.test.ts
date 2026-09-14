@@ -1,10 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { MarketDataStore } from '../store/index.js';
 import { createMarketStreamTools, type BookTickerSource } from './marketStream.js';
 
-function textOf(result: { content: { type: string; text: string }[] }): string {
-  return result.content[0]!.text;
+function textOf(result: CallToolResult): string {
+  const block = result.content[0];
+  if (!block || block.type !== 'text') {
+    throw new Error(`expected a text content block, got: ${block?.type ?? 'none'}`);
+  }
+  return block.text;
 }
 
 function fakeSource(store: MarketDataStore, opts: { connected?: boolean } = {}): BookTickerSource {

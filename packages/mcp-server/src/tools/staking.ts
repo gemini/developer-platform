@@ -36,7 +36,7 @@ export function createStakingTools(client: GeminiHttpClient): ToolDefinition[] {
       handler: wrapHandler(({ currency, amount, providerId }: { currency: string; amount: string; providerId: string }) =>
         staking.stake(client, currency, amount, providerId)
       ),
-      destructive: true,
+      mutates: 'destructive',
     },
     {
       name: 'gemini_unstake',
@@ -50,7 +50,7 @@ export function createStakingTools(client: GeminiHttpClient): ToolDefinition[] {
       handler: wrapHandler(({ currency, amount, providerId }: { currency: string; amount: string; providerId: string }) =>
         staking.unstake(client, currency, amount, providerId)
       ),
-      destructive: true,
+      mutates: 'destructive',
     },
   ];
 }

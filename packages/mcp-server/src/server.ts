@@ -18,6 +18,7 @@ import {
   createAlertTools,
   createMarketStreamTools,
 } from './tools/index.js';
+import { annotationsFor, requiresConfirmation } from './tools/index.js';
 import type { ToolDefinition } from './tools/index.js';
 
 export function createServer(): Server {
@@ -79,11 +80,7 @@ export function createServer(): Server {
       name: t.name,
       description: t.description,
       inputSchema: zodToJsonSchema(t.inputSchema),
-      annotations: {
-        title: t.name,
-        readOnlyHint: !t.destructive,
-        destructiveHint: !!t.destructive,
-      },
+      annotations: annotationsFor(t),
     })),
   }));
 
@@ -98,7 +95,7 @@ export function createServer(): Server {
 
     const rawArgs = (request.params.arguments ?? {}) as Record<string, unknown>;
 
-    if (tool.destructive && rawArgs.confirm !== true) {
+    if (requiresConfirmation(tool) && rawArgs.confirm !== true) {
       return {
         content: [
           {

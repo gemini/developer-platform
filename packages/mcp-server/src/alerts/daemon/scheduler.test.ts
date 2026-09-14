@@ -103,11 +103,11 @@ function build(opts: {
   };
 }
 
-const ruleDefaults: Partial<AlertRule> = {
+const ruleDefaults = {
   enabled: true,
   oneShot: false,
   cooldownMs: 60_000,
-};
+} satisfies Partial<AlertRule>;
 
 function ruleSpec(
   category: AlertCategory,
