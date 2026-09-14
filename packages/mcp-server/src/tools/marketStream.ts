@@ -82,7 +82,7 @@ async function getBookTicker(manager: MarketStreamSource, symbol: string, waitMs
     bestBidQty: ticker.bestBidQty,
     bestAsk: ticker.bestAsk,
     bestAskQty: ticker.bestAskQty,
-    dataAgeMs: store.getDataAge(symbol),
+    dataAgeMs: Date.now() - ticker.timestamp,
   };
 }
 
@@ -120,7 +120,7 @@ async function getContractStatus(manager: MarketStreamSource, symbol: string, wa
     newStatus: status.newStatus,
     strikePrice: status.strikePrice,
     eventTimeMs: status.eventTimeMs,
-    dataAgeMs: store.getDataAge(symbol),
+    dataAgeMs: Date.now() - status.timestamp,
   };
 }
 

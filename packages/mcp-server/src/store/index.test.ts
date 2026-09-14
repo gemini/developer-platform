@@ -48,6 +48,35 @@ test('updateContractStatus stores the latest event, keyed by symbol', () => {
   assert.strictEqual(status?.eventTimeMs, 1_700_000_000_000);
 });
 
+test('updateContractStatus replaces the cached event for a symbol on a second transition', () => {
+  const store = new MarketDataStore();
+  store.updateContractStatus(
+    'GEMI-PRES2028-VANCE',
+    'PRES2028',
+    'GEMI-PRES2028-VANCE',
+    '1',
+    'approved',
+    'active',
+    undefined,
+    1_700_000_000_000
+  );
+  store.updateContractStatus(
+    'GEMI-PRES2028-VANCE',
+    'PRES2028',
+    'GEMI-PRES2028-VANCE',
+    '1',
+    'active',
+    'settled',
+    '0.50',
+    1_700_000_300_000
+  );
+
+  const status = store.getContractStatus('GEMI-PRES2028-VANCE');
+  assert.strictEqual(status?.previousStatus, 'active');
+  assert.strictEqual(status?.newStatus, 'settled');
+  assert.strictEqual(status?.eventTimeMs, 1_700_000_300_000);
+});
+
 test('getContractStatus returns undefined for a symbol with no events yet', () => {
   const store = new MarketDataStore();
   assert.strictEqual(store.getContractStatus('GEMI-UNKNOWN'), undefined);

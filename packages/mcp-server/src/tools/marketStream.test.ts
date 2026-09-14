@@ -61,6 +61,12 @@ test('gemini_get_book_ticker reports no data yet, then returns it once a tick ar
   assert.match(textOf(empty), /subscribed_no_data_yet/);
 
   const pending = tool!.handler({ symbol: 'solusd', waitMs: 1000 });
+  // Let the handler's own awaits (ensureConnected, subscribe) drain before
+  // firing the update — otherwise this update lands before waitForUpdate
+  // registers its onUpdate listener, and the assertion below would pass
+  // even if the "wait for a later event" path were completely broken,
+  // because it'd just hit the already-cached fast path instead.
+  await new Promise((resolve) => setTimeout(resolve, 10));
   store.updateBookTicker('SOLUSD', '20', '5', '21', '5');
   const result = await pending;
 
@@ -110,6 +116,10 @@ test('gemini_get_contract_status reports no data yet, then returns it once an ev
   assert.match(textOf(empty), /subscribed_no_data_yet/);
 
   const pending = tool!.handler({ symbol: 'GEMI-PRES2028-VANCE', waitMs: 1000 });
+  // See the analogous comment on the book-ticker "wait" test above — without
+  // this, the update lands before waitForUpdate's onUpdate listener is
+  // registered, and this test would pass even if the wait path were broken.
+  await new Promise((resolve) => setTimeout(resolve, 10));
   store.updateContractStatus(
     'GEMI-PRES2028-VANCE',
     'PRES2028',

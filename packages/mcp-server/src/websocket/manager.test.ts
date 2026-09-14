@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { WebSocketServer, type RawData } from 'ws';
 import { WebSocketManager, toChannelSymbol } from './manager.js';
+import type { CachedContractStatus } from '../types/websocket.js';
 
 test('toChannelSymbol preserves case and hyphens for prediction-market symbols', () => {
   assert.strictEqual(toChannelSymbol('GEMI-PRES2028-VANCE'), 'GEMI-PRES2028-VANCE');
@@ -88,6 +89,7 @@ test('a real contractStatus wire message lands in the store with the contract ID
 
   const { port } = wss.address() as { port: number };
   const manager = new WebSocketManager(`ws://localhost:${port}`);
+  const beforeIngestion = Date.now();
 
   try {
     await manager.initialize();
@@ -115,7 +117,10 @@ test('a real contractStatus wire message lands in the store with the contract ID
         });
       }));
 
-    assert.deepStrictEqual(status, {
+    const afterIngestion = Date.now();
+    const { timestamp, ...rest } = status as CachedContractStatus;
+
+    assert.deepStrictEqual(rest, {
       symbol: 'GEMI-PRES2028-VANCE',
       eventTicker: 'PRES2028',
       contractTicker: 'GEMI-PRES2028-VANCE',
@@ -124,8 +129,11 @@ test('a real contractStatus wire message lands in the store with the contract ID
       newStatus: 'settled',
       strikePrice: '0.50',
       eventTimeMs: 1_700_000_000_000,
-      timestamp: (status as { timestamp: number }).timestamp,
     });
+    // `timestamp` is our own receipt-time bookkeeping (set via Date.now() at
+    // ingestion), distinct from the exchange's `eventTimeMs` — assert it
+    // against a real bound instead of comparing the object to itself.
+    assert.ok(timestamp >= beforeIngestion && timestamp <= afterIngestion);
   } finally {
     manager.disconnect();
     await new Promise<void>((resolve, reject) => wss.close((err) => (err ? reject(err) : resolve())));
