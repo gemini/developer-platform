@@ -115,3 +115,52 @@ export interface CancelOrderResponse {
   result: string;
   message: string;
 }
+
+export interface BatchOrderResult {
+  // String, not number: same 17-18 digit precision reasoning as
+  // PredictionOrder.orderId above.
+  orderId: string;
+  hashOrderId?: string;
+  clientOrderId?: string;
+  globalOrderId?: string;
+  // The batch API's status enum has one more value than the single-order
+  // OrderStatus: 'closed', returned when a successful IOC/FOK order didn't
+  // fill (accepted and immediately closed, distinct from a resting 'open'
+  // order or an explicitly 'cancelled' one). Confirmed against the spec's
+  // dedicated BatchOrderResponseStatus enum, not present on OrderStatus.
+  status: OrderStatus | 'closed';
+  symbol: string;
+  side: 'buy' | 'sell';
+  outcome: 'yes' | 'no';
+  orderType: string;
+  quantity: string;
+  filledQuantity: string;
+  remainingQuantity: string;
+  price: string;
+  avgExecutionPrice?: string;
+  fundsOnHold?: string;
+  createdAt: string;
+  updatedAt?: string;
+  cancelledAt?: string;
+  contractMetadata?: ContractMetadata;
+}
+
+// Discriminated by the presence of `order` vs `error`/`message`. Results are
+// positional (same order as the request) and may mix successes and
+// rejections in one response — never assume a 200 means every entry succeeded.
+export type PlaceOrderBatchResult =
+  | { order: BatchOrderResult }
+  | { error: string; message: string };
+
+export interface PlaceOrderBatchResponse {
+  results: PlaceOrderBatchResult[];
+}
+
+// Same positional-mixed-results caveat as PlaceOrderBatchResponse.
+export type CancelOrderBatchResult =
+  | { orderId: string; result: string }
+  | { orderId: string; error: string; message: string };
+
+export interface CancelOrderBatchResponse {
+  results: CancelOrderBatchResult[];
+}
