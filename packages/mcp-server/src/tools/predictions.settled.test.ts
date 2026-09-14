@@ -15,6 +15,24 @@ function fakeClient(response: unknown = {}) {
   } as unknown as GeminiHttpClient;
 }
 
+// Unlike fakeClient above, this records the endpoint/params of each call —
+// needed to prove the handler actually reaches the settled endpoint with the
+// parsed filters, not just that it returns whatever authenticatedPost hands
+// back (a fakeClient stub returns the fixture regardless of which endpoint,
+// or even which datasource function, was actually invoked).
+function recordingClient(response: unknown = {}) {
+  const calls: { endpoint: string; params?: unknown }[] = [];
+  const client = {
+    publicGet: async () => response,
+    authenticatedGet: async () => response,
+    authenticatedPost: async (endpoint: string, _body?: unknown, params?: unknown) => {
+      calls.push({ endpoint, params });
+      return response;
+    },
+  } as unknown as GeminiHttpClient;
+  return { client, calls };
+}
+
 function toolNamed(client: GeminiHttpClient, name: string) {
   const tool = createPredictionTools(client).find((t) => t.name === name);
   if (!tool) throw new Error(`tool not found: ${name}`);
@@ -136,6 +154,29 @@ test('gemini_get_prediction_settled_positions passes through cashOuts and totalC
   assert.strictEqual(parsed['totalCashOutProceeds'], '25.00');
   assert.strictEqual(parsed['totalCashOutCostBasis'], '20.00');
   assert.strictEqual(parsed['totalCashOutNetProfit'], '5.00');
+});
+
+// ----------------------------------------------------------------------------
+// Wiring — the handler must actually reach the settled endpoint with the
+// parsed filters, not just relay whatever authenticatedPost returns
+// ----------------------------------------------------------------------------
+
+test('gemini_get_prediction_settled_positions calls the settled endpoint with the parsed filters', async () => {
+  const { client, calls } = recordingClient({ positions: [] });
+  const tool = toolNamed(client, 'gemini_get_prediction_settled_positions');
+
+  await tool.handler(
+    tool.inputSchema.parse({ eventTicker: 'FEDJAN26', limit: 25, offset: 0, sort: '-payout' })
+  );
+
+  assert.strictEqual(calls.length, 1);
+  assert.strictEqual(calls[0]!.endpoint, '/v1/prediction-markets/positions/settled');
+  assert.deepStrictEqual(calls[0]!.params, {
+    eventTicker: 'FEDJAN26',
+    limit: '25',
+    offset: '0',
+    sort: '-payout',
+  });
 });
 
 // ----------------------------------------------------------------------------

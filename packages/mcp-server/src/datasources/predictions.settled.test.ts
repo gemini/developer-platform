@@ -78,6 +78,15 @@ test('getPositions forwards eventTicker/limit/offset/sort as stringified query p
   });
 });
 
+test('getPositions with offset: 0 forwards it, not treated as absent', async () => {
+  const { client, calls } = fakeClient({ positions: [] });
+
+  await predictions.getPositions(client, { offset: 0 });
+
+  const call = calls[0]!;
+  assert.deepStrictEqual(call.params, { offset: '0' });
+});
+
 test('getPositions returns the response unchanged', async () => {
   const response = { positions: [{ symbol: 'GEMI-A' }] };
   const { client } = fakeClient(response);
@@ -141,6 +150,15 @@ test('getSettledPositions sends withCashOuts as the literal string "false", not 
 
   const call = calls[0]!;
   assert.deepStrictEqual(call.params, { withCashOuts: 'false' });
+});
+
+test('getSettledPositions with offset: 0 forwards it, not treated as absent', async () => {
+  const { client, calls } = fakeClient({ positions: [] });
+
+  await predictions.getSettledPositions(client, { offset: 0 });
+
+  const call = calls[0]!;
+  assert.deepStrictEqual(call.params, { offset: '0' });
 });
 
 test('getSettledPositions returns the response unchanged', async () => {
