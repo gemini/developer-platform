@@ -123,7 +123,12 @@ export interface BatchOrderResult {
   hashOrderId: string;
   clientOrderId?: string;
   globalOrderId?: string;
-  status: OrderStatus;
+  // The batch API's status enum has one more value than the single-order
+  // OrderStatus: 'closed', returned when a successful IOC/FOK order didn't
+  // fill (accepted and immediately closed, distinct from a resting 'open'
+  // order or an explicitly 'cancelled' one). Confirmed against the spec's
+  // dedicated BatchOrderResponseStatus enum, not present on OrderStatus.
+  status: OrderStatus | 'closed';
   symbol: string;
   side: 'buy' | 'sell';
   outcome: 'yes' | 'no';

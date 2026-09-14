@@ -90,9 +90,16 @@ test('gemini_cancel_prediction_order_batch accepts a 1-id and a 20-id batch', ()
 
 test('gemini_cancel_prediction_order_batch rejects a 0-id and a 21-id batch', () => {
   const tool = toolNamed(fakeClient(), 'gemini_cancel_prediction_order_batch');
-  assert.strictEqual(tool.inputSchema.safeParse({ orderIds: [] }).success, false);
+  // confirm: true is included on both cases so the bounds check itself is
+  // what's under test — without it, both would report success: false
+  // purely because confirm is missing, and the test would still pass even
+  // if .min(1).max(20) were removed entirely.
+  assert.strictEqual(tool.inputSchema.safeParse({ orderIds: [], confirm: true }).success, false);
   assert.strictEqual(
-    tool.inputSchema.safeParse({ orderIds: Array.from({ length: 21 }, (_, i) => String(i)) }).success,
+    tool.inputSchema.safeParse({
+      orderIds: Array.from({ length: 21 }, (_, i) => String(i)),
+      confirm: true,
+    }).success,
     false
   );
 });
