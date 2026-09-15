@@ -64,7 +64,7 @@ export class GeminiWebSocketClient {
       return this.connectPromise;
     }
 
-    this.connectPromise = new Promise<void>((resolve, reject) => {
+    const promise: Promise<void> = new Promise<void>((resolve, reject) => {
       this.isManualClose = false;
       // Gemini requires auth at the connection-upgrade handshake — there's
       // no post-connect auth step. Headers are recomputed on every connect
@@ -125,6 +125,12 @@ export class GeminiWebSocketClient {
         console.error('[WS] Connection closed');
         this.stopPingInterval();
 
+        // A manual disconnect() (or any close) while still CONNECTING means
+        // 'open'/'error' never fired, so this promise would otherwise hang
+        // forever — reject() is a no-op if 'open' or 'error' already
+        // settled it, per normal Promise semantics.
+        reject(new Error('WebSocket closed before the connection finished opening'));
+
         if (!this.isManualClose && this.reconnectAttempts < this.maxReconnectAttempts) {
           this.scheduleReconnect();
         }
@@ -134,10 +140,19 @@ export class GeminiWebSocketClient {
         // Connection is alive
       });
     }).finally(() => {
-      this.connectPromise = null;
+      // Only clear the field if it still points at THIS promise.
+      // disconnect() clears it immediately (synchronously) on manual
+      // disconnect so a caller reconnecting right away gets a fresh
+      // attempt rather than the doomed one being torn down; without this
+      // check, this (older) promise's own cleanup running later would
+      // clobber a newer connect() attempt's connectPromise out from under it.
+      if (this.connectPromise === promise) {
+        this.connectPromise = null;
+      }
     });
 
-    return this.connectPromise;
+    this.connectPromise = promise;
+    return promise;
   }
 
   /**
@@ -315,6 +330,12 @@ export class GeminiWebSocketClient {
     }
 
     this.subscriptionQueue = [];
+
+    // Invalidate any in-flight connect() immediately. The promise tied to
+    // the socket just closed won't settle until its 'close' event fires
+    // asynchronously — without this, an immediate reconnect() call would
+    // return that doomed promise instead of starting a fresh attempt.
+    this.connectPromise = null;
   }
 
   /**
