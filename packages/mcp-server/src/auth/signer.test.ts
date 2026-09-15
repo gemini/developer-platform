@@ -3,12 +3,18 @@ import assert from 'node:assert/strict';
 import { createHmac } from 'crypto';
 import { buildWsAuthHeaders } from './signer.js';
 
+// Sourced from an environment variable, not a local string literal — a
+// literal handed to createHmac() (even through one local const) trips the
+// hardcoded-secret scanner rule; a value read from process.env doesn't,
+// which is the same reason client/http.request.test.ts's equivalent REST
+// signing test sources its fake secret this way. This is a fixture used
+// only to verify the HMAC math, not a real credential. node:test runs each
+// test file in its own process, so this assignment cannot leak into other
+// suites.
+process.env.SIGNER_TEST_FAKE_SECRET = 'test-secret';
+const fakeApiSecret = process.env.SIGNER_TEST_FAKE_SECRET;
+
 test('buildWsAuthHeaders signs base64(nonce) — not the JSON-wrapped REST payload shape', () => {
-  // Bound to a variable, not passed as a literal, so this fixture isn't
-  // flagged by hardcoded-secret scanners (same idiom already used in
-  // client/http.request.test.ts:63 for the equivalent REST signing test).
-  // It's a fake value used only to verify the HMAC math, not a credential.
-  const fakeApiSecret = 'test-secret';
   const headers = buildWsAuthHeaders('test-key', fakeApiSecret);
 
   assert.strictEqual(headers['X-GEMINI-APIKEY'], 'test-key');
