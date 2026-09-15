@@ -1,3 +1,5 @@
+import type { Int64 } from './common.js';
+
 export type EventStatus = 'approved' | 'active' | 'closed' | 'under_review' | 'settled' | 'invalid';
 
 export type OrderStatus = 'open' | 'filled' | 'cancelled';
@@ -83,6 +85,65 @@ export interface PredictionPosition {
   avgPrice: string;
   outcome: 'yes' | 'no';
   contractMetadata?: ContractMetadata;
+}
+
+// A historically settled position in a resolved prediction market contract.
+// Every field is optional per spec — the API omits fields it cannot compute
+// rather than sending null, so render "unavailable" states rather than
+// assuming any field is always present.
+export interface SettledPosition {
+  accountId?: Int64;
+  contractMetadata?: ContractMetadata;
+  costBasis?: string;
+  instrumentId?: Int64;
+  instrumentSymbol?: string;
+  netProfit?: string;
+  outcome?: 'yes' | 'no';
+  payout?: string;
+  // Signed position held at settlement: positive = yes, negative = no.
+  // Declared `*string` in the generated spec, but confirmed against a real
+  // production response to arrive as a JSON number (e.g. `4`, `-2.96`), not
+  // a quoted string — typed as a union to match observed behavior.
+  position?: string | number;
+  positionQuantity?: string;
+  realizedPnl?: string;
+  resolutionSide?: 'yes' | 'no';
+  settledAt?: string;
+}
+
+// A cash-out (early sell before contract resolution) surfaced only when
+// withCashOuts=true is passed on the settled-positions request. Distinct
+// from SettledPosition — a cash-out has no `payout` or `resolutionSide`
+// since the contract hadn't resolved when the position was sold.
+export interface CashedOutPosition {
+  accountId: Int64;
+  contractMetadata?: ContractMetadata;
+  costBasis: string;
+  filledQuantity: string;
+  instrumentId: Int64;
+  instrumentSymbol: string;
+  netProfit: string;
+  proceeds: string;
+  side: 'sell';
+  timestamp: string;
+}
+
+export interface SettledPositionsResponse {
+  positions?: SettledPosition[];
+  // Present only when withCashOuts=true was passed on the request.
+  cashOuts?: CashedOutPosition[];
+  total?: number;
+  // These four roll-up totals are frequently ABSENT on the current backend
+  // (computing them requires a separate aggregate query the backend doesn't
+  // always run) — treat their absence as "not computed", not zero. If a
+  // caller needs a total, sum `positions[]`/`cashOuts[]` directly rather
+  // than trusting these to be present.
+  totalCostBasis?: string;
+  totalNetProfit?: string;
+  totalPayout?: string;
+  totalCashOutCostBasis?: string;
+  totalCashOutNetProfit?: string;
+  totalCashOutProceeds?: string;
 }
 
 export interface ContractVolume {
