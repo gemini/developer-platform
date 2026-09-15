@@ -97,6 +97,52 @@ export interface WSContractStatusMessage {
 }
 
 /**
+ * Authenticated order lifecycle event (fills, cancels, rejects) from the
+ * `orders@account` / `orders@session` private stream. Like contractStatus,
+ * this has no per-symbol wire subscription — one account can have orders
+ * across many symbols, and Gemini pushes them all on one shared channel.
+ * The discriminator is documented as "orderUpdate" only, but sdk-go's own
+ * dispatcher explicitly also accepts "order" ("The private order stream can
+ * include a top-level trade ID (t)... otherwise an order update can be
+ * silently delivered as a trade") — trust the SDK's real-world observation
+ * over the spec here; isOrderUpdateMessage accepts both.
+ */
+export interface WSOrderUpdateMessage {
+  e: 'order' | 'orderUpdate';
+  // Nanoseconds, same convention as trade/bookTicker/depth/ticker — NOT
+  // milliseconds. Confirmed three ways: the live AsyncAPI spec, sdk-typescript's
+  // runtime validator, and directly against real production data during
+  // manual testing (a raw E of ~1.79e18 divided by 1_000_000 in
+  // WebSocketManager.handleMessage landed on the correct, present-day
+  // eventTimeMs). A prior review flagged this as wrong, citing an sdk-go unit
+  // test fixture (`E:1710000000000`) as evidence of milliseconds — that
+  // fixture is unreliable: the same Go test file reuses that exact value for
+  // trade/balanceUpdate/positionReport frames too, including trade's `T`,
+  // which is independently and unambiguously nanoseconds. See the wire-level
+  // test in websocket/manager.test.ts using a realistic 19-digit nanosecond
+  // fixture with an explicit eventTimeMs assertion.
+  E: number;
+  s: string;       // symbol
+  i: string;       // order ID (large integer; kept as string, same treatment as contractStatus's i)
+  c?: string;      // client order ID
+  S?: 'BUY' | 'SELL';
+  o?: 'LIMIT' | 'MARKET' | 'STOP_LIMIT' | 'STOP_MARKET';
+  X: string;       // status: NEW/OPEN/FILLED/PARTIALLY_FILLED/CANCELED/REJECTED/MODIFIED
+  O?: 'YES' | 'NO'; // outcome — prediction-market contracts only
+  p?: string;       // price
+  P?: string;       // stop price
+  q?: string;       // quantity
+  z?: string;       // remaining quantity
+  Z?: string;       // executed quantity
+  L?: string;       // last execution price
+  t?: string;       // trade ID (fills only; large integer kept as string, same as i)
+  n?: string;       // fee amount (fills only)
+  m?: boolean;      // maker flag (fills only)
+  r?: string;       // rejection/cancellation reason
+  T: number;        // trade/event time (nanoseconds)
+}
+
+/**
  * Union of all possible WebSocket messages
  */
 export type WSMessage =
@@ -105,6 +151,7 @@ export type WSMessage =
   | WSBookTickerMessage
   | WSTickerMessage
   | WSContractStatusMessage
+  | WSOrderUpdateMessage
   | WSSubscribeResponse;
 
 /**
@@ -162,6 +209,33 @@ export interface CachedContractStatus {
   previousStatus: string;
   newStatus: string;
   strikePrice?: string;
+  eventTimeMs: number;
+  timestamp: number;
+}
+
+/**
+ * Stored order lifecycle data (latest known state per order ID). Not
+ * symbol-scoped like the other Cached* types — one account has orders
+ * across many symbols, so the natural key is the order ID.
+ */
+export interface CachedOrderUpdate {
+  orderId: string;
+  clientOrderId?: string;
+  symbol: string;
+  side?: 'BUY' | 'SELL';
+  orderType?: string;
+  status: string;
+  outcome?: 'YES' | 'NO';
+  price?: string;
+  stopPrice?: string;
+  quantity?: string;
+  remainingQty?: string;
+  executedQty?: string;
+  lastExecutedPrice?: string;
+  tradeId?: string;
+  feeAmount?: string;
+  isMaker?: boolean;
+  rejectReason?: string;
   eventTimeMs: number;
   timestamp: number;
 }

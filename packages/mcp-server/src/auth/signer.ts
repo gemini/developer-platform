@@ -22,3 +22,26 @@ export function buildSignedHeaders(
     'Cache-Control': 'no-cache',
   };
 }
+
+/**
+ * Build auth headers for the WebSocket connection-upgrade request. Gemini
+ * requires credentials at connect time — there's no post-connect auth
+ * handshake — and the payload here is just the nonce itself (base64), not
+ * the JSON-wrapped {request, nonce, ...body} shape REST uses. Confirmed
+ * against sdk-typescript's HmacAuth.forWebSocket(): epoch-seconds nonce,
+ * HMAC-SHA384 over base64(nonce).
+ */
+export function buildWsAuthHeaders(apiKey: string, apiSecret: string): Record<string, string> {
+  const nonce = Math.floor(Date.now() / 1000).toString();
+  const encodedPayload = Buffer.from(nonce).toString('base64');
+  const signature = createHmac('sha384', apiSecret)
+    .update(encodedPayload)
+    .digest('hex');
+
+  return {
+    'X-GEMINI-APIKEY': apiKey,
+    'X-GEMINI-NONCE': nonce,
+    'X-GEMINI-PAYLOAD': encodedPayload,
+    'X-GEMINI-SIGNATURE': signature,
+  };
+}

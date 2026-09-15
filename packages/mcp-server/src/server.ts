@@ -17,6 +17,7 @@ import {
   createPredictionTools,
   createAlertTools,
   createMarketStreamTools,
+  createOrderStreamTools,
 } from './tools/index.js';
 import { annotationsFor, requiresConfirmation } from './tools/index.js';
 import type { ToolDefinition } from './tools/index.js';
@@ -71,6 +72,7 @@ export function createServer(): Server {
     ...createPredictionTools(client),
     ...createAlertTools(),
     ...createMarketStreamTools(wsManager),
+    ...createOrderStreamTools(wsManager),
   ];
 
   const toolMap = new Map<string, ToolDefinition>(allTools.map((t) => [t.name, t]));
