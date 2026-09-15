@@ -39,6 +39,16 @@ test('gemini_get_order_updates returns a cached update immediately', async () =>
     symbol: 'GEMI-PRES2028-VANCE',
     status: 'FILLED',
     outcome: 'YES',
+    side: 'BUY',
+    orderType: 'LIMIT',
+    price: '0.27',
+    quantity: '100',
+    remainingQty: '0',
+    executedQty: '100',
+    lastExecutedPrice: '0.27',
+    tradeId: '298374652910473625',
+    feeAmount: '0.01',
+    isMaker: true,
     eventTimeMs: 1_700_000_000_000,
   });
   const source = fakeSource(store, { connected: true });
@@ -49,10 +59,34 @@ test('gemini_get_order_updates returns a cached update immediately', async () =>
 
   assert.match(text, /"status": "FILLED"/);
   assert.match(text, /"outcome": "YES"/);
-  // 17-18 digit order IDs exceed Number.MAX_SAFE_INTEGER — must survive as a string, exact.
+  // 17-18 digit order/trade IDs exceed Number.MAX_SAFE_INTEGER — must survive as exact strings.
   assert.match(text, /"orderId": "145828833218573125"/);
+  assert.match(text, /"tradeId": "298374652910473625"/);
+  assert.match(text, /"remainingQty": "0"/);
+  assert.match(text, /"executedQty": "100"/);
+  assert.match(text, /"lastExecutedPrice": "0.27"/);
+  assert.match(text, /"eventTimeMs": 1700000000000/);
+  assert.match(text, /"dataAgeMs": \d+/);
   assert.doesNotMatch(text, /subscribed_no_data_yet/);
   assert.strictEqual(source.calls.subscribeAccountOrders, 1);
+});
+
+test('gemini_get_order_updates uses the documented 2000ms default when waitMs is omitted', async () => {
+  const store = new MarketDataStore();
+  const source = fakeSource(store, { connected: true });
+  const [tool] = createOrderStreamTools(source);
+
+  // No waitMs at all — must fall back to DEFAULT_WAIT_MS. If that fallback
+  // were dropped and `undefined` reached waitForOrderUpdate directly,
+  // setTimeout(fn, undefined) fires at 0ms in Node, so this update
+  // (delivered after a short delay) would be missed and the call would
+  // wrongly return subscribed_no_data_yet instead of catching it.
+  const pending = tool!.handler({ orderId: 'default-wait-order' });
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  store.updateOrder({ orderId: 'default-wait-order', symbol: 'GEMI-X', status: 'FILLED', eventTimeMs: 1 });
+  const result = await pending;
+
+  assert.match(textOf(result), /"status": "FILLED"/);
 });
 
 test('gemini_get_order_updates connects lazily on first call', async () => {

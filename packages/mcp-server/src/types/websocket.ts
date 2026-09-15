@@ -109,7 +109,19 @@ export interface WSContractStatusMessage {
  */
 export interface WSOrderUpdateMessage {
   e: 'order' | 'orderUpdate';
-  E: number;       // event time (nanoseconds, same convention as trade/bookTicker)
+  // Nanoseconds, same convention as trade/bookTicker/depth/ticker — NOT
+  // milliseconds. Confirmed three ways: the live AsyncAPI spec, sdk-typescript's
+  // runtime validator, and directly against real production data during
+  // manual testing (a raw E of ~1.79e18 divided by 1_000_000 in
+  // WebSocketManager.handleMessage landed on the correct, present-day
+  // eventTimeMs). A prior review flagged this as wrong, citing an sdk-go unit
+  // test fixture (`E:1710000000000`) as evidence of milliseconds — that
+  // fixture is unreliable: the same Go test file reuses that exact value for
+  // trade/balanceUpdate/positionReport frames too, including trade's `T`,
+  // which is independently and unambiguously nanoseconds. See the wire-level
+  // test in websocket/manager.test.ts using a realistic 19-digit nanosecond
+  // fixture with an explicit eventTimeMs assertion.
+  E: number;
   s: string;       // symbol
   i: string;       // order ID (large integer; kept as string, same treatment as contractStatus's i)
   c?: string;      // client order ID

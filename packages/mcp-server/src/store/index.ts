@@ -38,9 +38,11 @@ export class MarketDataStore {
 
   // Configuration
   private readonly maxTradesPerSymbol: number;
+  private readonly maxOrders: number;
 
-  constructor(maxTradesPerSymbol = 100) {
+  constructor(maxTradesPerSymbol = 100, maxOrders = 1000) {
     this.maxTradesPerSymbol = maxTradesPerSymbol;
+    this.maxOrders = maxOrders;
   }
 
   /**
@@ -233,6 +235,17 @@ export class MarketDataStore {
    * symbol-scoped — see the `orders` field comment.
    */
   updateOrder(update: Omit<CachedOrderUpdate, 'timestamp'>): void {
+    // Bounded so a long-lived process with sustained order activity doesn't
+    // grow this map forever — only relevant when this is a genuinely new
+    // order ID; updating an existing one never grows the map. Map preserves
+    // insertion order, so the first key is the oldest tracked order.
+    if (!this.orders.has(update.orderId) && this.orders.size >= this.maxOrders) {
+      const oldestOrderId = this.orders.keys().next().value;
+      if (oldestOrderId !== undefined) {
+        this.orders.delete(oldestOrderId);
+      }
+    }
+
     const record: CachedOrderUpdate = { ...update, timestamp: Date.now() };
     this.orders.set(update.orderId, record);
     this.emitOrderUpdate(record);

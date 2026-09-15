@@ -40,6 +40,14 @@ export class GeminiWebSocketClient {
   private pingTimer: NodeJS.Timeout | null = null;
   private isManualClose = false;
   private subscriptionQueue: string[] = [];
+  // Single-flights connect() at the client level. Without this, two callers
+  // that each hold their own "am I already connecting?" lock (e.g.
+  // marketStream.ts's and orderStream.ts's separate module-level
+  // `connecting` guards) can both see this.ws as not-yet-OPEN and both call
+  // connect() — the second call would overwrite this.ws with a brand new
+  // socket while the first is still CONNECTING, orphaning it and leaving its
+  // caller waiting on a socket that will never open.
+  private connectPromise: Promise<void> | null = null;
 
   constructor(url: string) {
     this.url = url;
@@ -49,12 +57,14 @@ export class GeminiWebSocketClient {
    * Connect to WebSocket
    */
   connect(): Promise<void> {
-    return new Promise((resolve, reject) => {
-      if (this.ws?.readyState === WebSocket.OPEN) {
-        resolve();
-        return;
-      }
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      return Promise.resolve();
+    }
+    if (this.connectPromise) {
+      return this.connectPromise;
+    }
 
+    this.connectPromise = new Promise<void>((resolve, reject) => {
       this.isManualClose = false;
       // Gemini requires auth at the connection-upgrade handshake — there's
       // no post-connect auth step. Headers are recomputed on every connect
@@ -123,7 +133,11 @@ export class GeminiWebSocketClient {
       this.ws.on('pong', () => {
         // Connection is alive
       });
+    }).finally(() => {
+      this.connectPromise = null;
     });
+
+    return this.connectPromise;
   }
 
   /**

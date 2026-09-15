@@ -249,3 +249,33 @@ test('getStats() counts orders, and clearAll() clears them', () => {
   assert.strictEqual(store.getStats().orderCount, 0);
   assert.strictEqual(store.getOrder('1'), undefined);
 });
+
+test('the order cache is bounded — the oldest order is evicted once maxOrders is reached', () => {
+  const store = new MarketDataStore(100, 3);
+  store.updateOrder({ orderId: '1', symbol: 'GEMI-X', status: 'NEW', eventTimeMs: 1 });
+  store.updateOrder({ orderId: '2', symbol: 'GEMI-X', status: 'NEW', eventTimeMs: 1 });
+  store.updateOrder({ orderId: '3', symbol: 'GEMI-X', status: 'NEW', eventTimeMs: 1 });
+  assert.strictEqual(store.getStats().orderCount, 3);
+
+  store.updateOrder({ orderId: '4', symbol: 'GEMI-X', status: 'NEW', eventTimeMs: 1 });
+
+  assert.strictEqual(store.getStats().orderCount, 3);
+  assert.strictEqual(store.getOrder('1'), undefined, 'the oldest order should have been evicted');
+  assert.ok(store.getOrder('2'));
+  assert.ok(store.getOrder('3'));
+  assert.ok(store.getOrder('4'));
+});
+
+test('updating an existing order never triggers eviction, even at the cache limit', () => {
+  const store = new MarketDataStore(100, 2);
+  store.updateOrder({ orderId: '1', symbol: 'GEMI-X', status: 'NEW', eventTimeMs: 1 });
+  store.updateOrder({ orderId: '2', symbol: 'GEMI-X', status: 'NEW', eventTimeMs: 1 });
+
+  // At the limit, but this is an update to an existing key, not a new
+  // insertion — must not evict order '1'.
+  store.updateOrder({ orderId: '2', symbol: 'GEMI-X', status: 'FILLED', eventTimeMs: 2 });
+
+  assert.strictEqual(store.getStats().orderCount, 2);
+  assert.ok(store.getOrder('1'));
+  assert.strictEqual(store.getOrder('2')?.status, 'FILLED');
+});
