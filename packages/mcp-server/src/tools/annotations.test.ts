@@ -62,7 +62,7 @@ test('exactly the money-moving tools are annotated destructive', () => {
 // a tool losing its `mutates: 'write'` field (e.g. gemini_add_bank, which
 // registers a real bank account) would silently start publishing
 // `readOnlyHint: true` with every other test in this suite still green.
-const EXPECTED_WRITE = ['gemini_add_bank'];
+const EXPECTED_WRITE = ['gemini_add_bank', 'gemini_create_prediction_combo'];
 
 test('exactly the state-changing-but-not-destructive tools are annotated write', () => {
   const write = allTools
