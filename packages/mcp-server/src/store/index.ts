@@ -4,6 +4,7 @@ import type {
   CachedTrade,
   CachedBookTicker,
   CachedContractStatus,
+  CachedOrderUpdate,
 } from '../types/websocket.js';
 
 export type MarketUpdateKind = 'price' | 'orderBook' | 'trade' | 'bookTicker' | 'contractStatus';
@@ -15,6 +16,7 @@ export interface MarketUpdateEvent {
 }
 
 export type MarketUpdateListener = (event: MarketUpdateEvent) => void;
+export type OrderUpdateListener = (update: CachedOrderUpdate) => void;
 
 /**
  * In-memory store for real-time market data from WebSocket feeds
@@ -25,15 +27,22 @@ export class MarketDataStore {
   private trades: Map<string, CachedTrade[]> = new Map();
   private bookTickers: Map<string, CachedBookTicker> = new Map();
   private contractStatuses: Map<string, CachedContractStatus> = new Map();
+  // Keyed by order ID, not symbol — one account has orders across many
+  // symbols, so this (and its listener map below) deliberately doesn't
+  // reuse the symbol-keyed lastUpdate/listeners/onUpdate machinery above.
+  private orders: Map<string, CachedOrderUpdate> = new Map();
+  private orderListeners: Map<string, Set<OrderUpdateListener>> = new Map();
   private subscriptions: Set<string> = new Set();
   private lastUpdate: Map<string, number> = new Map();
   private listeners: Map<string, Set<MarketUpdateListener>> = new Map();
 
   // Configuration
   private readonly maxTradesPerSymbol: number;
+  private readonly maxOrders: number;
 
-  constructor(maxTradesPerSymbol = 100) {
+  constructor(maxTradesPerSymbol = 100, maxOrders = 1000) {
     this.maxTradesPerSymbol = maxTradesPerSymbol;
+    this.maxOrders = maxOrders;
   }
 
   /**
@@ -65,6 +74,38 @@ export class MarketDataStore {
       } catch (err) {
         // eslint-disable-next-line no-console
         console.error('MarketDataStore listener for %s threw:', event.symbol, err);
+      }
+    }
+  }
+
+  /**
+   * Subscribe to updates for a single order ID. Returns an unsubscribe
+   * function. Separate from onUpdate() above because orders are keyed by
+   * order ID, not symbol.
+   */
+  onOrderUpdate(orderId: string, listener: OrderUpdateListener): () => void {
+    let set = this.orderListeners.get(orderId);
+    if (!set) {
+      set = new Set();
+      this.orderListeners.set(orderId, set);
+    }
+    set.add(listener);
+    return () => {
+      const current = this.orderListeners.get(orderId);
+      current?.delete(listener);
+      if (current && current.size === 0) this.orderListeners.delete(orderId);
+    };
+  }
+
+  private emitOrderUpdate(update: CachedOrderUpdate): void {
+    const set = this.orderListeners.get(update.orderId);
+    if (!set || set.size === 0) return;
+    for (const cb of set) {
+      try {
+        cb(update);
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error('MarketDataStore order listener for %s threw:', update.orderId, err);
       }
     }
   }
@@ -190,6 +231,27 @@ export class MarketDataStore {
   }
 
   /**
+   * Update (or insert) the latest known state for an order. Not
+   * symbol-scoped — see the `orders` field comment.
+   */
+  updateOrder(update: Omit<CachedOrderUpdate, 'timestamp'>): void {
+    // Bounded so a long-lived process with sustained order activity doesn't
+    // grow this map forever — only relevant when this is a genuinely new
+    // order ID; updating an existing one never grows the map. Map preserves
+    // insertion order, so the first key is the oldest tracked order.
+    if (!this.orders.has(update.orderId) && this.orders.size >= this.maxOrders) {
+      const oldestOrderId = this.orders.keys().next().value;
+      if (oldestOrderId !== undefined) {
+        this.orders.delete(oldestOrderId);
+      }
+    }
+
+    const record: CachedOrderUpdate = { ...update, timestamp: Date.now() };
+    this.orders.set(update.orderId, record);
+    this.emitOrderUpdate(record);
+  }
+
+  /**
    * Get current price for a symbol
    */
   getPrice(symbol: string): CachedPriceData | undefined {
@@ -226,6 +288,13 @@ export class MarketDataStore {
    */
   getContractStatus(symbol: string): CachedContractStatus | undefined {
     return this.contractStatuses.get(symbol.toUpperCase());
+  }
+
+  /**
+   * Get the latest known state for an order by ID
+   */
+  getOrder(orderId: string): CachedOrderUpdate | undefined {
+    return this.orders.get(orderId);
   }
 
   /**
@@ -277,6 +346,7 @@ export class MarketDataStore {
     this.trades.clear();
     this.bookTickers.clear();
     this.contractStatuses.clear();
+    this.orders.clear();
     this.lastUpdate.clear();
   }
 
@@ -336,6 +406,7 @@ export class MarketDataStore {
     totalTradeCount: number;
     bookTickerCount: number;
     contractStatusCount: number;
+    orderCount: number;
     subscriptionCount: number;
   } {
     let totalTradeCount = 0;
@@ -351,6 +422,7 @@ export class MarketDataStore {
       totalTradeCount,
       bookTickerCount: this.bookTickers.size,
       contractStatusCount: this.contractStatuses.size,
+      orderCount: this.orders.size,
       subscriptionCount: this.subscriptions.size,
     };
   }

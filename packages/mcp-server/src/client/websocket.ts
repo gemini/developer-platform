@@ -1,4 +1,6 @@
 import WebSocket from 'ws';
+import { config } from '../config.js';
+import { buildWsAuthHeaders } from '../auth/signer.js';
 import type {
   WSSubscribeRequest,
   WSMessage,
@@ -7,16 +9,19 @@ import type {
   WSBookTickerMessage,
   WSTickerMessage,
   WSContractStatusMessage,
+  WSOrderUpdateMessage,
   WSSubscribeResponse,
 } from '../types/websocket.js';
 
-// Contract IDs can be 17-18 digits, exceeding Number.MAX_SAFE_INTEGER — the
-// same class of precision loss already guarded against for REST order IDs
-// (see client/http.ts). Re-extracting just this field from the raw payload
-// (rather than switching the whole-message parser to a big-int-safe one)
-// keeps every other channel's parsing — including nanosecond `E` timestamps
-// on trade/depth/bookTicker/ticker — completely unchanged.
-const CONTRACT_ID_PATTERN = /"i"\s*:\s*(\d+)/;
+// Contract/order/trade IDs can be 17-18 digits, exceeding
+// Number.MAX_SAFE_INTEGER — the same class of precision loss already
+// guarded against for REST order IDs (see client/http.ts). Re-extracting
+// just these fields from the raw payload (rather than switching the
+// whole-message parser to a big-int-safe one) keeps every other channel's
+// parsing — including nanosecond `E` timestamps on trade/depth/bookTicker/
+// ticker — completely unchanged.
+const ID_FIELD_PATTERN = /"i"\s*:\s*(\d+)/;
+const TRADE_ID_FIELD_PATTERN = /"t"\s*:\s*(\d+)/;
 
 export type WSEventHandler = (message: WSMessage) => void;
 
@@ -35,6 +40,14 @@ export class GeminiWebSocketClient {
   private pingTimer: NodeJS.Timeout | null = null;
   private isManualClose = false;
   private subscriptionQueue: string[] = [];
+  // Single-flights connect() at the client level. Without this, two callers
+  // that each hold their own "am I already connecting?" lock (e.g.
+  // marketStream.ts's and orderStream.ts's separate module-level
+  // `connecting` guards) can both see this.ws as not-yet-OPEN and both call
+  // connect() — the second call would overwrite this.ws with a brand new
+  // socket while the first is still CONNECTING, orphaning it and leaving its
+  // caller waiting on a socket that will never open.
+  private connectPromise: Promise<void> | null = null;
 
   constructor(url: string) {
     this.url = url;
@@ -44,14 +57,23 @@ export class GeminiWebSocketClient {
    * Connect to WebSocket
    */
   connect(): Promise<void> {
-    return new Promise((resolve, reject) => {
-      if (this.ws?.readyState === WebSocket.OPEN) {
-        resolve();
-        return;
-      }
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      return Promise.resolve();
+    }
+    if (this.connectPromise) {
+      return this.connectPromise;
+    }
 
+    const promise: Promise<void> = new Promise<void>((resolve, reject) => {
       this.isManualClose = false;
-      this.ws = new WebSocket(this.url);
+      // Gemini requires auth at the connection-upgrade handshake — there's
+      // no post-connect auth step. Headers are recomputed on every connect
+      // (including reconnects) since the nonce is time-based. Harmless to
+      // send even when only subscribing to public channels — one connection
+      // serves both, matching samples/typescript/src/pmOrder.ts.
+      const authHeaders =
+        config.apiKey && config.apiSecret ? buildWsAuthHeaders(config.apiKey, config.apiSecret) : undefined;
+      this.ws = authHeaders ? new WebSocket(this.url, { headers: authHeaders }) : new WebSocket(this.url);
 
       this.ws.on('open', () => {
         console.error('[WS] Connected to', this.url);
@@ -74,9 +96,18 @@ export class GeminiWebSocketClient {
           const raw = data.toString();
           const message = JSON.parse(raw) as WSMessage;
           if (isContractStatusMessage(message)) {
-            const idMatch = raw.match(CONTRACT_ID_PATTERN);
+            const idMatch = raw.match(ID_FIELD_PATTERN);
             if (idMatch) {
               message.i = idMatch[1];
+            }
+          } else if (isOrderUpdateMessage(message)) {
+            const idMatch = raw.match(ID_FIELD_PATTERN);
+            if (idMatch) {
+              message.i = idMatch[1];
+            }
+            const tradeIdMatch = raw.match(TRADE_ID_FIELD_PATTERN);
+            if (tradeIdMatch) {
+              message.t = tradeIdMatch[1];
             }
           }
           this.handleMessage(message);
@@ -94,6 +125,12 @@ export class GeminiWebSocketClient {
         console.error('[WS] Connection closed');
         this.stopPingInterval();
 
+        // A manual disconnect() (or any close) while still CONNECTING means
+        // 'open'/'error' never fired, so this promise would otherwise hang
+        // forever — reject() is a no-op if 'open' or 'error' already
+        // settled it, per normal Promise semantics.
+        reject(new Error('WebSocket closed before the connection finished opening'));
+
         if (!this.isManualClose && this.reconnectAttempts < this.maxReconnectAttempts) {
           this.scheduleReconnect();
         }
@@ -102,7 +139,20 @@ export class GeminiWebSocketClient {
       this.ws.on('pong', () => {
         // Connection is alive
       });
+    }).finally(() => {
+      // Only clear the field if it still points at THIS promise.
+      // disconnect() clears it immediately (synchronously) on manual
+      // disconnect so a caller reconnecting right away gets a fresh
+      // attempt rather than the doomed one being torn down; without this
+      // check, this (older) promise's own cleanup running later would
+      // clobber a newer connect() attempt's connectPromise out from under it.
+      if (this.connectPromise === promise) {
+        this.connectPromise = null;
+      }
     });
+
+    this.connectPromise = promise;
+    return promise;
   }
 
   /**
@@ -280,6 +330,12 @@ export class GeminiWebSocketClient {
     }
 
     this.subscriptionQueue = [];
+
+    // Invalidate any in-flight connect() immediately. The promise tied to
+    // the socket just closed won't settle until its 'close' event fires
+    // asynchronously — without this, an immediate reconnect() call would
+    // return that doomed promise instead of starting a fresh attempt.
+    this.connectPromise = null;
   }
 
   /**
@@ -358,4 +414,16 @@ export function isSubscribeResponse(msg: WSMessage): msg is WSSubscribeResponse 
  */
 export function isContractStatusMessage(msg: WSMessage): msg is WSContractStatusMessage {
   return 'k' in msg && 'i' in msg;
+}
+
+/**
+ * Helper to check if message is an authenticated order lifecycle event.
+ * The spec documents only "orderUpdate", but sdk-go's dispatcher explicitly
+ * also treats "order" as valid (see the note on WSOrderUpdateMessage) — this
+ * check is placed ahead of isTradeMessage in WebSocketManager.handleMessage
+ * specifically because a fill event's t/q/m fields would otherwise duck-type
+ * match as a trade.
+ */
+export function isOrderUpdateMessage(msg: WSMessage): msg is WSOrderUpdateMessage {
+  return 'e' in msg && ((msg as WSOrderUpdateMessage).e === 'order' || (msg as WSOrderUpdateMessage).e === 'orderUpdate');
 }
