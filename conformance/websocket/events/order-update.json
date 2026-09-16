@@ -1,0 +1,17 @@
+{
+  "id": "websocket/events/order-update",
+  "kind": "wsEvent",
+  "stream": "orders",
+  "symbol": "BTCUSD",
+  "frame": "{\"e\":\"orderUpdate\",\"E\":1700000000000,\"s\":\"BTCUSD\",\"i\":12345,\"c\":\"client-order-1\",\"S\":\"BUY\",\"o\":\"LIMIT\",\"X\":\"FILLED\",\"p\":\"1000.00\",\"q\":\"0.25\",\"z\":\"0.25\",\"Z\":\"250.00\",\"T\":1700000000001}",
+  "expect": {
+    "fields": {
+      "e": { "text": "orderUpdate", "compare": "exact" },
+      "E": { "text": "1700000000000", "compare": "exact" },
+      "s": { "text": "BTCUSD", "compare": "exact" },
+      "i": { "text": "12345", "compare": "exact" },
+      "X": { "text": "FILLED", "compare": "exact" },
+      "T": { "text": "1700000000001", "compare": "exact" }
+    }
+  }
+}

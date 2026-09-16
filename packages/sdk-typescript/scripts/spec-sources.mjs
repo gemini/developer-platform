@@ -1,31 +1,55 @@
 import { createHash } from "node:crypto";
+import { existsSync } from "node:fs";
+import { readFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
-export const PUBLISHED_SPECS = Object.freeze({
-  rest: "https://developer.gemini.com/specs/openapi/rest.yaml",
-  predictionMarkets: "https://developer.gemini.com/specs/openapi/prediction-markets.yaml",
-  websocket: "https://developer.gemini.com/specs/asyncapi/websocket.yaml",
+export const SPEC_IDS = Object.freeze(["rest", "predictionMarkets", "websocket"]);
+
+const SPEC_PATHS = Object.freeze({
+  rest: "openapi/rest.yaml",
+  predictionMarkets: "openapi/prediction-markets.yaml",
+  websocket: "asyncapi/websocket.yaml",
 });
 
-// Update these values only in a reviewed change that also updates generated output.
-const PUBLISHED_SPEC_SHA256 = Object.freeze({
-  [PUBLISHED_SPECS.rest]: "79a0dc4061f3942dca8b30a589bbd406c781d2c6c19283d87cb21177afdcab5e",
-  [PUBLISHED_SPECS.predictionMarkets]: "0c70a976f4553ae39d14d6851416cb974f081919216b94ebd851f044d108cfe7",
-  [PUBLISHED_SPECS.websocket]: "d83c624336f16542c3f1f4554101e7fa19bbc703012ae7bcd780c401667a5def",
-});
-
-const ALLOWED_PUBLISHED_SPEC_URLS = new Set(Object.values(PUBLISHED_SPECS));
-
-export async function loadPublishedSpecText(specUrl) {
-  const expectedHash = PUBLISHED_SPEC_SHA256[specUrl];
-  if (!expectedHash || !ALLOWED_PUBLISHED_SPEC_URLS.has(specUrl)) {
-    throw new Error(`Unallowlisted published specification URL: ${specUrl}`);
+function assertSpecId(specId) {
+  if (!SPEC_IDS.includes(specId)) {
+    throw new Error(`unknown specification id: ${specId}`);
   }
-  const response = await fetch(specUrl);
-  if (!response.ok) throw new Error(`Failed to fetch spec: ${response.status}`);
-  const bytes = Buffer.from(await response.arrayBuffer());
-  const actualHash = createHash("sha256").update(bytes).digest("hex");
-  if (actualHash !== expectedHash) {
-    throw new Error(`Published specification hash mismatch for ${specUrl}: expected ${expectedHash}, got ${actualHash}`);
+}
+
+export function specsRoot() {
+  const startDir = dirname(fileURLToPath(import.meta.url));
+  let currentDir = startDir;
+  while (true) {
+    if (existsSync(join(currentDir, "specs", "SOURCES.json"))) {
+      return join(currentDir, "specs");
+    }
+    const parentDir = dirname(currentDir);
+    if (parentDir === currentDir) break;
+    currentDir = parentDir;
+  }
+  throw new Error(`specs/SOURCES.json not found above ${startDir}`);
+}
+
+export function vendoredSpecPath(specId) {
+  assertSpecId(specId);
+  return join(specsRoot(), SPEC_PATHS[specId]);
+}
+
+export async function loadVendoredSpecText(specId) {
+  assertSpecId(specId);
+  const root = specsRoot();
+  const manifest = JSON.parse(await readFile(join(root, "SOURCES.json"), "utf8"));
+  const entry = manifest.specs.find(({ id }) => id === specId);
+  if (!entry) throw new Error(`unknown specification id: ${specId}`);
+
+  const bytes = await readFile(join(root, entry.path));
+  const actual = createHash("sha256").update(bytes).digest("hex");
+  if (actual !== entry.sha256) {
+    throw new Error(
+      `vendored specification digest mismatch for ${entry.path}: expected ${entry.sha256}, got ${actual}; run node specs/refresh.mjs`,
+    );
   }
   return bytes.toString("utf8");
 }

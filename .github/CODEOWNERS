@@ -13,3 +13,7 @@
 
 # Published Go SDK source, module metadata, and release workflow.
 /packages/sdk-go/** @fuller @ximt
+
+# Cross-SDK API contract and conformance fixtures.
+/specs/** @fuller @ximt
+/conformance/** @fuller @ximt

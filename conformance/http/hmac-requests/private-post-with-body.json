@@ -1,0 +1,51 @@
+{
+  "id": "http/hmac-requests/private-post-with-body",
+  "kind": "hmacRequest",
+  "credentials": {
+    "apiKey": "conformance-api-key",
+    "apiSecret": "conformance-api-secret"
+  },
+  "nonce": {
+    "mode": "monotonic",
+    "value": "1700000000000"
+  },
+  "request": {
+    "method": "POST",
+    "path": "/v1/order/new",
+    "body": {
+      "symbol": "BTCUSD",
+      "amount": "0.01",
+      "price": "1000.00",
+      "side": "buy",
+      "type": "exchange limit"
+    }
+  },
+  "expect": {
+    "headers": [
+      "X-GEMINI-APIKEY",
+      "X-GEMINI-PAYLOAD",
+      "X-GEMINI-SIGNATURE"
+    ],
+    "apiKeyHeader": "conformance-api-key",
+    "payload": {
+      "request": "/v1/order/new",
+      "nonce": "1700000000000",
+      "fields": {
+        "symbol": "BTCUSD",
+        "amount": "0.01",
+        "price": "1000.00",
+        "side": "buy",
+        "type": "exchange limit"
+      }
+    },
+    "signature": {
+      "algorithm": "HMAC-SHA384",
+      "over": "payloadBase64",
+      "encoding": "hex-lower"
+    }
+  },
+  "exceptions": [
+    "rest-nonce-json-type",
+    "rest-payload-key-order"
+  ]
+}

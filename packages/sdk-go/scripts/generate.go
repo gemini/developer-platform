@@ -3,198 +3,413 @@ package main
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"go/format"
-	"io"
-	"net/http"
 	"os"
-	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/oapi-codegen/oapi-codegen/v2/pkg/codegen"
+	"gopkg.in/yaml.v3"
 )
 
 type ModuleConfig struct {
 	ID      string
 	Package string
-	SpecURL string
+	SpecID  string
 	Tags    []string
 }
 
 const (
-	restSpecURL              = "https://developer.gemini.com/specs/openapi/rest.yaml"
-	predictionMarketsSpecURL = "https://developer.gemini.com/specs/openapi/prediction-markets.yaml"
-	websocketSpecURL         = "https://developer.gemini.com/specs/asyncapi/websocket.yaml"
+	restSpecID              = "rest"
+	predictionMarketsSpecID = "predictionMarkets"
+	websocketSpecID         = "websocket"
 )
 
-// Update these values only in a reviewed change that also updates generated output.
-var publishedSpecSHA256 = map[string]string{
-	restSpecURL:              "79a0dc4061f3942dca8b30a589bbd406c781d2c6c19283d87cb21177afdcab5e",
-	predictionMarketsSpecURL: "0c70a976f4553ae39d14d6851416cb974f081919216b94ebd851f044d108cfe7",
-	websocketSpecURL:         "d83c624336f16542c3f1f4554101e7fa19bbc703012ae7bcd780c401667a5def",
+type specSource struct {
+	ID      string `json:"id"`
+	Path    string `json:"path"`
+	SHA256  string `json:"sha256"`
 }
 
-var (
-	publishedSpecClient = &http.Client{
-		Timeout: 30 * time.Second,
-		// The specification URLs are allowlisted and pinned by digest. Do not
-		// follow redirects because that would permit an allowlisted HTTPS URL to
-		// fetch from an unexpected host or downgrade to HTTP.
-		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
-			return http.ErrUseLastResponse
-		},
-	}
-	publishedSpecCache = struct {
-		sync.Mutex
-		values map[string][]byte
-	}{values: make(map[string][]byte)}
-)
+type specSourcesManifest struct {
+	Version int          `json:"version"`
+	Specs   []specSource `json:"specs"`
+}
+type numericOverlay struct {
+	Version           int                     `yaml:"version"`
+	FormatAliases     numericFormatAliases    `yaml:"formatAliases"`
+	DecimalFormat     numericDecimalFormat    `yaml:"decimalFormat"`
+	WideIntegers      numericWideIntegers     `yaml:"wideIntegers"`
+	UnsignedIntegers  numericUnsignedIntegers `yaml:"unsignedIntegers"`
+	SchemaOverrides   numericSchemaOverrides `yaml:"schemaOverrides"`
+}
 
-const maxPublishedSpecBytes int64 = 16 << 20
+type numericFormatAliases struct {
+	AppliesTo []string             `yaml:"appliesTo"`
+	Reason    string               `yaml:"reason"`
+	Rules     []numericFormatAlias `yaml:"rules"`
+}
+
+type numericFormatAlias struct {
+	From string `yaml:"from"`
+	To   string `yaml:"to"`
+}
+
+type numericDecimalFormat struct {
+	AppliesTo  []string            `yaml:"appliesTo"`
+	Format     string              `yaml:"format"`
+	Go         numericDecimalGo    `yaml:"go"`
+	TypeScript numericDecimalTS    `yaml:"typescript"`
+}
+
+type numericDecimalGo struct {
+	NumberSchema string `yaml:"numberSchema"`
+	StringSchema string `yaml:"stringSchema"`
+	ImportPath   string `yaml:"importPath"`
+	ImportAlias  string `yaml:"importAlias"`
+}
+
+type numericDecimalTS struct {
+	NumberSchema   string `yaml:"numberSchema"`
+	StringSchema   string `yaml:"stringSchema"`
+	ExactArithmetic string `yaml:"exactArithmetic"`
+}
+
+type numericWideIntegers struct {
+	AppliesTo            []string `yaml:"appliesTo"`
+	Reason               string   `yaml:"reason"`
+	Matches              []string `yaml:"matches"`
+	SkipComposedSchemas  bool     `yaml:"skipComposedSchemas"`
+	Properties           []string `yaml:"properties"`
+}
+
+type numericUnsignedIntegers struct {
+	AppliesTo  []string                   `yaml:"appliesTo"`
+	Extension  string                     `yaml:"extension"`
+	Locations  []numericUnsignedLocation  `yaml:"locations"`
+}
+
+type numericUnsignedLocation struct {
+	Schema   string `yaml:"schema"`
+	Property string `yaml:"property"`
+}
+
+type numericSchemaOverrides struct {
+	AppliesTo          []string                  `yaml:"appliesTo"`
+	Reason             string                    `yaml:"reason"`
+	DecimalFields      []numericDecimalField     `yaml:"decimalFields"`
+	Int64Fields        []numericInt64Field       `yaml:"int64Fields"`
+	Int64OneOfVariants []numericSchemaReference  `yaml:"int64OneOfVariants"`
+}
+
+type numericDecimalField struct {
+	Schema     string   `yaml:"schema"`
+	Properties []string `yaml:"properties"`
+}
+
+type numericInt64Field struct {
+	Schema   string `yaml:"schema"`
+	Property string `yaml:"property"`
+}
+
+type numericSchemaReference struct {
+	Schema string `yaml:"schema"`
+}
+
+type numericFormatRegex struct {
+	regex       *regexp.Regexp
+	replacement []byte
+}
+
+type numericPolicy struct {
+	overlay                 numericOverlay
+	formatAliases           []numericFormatRegex
+	integerFormats           map[string]struct{}
+	wideIntegerPropertyNames map[string]struct{}
+	integerFormat            string
+}
+
+var numericOverlayCache struct {
+	sync.Once
+	value *numericPolicy
+	err   error
+}
+
+func loadNumericOverlay() (*numericPolicy, error) {
+	numericOverlayCache.Do(func() {
+		root, err := specsRoot()
+		if err != nil {
+			numericOverlayCache.err = fmt.Errorf("loading numeric overlay: %w", err)
+			return
+		}
+		raw, err := os.ReadFile(filepath.Join(root, "overlays", "numeric-types.yaml"))
+		if err != nil {
+			numericOverlayCache.err = fmt.Errorf("loading numeric overlay: %w", err)
+			return
+		}
+		var overlay numericOverlay
+		if err := yaml.Unmarshal(raw, &overlay); err != nil {
+			numericOverlayCache.err = fmt.Errorf("loading numeric overlay: %w", err)
+			return
+		}
+
+		policy := &numericPolicy{
+			overlay:                 overlay,
+			integerFormats:           make(map[string]struct{}),
+			wideIntegerPropertyNames: make(map[string]struct{}, len(overlay.WideIntegers.Properties)),
+		}
+		for _, propertyName := range overlay.WideIntegers.Properties {
+			policy.wideIntegerPropertyNames[propertyName] = struct{}{}
+		}
+		for _, alias := range overlay.FormatAliases.Rules {
+			pattern := fmt.Sprintf(`(?m)^(\s*)format:\s*%s\s*$`, regexp.QuoteMeta(alias.From))
+			re, err := regexp.Compile(pattern)
+			if err != nil {
+				numericOverlayCache.err = fmt.Errorf("loading numeric overlay: %w", err)
+				return
+			}
+			policy.formatAliases = append(policy.formatAliases, numericFormatRegex{
+				regex:       re,
+				replacement: []byte("${1}format: " + alias.To),
+			})
+			if alias.To != "" {
+				policy.integerFormats[alias.To] = struct{}{}
+				if policy.integerFormat == "" {
+					policy.integerFormat = alias.To
+				}
+			}
+		}
+		numericOverlayCache.value = policy
+	})
+	return numericOverlayCache.value, numericOverlayCache.err
+}
+
+var publishedSpecCache = struct {
+	sync.Mutex
+	values map[string][]byte
+}{values: make(map[string][]byte)}
 
 var Modules = []ModuleConfig{
 	{
 		ID:      "marketdata",
 		Package: "marketdata",
-		SpecURL: restSpecURL,
+		SpecID:  restSpecID,
 		Tags:    []string{"Market Data"},
 	},
 	{
 		ID:      "trading",
 		Package: "trading",
-		SpecURL: restSpecURL,
+		SpecID:  restSpecID,
 		Tags:    []string{"Orders", "Session"},
 	},
 	{
 		ID:      "margin",
 		Package: "margin",
-		SpecURL: restSpecURL,
+		SpecID:  restSpecID,
 		Tags:    []string{"Margin Trading"},
 	},
 	{
 		ID:      "perpetuals",
 		Package: "perpetuals",
-		SpecURL: restSpecURL,
+		SpecID:  restSpecID,
 		Tags:    []string{"Derivatives"},
 	},
 	{
 		ID:      "account",
 		Package: "account",
-		SpecURL: restSpecURL,
+		SpecID:  restSpecID,
 		Tags:    []string{"Account Administration", "Fund Management", "OAuth", "Staking"},
 	},
 	{
 		ID:      "clearing",
 		Package: "clearing",
-		SpecURL: restSpecURL,
+		SpecID:  restSpecID,
 		Tags:    []string{"Clearing", "Instant"},
 	},
 	{
 		ID:      "predictions",
 		Package: "predictions",
-		SpecURL: predictionMarketsSpecURL,
+		SpecID:  predictionMarketsSpecID,
 		Tags:    []string{"Combos", "Markets", "Positions", "Rewards", "Terms", "Trading", "Volume"},
 	},
 }
 
-var (
-	longFormatRegex    = regexp.MustCompile(`(?m)^(\s*)format:\s*long\s*$`)
-	integerFormatRegex = regexp.MustCompile(`(?m)^(\s*)format:\s*integer\s*$`)
-)
+func specsRoot() (string, error) {
+	startDir, err := os.Getwd()
+	if err != nil {
+		return "", err
+	}
+	dir := startDir
+	for {
+		manifestPath := filepath.Join(dir, "specs", "SOURCES.json")
+		if _, err := os.Stat(manifestPath); err == nil {
+			return filepath.Join(dir, "specs"), nil
+		} else if !os.IsNotExist(err) {
+			return "", err
+		}
 
-// These fields are identifiers or timestamps whose valid values are wider
-// than the native int on 32-bit builds. Keep bounded collection sizes and
-// other API limits as int because callers use them as local slice/request
-// sizes, but never represent wire-level wide integers with a platform-sized
-// type.
-var wideIntegerPropertyNames = map[string]struct{}{
-	"cancelRejects":   {},
-	"cancelledOrders": {},
-	"eid":             {},
-	"last_updated_ms": {},
-	"order_id":        {},
-	"quoteId":         {},
-	"since_tid":       {},
-	"tid":             {},
-	"timestamp_nanos": {},
-	"timestampms":     {},
-	"txTime":          {},
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			break
+		}
+		dir = parent
+	}
+	return "", fmt.Errorf("specs/SOURCES.json not found above %s", startDir)
 }
 
-func sanitizeSpecBytes(data []byte) []byte {
-	out := longFormatRegex.ReplaceAll(data, []byte("${1}format: int64"))
-	out = integerFormatRegex.ReplaceAll(out, []byte("${1}format: int64"))
+func loadVendoredSpec(specID string) ([]byte, error) {
+	if specID != restSpecID && specID != predictionMarketsSpecID && specID != websocketSpecID {
+		return nil, fmt.Errorf("unknown specification id: %s", specID)
+	}
+
+	publishedSpecCache.Lock()
+	cached := publishedSpecCache.values[specID]
+	publishedSpecCache.Unlock()
+	if cached != nil {
+		return cached, nil
+	}
+
+	root, err := specsRoot()
+	if err != nil {
+		return nil, err
+	}
+	manifestBytes, err := os.ReadFile(filepath.Join(root, "SOURCES.json"))
+	if err != nil {
+		return nil, err
+	}
+	var manifest specSourcesManifest
+	if err := json.Unmarshal(manifestBytes, &manifest); err != nil {
+		return nil, err
+	}
+
+	var entry *specSource
+	for i := range manifest.Specs {
+		if manifest.Specs[i].ID == specID {
+			entry = &manifest.Specs[i]
+			break
+		}
+	}
+	if entry == nil {
+		return nil, fmt.Errorf("unknown specification id: %s", specID)
+	}
+
+	raw, err := os.ReadFile(filepath.Join(root, entry.Path))
+	if err != nil {
+		return nil, err
+	}
+	digest := sha256.Sum256(raw)
+	actualHash := hex.EncodeToString(digest[:])
+	if actualHash != entry.SHA256 {
+		return nil, fmt.Errorf("vendored specification digest mismatch for %s: expected %s, got %s; run node specs/refresh.mjs", entry.Path, entry.SHA256, actualHash)
+	}
+
+	publishedSpecCache.Lock()
+	if existing := publishedSpecCache.values[specID]; existing != nil {
+		raw = existing
+	} else {
+		publishedSpecCache.values[specID] = raw
+	}
+	publishedSpecCache.Unlock()
+
+	return raw, nil
+}
+
+func specBasename(specID string) string {
+	switch specID {
+	case restSpecID:
+		return "rest.yaml"
+	case predictionMarketsSpecID:
+		return "prediction-markets.yaml"
+	case websocketSpecID:
+		return "websocket.yaml"
+	default:
+		return ""
+	}
+}
+
+func sanitizeSpecBytes(data []byte, policy *numericPolicy) []byte {
+	out := data
+	for _, alias := range policy.formatAliases {
+		out = alias.regex.ReplaceAll(out, alias.replacement)
+	}
 	return out
 }
 
-func fixSchema(s *openapi3.Schema) {
+func isComposedSchema(s *openapi3.Schema) bool {
+	return len(s.AllOf) > 0 || len(s.AnyOf) > 0 || len(s.OneOf) > 0
+}
+
+func setInt64Override(s *openapi3.Schema, policy *numericPolicy) {
 	if s == nil {
 		return
 	}
+	s.Type = &openapi3.Types{"integer"}
+	s.Format = policy.integerFormat
+}
+
+func fixSchema(s *openapi3.Schema, policy *numericPolicy) {
+	if s == nil || policy == nil {
+		return
+	}
+	if s.Extensions != nil {
+		if unsigned, ok := s.Extensions[policy.overlay.UnsignedIntegers.Extension].(bool); ok && unsigned {
+			setGoTypeOverride(s, "uint64")
+		}
+	}
 	if s.Type != nil {
-		if s.Type.Is("number") {
-			if s.Format == "long" || s.Format == "integer" || s.Format == "int64" {
-				s.Type = &openapi3.Types{"integer"}
-				s.Format = "int64"
-			} else if s.Format == "decimal" {
-				setDecimalOverride(s)
-			}
-		} else if s.Type.Is("integer") {
-			if s.Format == "long" || s.Format == "integer" {
-				s.Format = "int64"
-			}
+		if _, wide := policy.integerFormats[s.Format]; wide && s.Type.Is("number") {
+			setInt64Override(s, policy)
+		} else if s.Type.Is("number") && s.Format == policy.overlay.DecimalFormat.Format {
+			setDecimalOverride(s, policy)
 		}
 	}
 	for propertyName, prop := range s.Properties {
 		if prop.Value != nil {
-			setWideIntegerOverride(propertyName, prop.Value)
-			fixSchema(prop.Value)
+			setWideIntegerOverride(propertyName, prop.Value, policy)
+			fixSchema(prop.Value, policy)
 		}
 	}
 	for _, allOf := range s.AllOf {
 		if allOf.Value != nil {
-			fixSchema(allOf.Value)
+			fixSchema(allOf.Value, policy)
 		}
 	}
 	for _, anyOf := range s.AnyOf {
 		if anyOf.Value != nil {
-			fixSchema(anyOf.Value)
+			fixSchema(anyOf.Value, policy)
 		}
 	}
 	for _, oneOf := range s.OneOf {
 		if oneOf.Value != nil {
-			fixSchema(oneOf.Value)
+			fixSchema(oneOf.Value, policy)
 		}
 	}
 	if s.Items != nil && s.Items.Value != nil {
-		fixSchema(s.Items.Value)
+		fixSchema(s.Items.Value, policy)
 	}
 	if s.AdditionalProperties.Schema != nil && s.AdditionalProperties.Schema.Value != nil {
-		fixSchema(s.AdditionalProperties.Schema.Value)
+		fixSchema(s.AdditionalProperties.Schema.Value, policy)
 	}
 }
 
-func setWideIntegerOverride(propertyName string, s *openapi3.Schema) {
-	if _, ok := wideIntegerPropertyNames[propertyName]; !ok || s == nil || s.Type == nil {
+func setWideIntegerOverride(propertyName string, s *openapi3.Schema, policy *numericPolicy) {
+	if _, ok := policy.wideIntegerPropertyNames[propertyName]; !ok || s == nil || s.Type == nil {
 		return
 	}
 	if s.Type.Is("array") && s.Items != nil && s.Items.Value != nil {
-		setWideIntegerOverride(propertyName, s.Items.Value)
+		setWideIntegerOverride(propertyName, s.Items.Value, policy)
 		return
 	}
-	// Do not replace unions such as timestamp aliases. The generated type may
-	// intentionally support both numeric and string representations.
-	if len(s.AllOf) > 0 || len(s.AnyOf) > 0 || len(s.OneOf) > 0 {
+	if policy.overlay.WideIntegers.SkipComposedSchemas && isComposedSchema(s) {
 		return
 	}
 	if s.Type.Is("integer") || s.Type.Is("number") {
-		s.Type = &openapi3.Types{"integer"}
-		s.Format = "int64"
+		setInt64Override(s, policy)
 	}
 }
 
@@ -205,93 +420,42 @@ func setGoTypeOverride(s *openapi3.Schema, goType string) {
 	s.Extensions["x-go-type"] = goType
 }
 
-func setDecimalOverride(s *openapi3.Schema) {
-	goType := "types.Decimal"
+func setDecimalOverride(s *openapi3.Schema, policy *numericPolicy) {
+	goType := policy.overlay.DecimalFormat.Go.StringSchema
 	if s.Type != nil && s.Type.Is("number") {
-		goType = "types.DecimalNumber"
+		goType = policy.overlay.DecimalFormat.Go.NumberSchema
 	}
 	setGoTypeOverride(s, goType)
 	if s.Extensions == nil {
 		s.Extensions = make(map[string]any)
 	}
 	s.Extensions["x-go-type-import"] = map[string]any{
-		"path": "github.com/gemini/developer-platform/packages/sdk-go/types",
-		"name": "types",
+		"path": policy.overlay.DecimalFormat.Go.ImportPath,
+		"name": policy.overlay.DecimalFormat.Go.ImportAlias,
 	}
 }
 
-func loadPublishedSpec(specURL string) ([]byte, error) {
-	expectedHash, ok := publishedSpecSHA256[specURL]
-	if !ok {
-		return nil, fmt.Errorf("unallowlisted published specification URL: %s", specURL)
-	}
-
-	publishedSpecCache.Lock()
-	cached := publishedSpecCache.values[specURL]
-	publishedSpecCache.Unlock()
-	if cached != nil {
-		return cached, nil
-	}
-
-	response, err := publishedSpecClient.Get(specURL)
-	if err != nil {
-		return nil, fmt.Errorf("fetching spec %s: %w", specURL, err)
-	}
-	defer response.Body.Close()
-
-	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
-		return nil, fmt.Errorf("fetching spec %s: HTTP %s", specURL, response.Status)
-	}
-	if response.ContentLength > maxPublishedSpecBytes {
-		return nil, fmt.Errorf("published specification %s exceeds %d-byte limit", specURL, maxPublishedSpecBytes)
-	}
-
-	raw, err := io.ReadAll(io.LimitReader(response.Body, maxPublishedSpecBytes+1))
-	if err != nil {
-		return nil, fmt.Errorf("reading spec %s: %w", specURL, err)
-	}
-	if int64(len(raw)) > maxPublishedSpecBytes {
-		return nil, fmt.Errorf("published specification %s exceeds %d-byte limit", specURL, maxPublishedSpecBytes)
-	}
-
-	digest := sha256.Sum256(raw)
-	actualHash := hex.EncodeToString(digest[:])
-	if actualHash != expectedHash {
-		return nil, fmt.Errorf("published specification hash mismatch for %s: expected %s, got %s", specURL, expectedHash, actualHash)
-	}
-
-	publishedSpecCache.Lock()
-	if existing := publishedSpecCache.values[specURL]; existing != nil {
-		raw = existing
-	} else {
-		publishedSpecCache.values[specURL] = raw
-	}
-	publishedSpecCache.Unlock()
-
-	return raw, nil
-}
-
-func fixDoc(doc *openapi3.T) {
-	if doc == nil {
+func fixDoc(doc *openapi3.T, policy *numericPolicy) {
+	if doc == nil || policy == nil {
 		return
 	}
 	if doc.Components != nil {
 		for _, schemaRef := range doc.Components.Schemas {
 			if schemaRef != nil && schemaRef.Value != nil {
-				fixSchema(schemaRef.Value)
+				fixSchema(schemaRef.Value, policy)
 			}
 		}
 		for _, paramRef := range doc.Components.Parameters {
 			if paramRef != nil && paramRef.Value != nil && paramRef.Value.Schema != nil && paramRef.Value.Schema.Value != nil {
-				setWideIntegerOverride(paramRef.Value.Name, paramRef.Value.Schema.Value)
-				fixSchema(paramRef.Value.Schema.Value)
+				setWideIntegerOverride(paramRef.Value.Name, paramRef.Value.Schema.Value, policy)
+				fixSchema(paramRef.Value.Schema.Value, policy)
 			}
 		}
 		for _, respRef := range doc.Components.Responses {
 			if respRef != nil && respRef.Value != nil {
 				for _, content := range respRef.Value.Content {
 					if content != nil && content.Schema != nil && content.Schema.Value != nil {
-						fixSchema(content.Schema.Value)
+						fixSchema(content.Schema.Value, policy)
 					}
 				}
 			}
@@ -308,14 +472,14 @@ func fixDoc(doc *openapi3.T) {
 				}
 				for _, paramRef := range op.Parameters {
 					if paramRef != nil && paramRef.Value != nil && paramRef.Value.Schema != nil && paramRef.Value.Schema.Value != nil {
-						setWideIntegerOverride(paramRef.Value.Name, paramRef.Value.Schema.Value)
-						fixSchema(paramRef.Value.Schema.Value)
+						setWideIntegerOverride(paramRef.Value.Name, paramRef.Value.Schema.Value, policy)
+						fixSchema(paramRef.Value.Schema.Value, policy)
 					}
 				}
 				if op.RequestBody != nil && op.RequestBody.Value != nil {
 					for _, content := range op.RequestBody.Value.Content {
 						if content != nil && content.Schema != nil && content.Schema.Value != nil {
-							fixSchema(content.Schema.Value)
+							fixSchema(content.Schema.Value, policy)
 						}
 					}
 				}
@@ -324,7 +488,7 @@ func fixDoc(doc *openapi3.T) {
 						if respRef != nil && respRef.Value != nil {
 							for _, content := range respRef.Value.Content {
 								if content != nil && content.Schema != nil && content.Schema.Value != nil {
-									fixSchema(content.Schema.Value)
+									fixSchema(content.Schema.Value, policy)
 								}
 							}
 						}
@@ -333,60 +497,158 @@ func fixDoc(doc *openapi3.T) {
 			}
 		}
 	}
-	applySDKTypeOverrides(doc)
+	applySDKTypeOverrides(doc, policy)
 }
 
 // applySDKTypeOverrides contains Go-specific model decisions that are owned by
 // this SDK repository rather than the shared REST description. Keeping these
 // transformations here makes generation reproducible without changing the
 // API source specification.
-func applySDKTypeOverrides(doc *openapi3.T) {
-	if doc.Components == nil {
+func applySDKTypeOverrides(doc *openapi3.T, policy *numericPolicy) {
+	if doc == nil || doc.Components == nil || policy == nil {
 		return
 	}
-	if balance := doc.Components.Schemas["Balance"]; balance != nil && balance.Value != nil {
-		for _, field := range []string{"amount", "available", "availableForWithdrawal", "pendingWithdrawal", "pendingDeposit"} {
-			if prop := balance.Value.Properties[field]; prop != nil && prop.Value != nil {
-				setDecimalOverride(prop.Value)
+	for _, override := range policy.overlay.SchemaOverrides.DecimalFields {
+		schema := doc.Components.Schemas[override.Schema]
+		if schema == nil || schema.Value == nil {
+			continue
+		}
+		for _, field := range override.Properties {
+			if prop := schema.Value.Properties[field]; prop != nil && prop.Value != nil {
+				setDecimalOverride(prop.Value, policy)
 			}
 		}
 	}
-	if order := doc.Components.Schemas["NewOrderRequest"]; order != nil && order.Value != nil {
-		if nonce := order.Value.Properties["nonce"]; nonce != nil && nonce.Value != nil {
-			nonce.Value.Type = &openapi3.Types{"integer"}
-			nonce.Value.Format = "int64"
+	for _, override := range policy.overlay.SchemaOverrides.Int64Fields {
+		schema := doc.Components.Schemas[override.Schema]
+		if schema == nil || schema.Value == nil {
+			continue
+		}
+		if prop := schema.Value.Properties[override.Property]; prop != nil && prop.Value != nil {
+			setInt64Override(prop.Value, policy)
 		}
 	}
-	if cancel := doc.Components.Schemas["CancelOrderRequest"]; cancel != nil && cancel.Value != nil {
-		if orderID := cancel.Value.Properties["order_id"]; orderID != nil && orderID.Value != nil {
-			// Order IDs are unsigned 64-bit wire values. Using uint64 avoids
-			// rejecting valid IDs above MaxInt64 in cancellation helpers.
-			setGoTypeOverride(orderID.Value, "uint64")
+	for _, override := range policy.overlay.SchemaOverrides.Int64OneOfVariants {
+		schema := doc.Components.Schemas[override.Schema]
+		if schema == nil || schema.Value == nil {
+			continue
 		}
-	}
-	if status := doc.Components.Schemas["OrderStatusRequest"]; status != nil && status.Value != nil {
-		if orderID := status.Value.Properties["order_id"]; orderID != nil && orderID.Value != nil {
-			setGoTypeOverride(orderID.Value, "uint64")
-		}
-	}
-	if nonce := doc.Components.Schemas["Nonce"]; nonce != nil && nonce.Value != nil {
-		for _, variant := range nonce.Value.OneOf {
+		for _, variant := range schema.Value.OneOf {
 			if variant.Value != nil && variant.Value.Type != nil && variant.Value.Type.Is("integer") {
-				variant.Value.Type = &openapi3.Types{"integer"}
-				variant.Value.Format = "int64"
+				setInt64Override(variant.Value, policy)
 			}
 		}
 	}
 }
 
+// preserveContractTotalShares keeps the field that older versions of the
+// prediction-markets API exposed even when the current schema omits it.
+func preserveContractTotalShares(code string, predictionMarkets bool) string {
+	if !predictionMarkets {
+		return code
+	}
+	const marker = "type Contract struct {\n"
+	start := strings.Index(code, marker)
+	if start < 0 {
+		return code
+	}
+	bodyStart := start + len(marker)
+	bodyEnd := strings.Index(code[bodyStart:], "\n}")
+	if bodyEnd < 0 {
+		return code
+	}
+	bodyEnd += bodyStart
+	if strings.Contains(code[bodyStart:bodyEnd], "TotalShares ") {
+		return code
+	}
+	return code[:bodyStart] +
+		"\t// TotalShares Total shares available for the contract.\n" +
+		"\tTotalShares *string `json:\"totalShares,omitempty\"`\n" +
+		code[bodyStart:]
+}
+
+// rewriteDecimalImportsAndTypes rewrites decimal references and deduplicates
+// the generated import for the configured decimal package.
+func rewriteDecimalImportsAndTypes(code string, decimalGo numericDecimalGo) string {
+	const runtimeTypesPath = "github.com/oapi-codegen/runtime/types"
+	importPath := decimalGo.ImportPath
+	if importPath == "" {
+		return code
+	}
+
+	// oapi-codegen uses the existing runtime/types import alias for generated
+	targetAlias := "openapi_" + strings.TrimPrefix(decimalGo.ImportAlias, "openapi_")
+	if decimalGo.ImportAlias == "" {
+		targetAlias = "openapi_types"
+	}
+	runtimeImport := regexp.MustCompile(`(?m)^[ \t]*([[:alnum:]_]+)[ \t]+` + regexp.QuoteMeta(fmt.Sprintf("%q", runtimeTypesPath)) + `[ \t]*\r?\n`)
+	if match := runtimeImport.FindStringSubmatch(code); len(match) == 2 {
+		targetAlias = match[1]
+	}
+
+	quotedImportPath := fmt.Sprintf("%q", importPath)
+	code = strings.ReplaceAll(code, fmt.Sprintf("%q", runtimeTypesPath), quotedImportPath)
+
+	// Keep exactly one import for the configured package. Depending on which
+	// generated model first requires it, codegen may emit several aliases for
+	// the same path (for example, openapi_types and openapi_openapi_types).
+	importLine := regexp.MustCompile(`(?m)^[ \t]*(?:[[:alnum:]_]+[ \t]+)?` + regexp.QuoteMeta(quotedImportPath) + `[ \t]*\r?\n`)
+	seenImport := false
+	code = importLine.ReplaceAllStringFunc(code, func(string) string {
+		if seenImport {
+			return ""
+		}
+		seenImport = true
+		return "\t" + targetAlias + " " + quotedImportPath + "\n"
+	})
+
+	for _, configuredType := range []string{decimalGo.NumberSchema, decimalGo.StringSchema} {
+		if configuredType == "" {
+			continue
+		}
+		typeQualifier := decimalGo.ImportAlias
+		typeName := configuredType
+		if dot := strings.LastIndex(configuredType, "."); dot >= 0 {
+			typeQualifier = configuredType[:dot]
+			typeName = configuredType[dot+1:]
+		}
+
+		// Match complete qualified identifiers. An unbounded replacement of
+		// "types.Decimal" also matches the suffix of "openapi_types.Decimal",
+		// producing the invalid "openapi_openapi_types.Decimal".
+		qualifiers := []string{
+			typeQualifier + "." + typeName,
+			decimalGo.ImportAlias + "." + typeName,
+			targetAlias + "." + typeName,
+			"openapi_" + typeQualifier + "." + typeName,
+			"openapi_" + decimalGo.ImportAlias + "." + typeName,
+			"openapi_" + targetAlias + "." + typeName,
+		}
+		seenQualifiers := make(map[string]struct{}, len(qualifiers))
+		for _, qualifier := range qualifiers {
+			if _, seen := seenQualifiers[qualifier]; seen || qualifier == "" {
+				continue
+			}
+			seenQualifiers[qualifier] = struct{}{}
+			qualifiedType := regexp.MustCompile(`(^|[^[:alnum:]_])` + regexp.QuoteMeta(qualifier) + `([^[:alnum:]_]|$)`)
+			code = qualifiedType.ReplaceAllString(code, `${1}`+targetAlias+"."+typeName+`${2}`)
+		}
+	}
+	return code
+}
+
 // RenderModule generates the Go code for a given module configuration from its OpenAPI spec.
 func RenderModule(mod ModuleConfig) (string, error) {
-	raw, err := loadPublishedSpec(mod.SpecURL)
+	policy, err := loadNumericOverlay()
+	if err != nil {
+		return "", err
+	}
+	raw, err := loadVendoredSpec(mod.SpecID)
 	if err != nil {
 		return "", err
 	}
 
-	sanitized := sanitizeSpecBytes(raw)
+	sanitized := sanitizeSpecBytes(raw, policy)
 
 	loader := openapi3.NewLoader()
 	loader.IsExternalRefsAllowed = false
@@ -395,7 +657,7 @@ func RenderModule(mod ModuleConfig) (string, error) {
 		return "", fmt.Errorf("loading openapi doc: %w", err)
 	}
 
-	fixDoc(doc)
+	fixDoc(doc, policy)
 
 	cfg := codegen.Configuration{
 		PackageName: mod.Package,
@@ -413,21 +675,16 @@ func RenderModule(mod ModuleConfig) (string, error) {
 		return "", fmt.Errorf("generating code for %s: %w", mod.ID, err)
 	}
 
-	// Rewire third-party runtime imports to stdlib-backed internal packages
-	code = strings.ReplaceAll(code, "\"github.com/oapi-codegen/runtime/types\"", "\"github.com/gemini/developer-platform/packages/sdk-go/types\"")
+	// Rewire third-party runtime imports to stdlib-backed internal packages.
 	code = strings.ReplaceAll(code, "\"github.com/oapi-codegen/runtime\"", "\"github.com/gemini/developer-platform/packages/sdk-go/internal/runtime\"")
-	// The generated files already import the shared types package as
-	// openapi_types for dates and UUIDs. Reuse that alias for Decimal fields so
-	// generation does not emit two imports of the same package under different
-	// names.
-	code = strings.ReplaceAll(code, "types.Decimal", "openapi_types.Decimal")
-	code = strings.ReplaceAll(code, "\ttypes \"github.com/gemini/developer-platform/packages/sdk-go/types\"\n", "")
+	code = rewriteDecimalImportsAndTypes(code, policy.overlay.DecimalFormat.Go)
+	code = preserveContractTotalShares(code, mod.SpecID == predictionMarketsSpecID)
 
-	// Normalize tool version comment line to ensure deterministic comparison across environments
+	// Normalize tool version comment line to ensure deterministic comparison across environments.
 	versionRegex := regexp.MustCompile(`(?m)^// Code generated by .* DO NOT EDIT\.\r?\n`)
 	code = versionRegex.ReplaceAllString(code, "// Code generated by oapi-codegen. DO NOT EDIT.\n")
 
-	header := fmt.Sprintf("// Code generated from %s (%s). DO NOT EDIT.\n\n", path.Base(mod.SpecURL), strings.Join(mod.Tags, ", "))
+	header := fmt.Sprintf("// Code generated from %s (%s). DO NOT EDIT.\n\n", specBasename(mod.SpecID), strings.Join(mod.Tags, ", "))
 	formatted, err := format.Source([]byte(header + code))
 	if err != nil {
 		return "", fmt.Errorf("formatting generated code for %s: %w", mod.ID, err)
@@ -441,7 +698,6 @@ func GenerateModule(mod ModuleConfig) error {
 	if err != nil {
 		return err
 	}
-
 	outDir := filepath.Join("..", "generated", mod.Package)
 	if err := os.MkdirAll(outDir, 0750); err != nil {
 		return fmt.Errorf("creating dir %s: %w", outDir, err)
