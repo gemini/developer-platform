@@ -208,6 +208,51 @@ test('the account override is signed into the payload on both methods', async ()
   }
 });
 
+// ----------------------------------------------------------------------------
+// Regression: authenticatedPost must attach fullBody as the real HTTP body,
+// not just sign it into X-GEMINI-PAYLOAD. Newer prediction-market handlers
+// (e.g. combos) do a real json.Decode(r.Body) server-side and 400 on an
+// empty body, unlike the legacy private-API endpoints that read only the
+// header — sendAuthenticated previously never set `body:` on the fetch call
+// at all, so every authenticated POST silently sent zero bytes.
+// ----------------------------------------------------------------------------
+
+test('authenticatedPost sends fullBody as a real JSON request body', async () => {
+  const f = stubFetch('{"alreadyExisted":true}');
+  try {
+    const client = new GeminiHttpClient();
+    await client.authenticatedPost('/v1/prediction-markets/combos', { legs: ['a', 'b'] });
+
+    const call = f.calls[0]!;
+    assert.strictEqual(call.body, JSON.stringify({ legs: ['a', 'b'] }));
+    assert.strictEqual(call.headers['Content-Type'], 'application/json');
+    // Content-Length must not be left stale at '0' now that a real body is
+    // sent — that mismatch doesn't throw, it just makes fetch silently drop
+    // the body, which is exactly how this bug slipped through originally.
+    assert.strictEqual(
+      call.headers['Content-Length'],
+      undefined,
+      'a stale Content-Length must not override the real body length — let fetch compute it'
+    );
+  } finally {
+    f.restore();
+  }
+});
+
+test('authenticatedGet still sends no body and keeps its own headers untouched', async () => {
+  const f = stubFetch('{"hasAcceptedLatest":true}');
+  try {
+    const client = new GeminiHttpClient();
+    await client.authenticatedGet('/v1/prediction-markets/terms/status');
+
+    const call = f.calls[0]!;
+    assert.strictEqual(call.body, undefined);
+    assert.strictEqual(call.headers['Content-Type'], undefined);
+  } finally {
+    f.restore();
+  }
+});
+
 test('a non-2xx response throws with the status and body', async () => {
   const f = stubFetch('{"reason":"AcceptTermsRequired"}', 403);
   try {
