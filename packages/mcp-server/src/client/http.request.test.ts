@@ -239,6 +239,31 @@ test('authenticatedPost sends fullBody as a real JSON request body', async () =>
   }
 });
 
+test('authenticatedPost sends the account override in the real body, matching what is signed', async () => {
+  const saved = config.account;
+  const f = stubFetch('{"alreadyExisted":true}');
+  try {
+    config.account = 'primary';
+    const client = new GeminiHttpClient();
+    await client.authenticatedPost('/v1/prediction-markets/combos', { legs: ['a', 'b'] });
+
+    const call = f.calls[0]!;
+    const sentBody = JSON.parse(call.body!) as Record<string, unknown>;
+    assert.deepStrictEqual(sentBody, { legs: ['a', 'b'], account: 'primary' });
+
+    // The real body and the signed X-GEMINI-PAYLOAD must describe the same
+    // request. A regression that signs `{...body, account}` into the header
+    // but sends only the base `body` over the wire would pass the plain
+    // body-serialization test above while leaving the server with a request
+    // whose body and signature silently disagree.
+    const { request: _req, nonce: _nonce, ...signedBody } = signedPayload(call.headers);
+    assert.deepStrictEqual(sentBody, signedBody);
+  } finally {
+    config.account = saved;
+    f.restore();
+  }
+});
+
 test('authenticatedGet still sends no body and keeps its own headers untouched', async () => {
   const f = stubFetch('{"hasAcceptedLatest":true}');
   try {
