@@ -109,18 +109,19 @@ export interface WSContractStatusMessage {
  */
 export interface WSOrderUpdateMessage {
   e: 'order' | 'orderUpdate';
-  // Nanoseconds, same convention as trade/bookTicker/depth/ticker — NOT
-  // milliseconds. Confirmed three ways: the live AsyncAPI spec, sdk-typescript's
-  // runtime validator, and directly against real production data during
-  // manual testing (a raw E of ~1.79e18 divided by 1_000_000 in
-  // WebSocketManager.handleMessage landed on the correct, present-day
-  // eventTimeMs). A prior review flagged this as wrong, citing an sdk-go unit
-  // test fixture (`E:1710000000000`) as evidence of milliseconds — that
-  // fixture is unreliable: the same Go test file reuses that exact value for
-  // trade/balanceUpdate/positionReport frames too, including trade's `T`,
-  // which is independently and unambiguously nanoseconds. See the wire-level
-  // test in websocket/manager.test.ts using a realistic 19-digit nanosecond
-  // fixture with an explicit eventTimeMs assertion.
+  // Nanoseconds in real production traffic today, same convention as
+  // trade/bookTicker/depth/ticker — confirmed directly against real
+  // production data during manual testing (a raw E of ~1.79e18 landed on the
+  // correct, present-day eventTimeMs after conversion). A review flagged
+  // this as milliseconds instead, citing an sdk-go unit test fixture
+  // (`E:1710000000000`) — that fixture is unreliable (the same Go test file
+  // reuses that exact value for trade/balanceUpdate/positionReport frames
+  // too, including trade's `T`, which is independently and unambiguously
+  // nanoseconds), but rather than relitigate it, WebSocketManager.toEventTimeMs()
+  // now detects the unit by magnitude instead of assuming nanoseconds
+  // unconditionally, so a millisecond-scale value (like that cited fixture)
+  // is used as-is instead of being wrongly divided. See the wire-level tests
+  // in websocket/manager.test.ts covering both magnitudes explicitly.
   E: number;
   s: string;       // symbol
   i: string;       // order ID (large integer; kept as string, same treatment as contractStatus's i)

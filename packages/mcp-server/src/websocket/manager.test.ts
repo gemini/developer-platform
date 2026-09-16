@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { WebSocketServer, type RawData } from 'ws';
-import { WebSocketManager, toChannelSymbol } from './manager.js';
+import { WebSocketManager, toChannelSymbol, toEventTimeMs } from './manager.js';
 import { config } from '../config.js';
 import type { MarketDataStore } from '../store/index.js';
 import type { CachedContractStatus, CachedOrderUpdate } from '../types/websocket.js';
@@ -64,6 +64,20 @@ test('toChannelSymbol preserves case and hyphens for prediction-market symbols',
 test('toChannelSymbol lowercases spot symbols', () => {
   assert.strictEqual(toChannelSymbol('BTCUSD'), 'btcusd');
   assert.strictEqual(toChannelSymbol('EthUsd'), 'ethusd');
+});
+
+test('toEventTimeMs divides a nanosecond-scale value, matching real production traffic', () => {
+  // ~1.79e18 — the actual magnitude captured live during manual testing for
+  // this PR, which converts to a correct, present-day millisecond timestamp.
+  assert.strictEqual(toEventTimeMs(1_789_420_240_479_000_000), 1_789_420_240_479);
+});
+
+test('toEventTimeMs leaves a millisecond-scale value unchanged', () => {
+  // The exact fixture value a review cited as evidence order events use
+  // milliseconds. Whether or not real traffic ever actually sends this
+  // shape, a value at this magnitude is used as-is rather than divided —
+  // dividing it would produce a nonsense January-1970 timestamp.
+  assert.strictEqual(toEventTimeMs(1_710_000_000_000), 1_710_000_000_000);
 });
 
 async function withEchoServer(run: (manager: WebSocketManager, receivedParams: string[]) => Promise<void>): Promise<void> {

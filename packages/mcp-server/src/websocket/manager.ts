@@ -14,6 +14,20 @@ export function toChannelSymbol(symbol: string): string {
   return symbol.toUpperCase().startsWith('GEMI-') ? symbol.toUpperCase() : symbol.toLowerCase();
 }
 
+// Order-event `E` is nanoseconds in real production traffic today (confirmed
+// live — see the wire-level tests in manager.test.ts and the note on
+// WSOrderUpdateMessage in types/websocket.ts) — but rather than assuming
+// that unconditionally, detect it by magnitude so a millisecond-scale value
+// is used as-is instead of being wrongly divided. A millisecond epoch
+// timestamp won't reach 1e15 until the year 33658; a nanosecond one is
+// already ~1.79e18 today, six orders of magnitude apart, so this is not a
+// close call either way.
+const NANOSECOND_MAGNITUDE_THRESHOLD = 1e15;
+
+export function toEventTimeMs(rawTimestamp: number): number {
+  return rawTimestamp >= NANOSECOND_MAGNITUDE_THRESHOLD ? Math.floor(rawTimestamp / 1_000_000) : rawTimestamp;
+}
+
 /**
  * WebSocket manager that integrates client and store
  */
@@ -255,7 +269,7 @@ export class WebSocketManager {
           feeAmount: message.n,
           isMaker: message.m,
           rejectReason: message.r,
-          eventTimeMs: Math.floor(message.E / 1_000_000), // nanoseconds to milliseconds
+          eventTimeMs: toEventTimeMs(message.E),
         });
         return;
       }
