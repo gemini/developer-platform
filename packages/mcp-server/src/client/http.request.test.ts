@@ -116,6 +116,13 @@ test('authenticatedPost puts params in the query string and signs the bare path'
     assert.strictEqual(url.searchParams.get('limit'), '25');
     assert.strictEqual(url.searchParams.get('withCashOuts'), 'true');
 
+    // The default (no explicit body) case must still serialize to a real
+    // '{}' request body, not be left unsent — a regression that special-
+    // cases an empty fullBody as "nothing to send" would pass every other
+    // POST-body test here, which all pass a non-empty payload.
+    assert.strictEqual(call.body, '{}');
+    assert.strictEqual(call.headers['Content-Type'], 'application/json');
+
     // The regression this guards: including the query string in the signed
     // payload gets the request rejected by the API. Both SDKs sign the path
     // only for these endpoints.
