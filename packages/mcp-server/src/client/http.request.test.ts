@@ -116,6 +116,13 @@ test('authenticatedPost puts params in the query string and signs the bare path'
     assert.strictEqual(url.searchParams.get('limit'), '25');
     assert.strictEqual(url.searchParams.get('withCashOuts'), 'true');
 
+    // The default (no explicit body) case must still serialize to a real
+    // '{}' request body, not be left unsent — a regression that special-
+    // cases an empty fullBody as "nothing to send" would pass every other
+    // POST-body test here, which all pass a non-empty payload.
+    assert.strictEqual(call.body, '{}');
+    assert.strictEqual(call.headers['Content-Type'], 'application/json');
+
     // The regression this guards: including the query string in the signed
     // payload gets the request rejected by the API. Both SDKs sign the path
     // only for these endpoints.
@@ -204,6 +211,76 @@ test('the account override is signed into the payload on both methods', async ()
     assert.deepStrictEqual(post['orders'], []);
   } finally {
     config.account = saved;
+    f.restore();
+  }
+});
+
+// ----------------------------------------------------------------------------
+// Regression: authenticatedPost must attach fullBody as the real HTTP body,
+// not just sign it into X-GEMINI-PAYLOAD. Newer prediction-market handlers
+// (e.g. combos) do a real json.Decode(r.Body) server-side and 400 on an
+// empty body, unlike the legacy private-API endpoints that read only the
+// header — sendAuthenticated previously never set `body:` on the fetch call
+// at all, so every authenticated POST silently sent zero bytes.
+// ----------------------------------------------------------------------------
+
+test('authenticatedPost sends fullBody as a real JSON request body', async () => {
+  const f = stubFetch('{"alreadyExisted":true}');
+  try {
+    const client = new GeminiHttpClient();
+    await client.authenticatedPost('/v1/prediction-markets/combos', { legs: ['a', 'b'] });
+
+    const call = f.calls[0]!;
+    assert.strictEqual(call.body, JSON.stringify({ legs: ['a', 'b'] }));
+    assert.strictEqual(call.headers['Content-Type'], 'application/json');
+    // Content-Length must not be left stale at '0' now that a real body is
+    // sent — that mismatch doesn't throw, it just makes fetch silently drop
+    // the body, which is exactly how this bug slipped through originally.
+    assert.strictEqual(
+      call.headers['Content-Length'],
+      undefined,
+      'a stale Content-Length must not override the real body length — let fetch compute it'
+    );
+  } finally {
+    f.restore();
+  }
+});
+
+test('authenticatedPost sends the account override in the real body, matching what is signed', async () => {
+  const saved = config.account;
+  const f = stubFetch('{"alreadyExisted":true}');
+  try {
+    config.account = 'primary';
+    const client = new GeminiHttpClient();
+    await client.authenticatedPost('/v1/prediction-markets/combos', { legs: ['a', 'b'] });
+
+    const call = f.calls[0]!;
+    const sentBody = JSON.parse(call.body!) as Record<string, unknown>;
+    assert.deepStrictEqual(sentBody, { legs: ['a', 'b'], account: 'primary' });
+
+    // The real body and the signed X-GEMINI-PAYLOAD must describe the same
+    // request. A regression that signs `{...body, account}` into the header
+    // but sends only the base `body` over the wire would pass the plain
+    // body-serialization test above while leaving the server with a request
+    // whose body and signature silently disagree.
+    const { request: _req, nonce: _nonce, ...signedBody } = signedPayload(call.headers);
+    assert.deepStrictEqual(sentBody, signedBody);
+  } finally {
+    config.account = saved;
+    f.restore();
+  }
+});
+
+test('authenticatedGet still sends no body and keeps its own headers untouched', async () => {
+  const f = stubFetch('{"hasAcceptedLatest":true}');
+  try {
+    const client = new GeminiHttpClient();
+    await client.authenticatedGet('/v1/prediction-markets/terms/status');
+
+    const call = f.calls[0]!;
+    assert.strictEqual(call.body, undefined);
+    assert.strictEqual(call.headers['Content-Type'], undefined);
+  } finally {
     f.restore();
   }
 });

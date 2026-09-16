@@ -99,8 +99,23 @@ export class GeminiHttpClient {
     // signature produces a 400 from the API. Both the Go and TypeScript SDKs
     // sign the path only, reserving query signing for the two funding-payment
     // report endpoints that explicitly require it.
+    const { 'Content-Type': _signedContentType, 'Content-Length': _signedContentLength, ...signedAuthHeaders } =
+      buildSignedHeaders(endpoint, fullBody, this.apiKey, this.apiSecret);
+    // POST endpoints need `fullBody` as an actual JSON request body, not just
+    // signed into X-GEMINI-PAYLOAD: some newer prediction-market handlers
+    // (e.g. combos) do a real `json.Decode(r.Body)` server-side and reject an
+    // empty body with a 400, unlike the legacy private-API endpoints that
+    // read exclusively from the header. GET never sends a body — the payload
+    // rides in the header only, per authenticatedGet's doc comment above.
+    // buildSignedHeaders' `Content-Type: text/plain` / `Content-Length: 0`
+    // are correct for the no-body case but stale once a real body is
+    // attached — an explicit mismatched Content-Length is NOT rejected by
+    // `fetch`, it just silently keeps the body from reaching the server, so
+    // both are dropped here and left for `fetch` to compute from `body`.
+    const requestBody = method === 'POST' ? JSON.stringify(fullBody) : undefined;
     const headers = {
-      ...buildSignedHeaders(endpoint, fullBody, this.apiKey, this.apiSecret),
+      ...signedAuthHeaders,
+      ...(requestBody !== undefined ? { 'Content-Type': 'application/json' } : {}),
       'User-Agent': USER_AGENT,
     };
     const url = new URL(`${this.baseUrl}${endpoint}`);
@@ -108,6 +123,7 @@ export class GeminiHttpClient {
     const res = await fetch(url.toString(), {
       method,
       headers,
+      body: requestBody,
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
     return this.parseResponse<T>(res);
