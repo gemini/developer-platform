@@ -1,5 +1,6 @@
-import { GeminiWebSocketClient, isTradeMessage, isDepthMessage, isBookTickerMessage, isTickerMessage, isContractStatusMessage, isSubscribeResponse } from '../client/websocket.js';
+import { GeminiWebSocketClient, isTradeMessage, isDepthMessage, isBookTickerMessage, isTickerMessage, isContractStatusMessage, isOrderUpdateMessage, isSubscribeResponse } from '../client/websocket.js';
 import { MarketDataStore } from '../store/index.js';
+import { config } from '../config.js';
 import type { WSMessage, WSConnectionStatus, WSManagerState, WSChannel } from '../types/websocket.js';
 
 /**
@@ -11,6 +12,20 @@ import type { WSMessage, WSConnectionStatus, WSManagerState, WSChannel } from '.
  */
 export function toChannelSymbol(symbol: string): string {
   return symbol.toUpperCase().startsWith('GEMI-') ? symbol.toUpperCase() : symbol.toLowerCase();
+}
+
+// Order-event `E` is nanoseconds in real production traffic today (confirmed
+// live — see the wire-level tests in manager.test.ts and the note on
+// WSOrderUpdateMessage in types/websocket.ts) — but rather than assuming
+// that unconditionally, detect it by magnitude so a millisecond-scale value
+// is used as-is instead of being wrongly divided. A millisecond epoch
+// timestamp won't reach 1e15 until the year 33658; a nanosecond one is
+// already ~1.79e18 today, six orders of magnitude apart, so this is not a
+// close call either way.
+const NANOSECOND_MAGNITUDE_THRESHOLD = 1e15;
+
+export function toEventTimeMs(rawTimestamp: number): number {
+  return rawTimestamp >= NANOSECOND_MAGNITUDE_THRESHOLD ? Math.floor(rawTimestamp / 1_000_000) : rawTimestamp;
 }
 
 /**
@@ -180,6 +195,27 @@ export class WebSocketManager {
   }
 
   /**
+   * Subscribe to the authenticated orders@account channel (fill/cancel/
+   * reject confirmation for every order on the account). Like
+   * contractStatus, this is one global channel — no per-symbol wire
+   * subscription — and requires credentials at the WebSocket connection
+   * upgrade itself (handled in GeminiWebSocketClient.connect()), not a
+   * post-connect handshake. Throws immediately if credentials aren't
+   * configured, mirroring GeminiHttpClient.authenticatedPost's guard,
+   * rather than attempting the subscribe and getting a confusing late
+   * rejection from Gemini.
+   */
+  async subscribeAccountOrders(): Promise<void> {
+    if (!config.apiKey || !config.apiSecret) {
+      throw new Error(
+        'Authentication required for orders@account: GEMINI_API_KEY and GEMINI_API_SECRET ' +
+          'must be set in the MCP server environment. This tool is unavailable in public-only mode.'
+      );
+    }
+    return this.subscribeOnce('orders@account');
+  }
+
+  /**
    * Handle incoming WebSocket message
    */
   private handleMessage(message: WSMessage): void {
@@ -204,6 +240,37 @@ export class WebSocketManager {
           message.p,
           message.E
         );
+        return;
+      }
+
+      // Handle authenticated order lifecycle events — checked before
+      // isTradeMessage below on purpose. A fill event's t/q/m fields
+      // duck-type match isTradeMessage's check exactly; sdk-go's own
+      // dispatcher hit this and fixed it the same way (explicit
+      // discriminator first). Getting this order wrong means a fill
+      // silently corrupts the spot price/trade cache instead of reaching
+      // the order store.
+      if (isOrderUpdateMessage(message)) {
+        this.store.updateOrder({
+          orderId: message.i,
+          clientOrderId: message.c,
+          symbol: message.s,
+          side: message.S,
+          orderType: message.o,
+          status: message.X,
+          outcome: message.O,
+          price: message.p,
+          stopPrice: message.P,
+          quantity: message.q,
+          remainingQty: message.z,
+          executedQty: message.Z,
+          lastExecutedPrice: message.L,
+          tradeId: message.t,
+          feeAmount: message.n,
+          isMaker: message.m,
+          rejectReason: message.r,
+          eventTimeMs: toEventTimeMs(message.E),
+        });
         return;
       }
 
