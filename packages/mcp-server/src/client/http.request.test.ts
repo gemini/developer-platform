@@ -144,13 +144,13 @@ test('query serialization repeats arrays, sets scalars, and drops undefined', as
   try {
     const client = new GeminiHttpClient();
     await client.publicGet('/v1/prediction-markets/events', {
-      'status[]': ['active', 'closed'],
+      status: ['active', 'closed'],
       search: 'fed',
       limit: undefined,
     });
 
     const url = new URL(f.calls[0]!.url);
-    assert.deepStrictEqual(url.searchParams.getAll('status[]'), ['active', 'closed']);
+    assert.deepStrictEqual(url.searchParams.getAll('status'), ['active', 'closed']);
     assert.strictEqual(url.searchParams.get('search'), 'fed');
     assert.strictEqual(url.searchParams.has('limit'), false, 'undefined params must be dropped');
   } finally {
