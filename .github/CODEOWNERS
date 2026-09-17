@@ -15,5 +15,5 @@
 /packages/sdk-go/** @fuller @ximt
 
 # Cross-SDK API contract and conformance fixtures.
-/specs/** @fuller @ximt
-/conformance/** @fuller @ximt
+/specs/** @fuller @ximt @kevinnguy
+/conformance/** @fuller @ximt @kevinnguy
