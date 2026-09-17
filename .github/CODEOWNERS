@@ -1,19 +1,19 @@
 # Release and security-sensitive repository controls.
-/.github/CODEOWNERS @fuller @ximt
-/.github/workflows/** @fuller @ximt
+/.github/CODEOWNERS @gemini/principal-engineers
+/.github/workflows/** @gemini/principal-engineers
 /.github/workflows/publish-typescript-sdk.yml @gemini/principal-engineers
-/SECURITY.md @fuller @ximt
+/SECURITY.md @gemini/principal-engineers
 
 # Published TypeScript SDK source.
-/packages/sdk-typescript/** @fuller @ximt
+/packages/sdk-typescript/** @gemini/principal-engineers
 
 # Published TypeScript SDK release metadata.
 /packages/sdk-typescript/package.json @gemini/principal-engineers
 /packages/sdk-typescript/package-lock.json @gemini/principal-engineers
 
 # Published Go SDK source, module metadata, and release workflow.
-/packages/sdk-go/** @fuller @ximt
+/packages/sdk-go/** @gemini/principal-engineers
 
 # Cross-SDK API contract and conformance fixtures.
-/specs/** @fuller @ximt @kevinnguy
-/conformance/** @fuller @ximt @kevinnguy
+/specs/** @gemini/principal-engineers
+/conformance/** @gemini/principal-engineers
