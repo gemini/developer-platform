@@ -1,0 +1,26 @@
+{
+  "id": "http/hmac-requests/websocket-upgrade-nonce",
+  "kind": "hmacRequest",
+  "credentials": {
+    "apiKey": "conformance-api-key",
+    "apiSecret": "conformance-api-secret"
+  },
+  "nonce": {
+    "mode": "websocket"
+  },
+  "expect": {
+    "headers": [
+      "X-GEMINI-APIKEY",
+      "X-GEMINI-NONCE",
+      "X-GEMINI-PAYLOAD",
+      "X-GEMINI-SIGNATURE"
+    ],
+    "apiKeyHeader": "conformance-api-key",
+    "payload": {},
+    "signature": {
+      "algorithm": "HMAC-SHA384",
+      "over": "payloadBase64",
+      "encoding": "hex-lower"
+    }
+  }
+}

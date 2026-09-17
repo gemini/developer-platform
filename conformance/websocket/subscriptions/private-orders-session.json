@@ -1,0 +1,12 @@
+{
+  "id": "websocket/subscriptions/private-orders-session",
+  "kind": "wsSubscription",
+  "stream": "orders",
+  "options": {
+    "scope": "session"
+  },
+  "expect": {
+    "method": "SUBSCRIBE",
+    "params": ["orders@session"]
+  }
+}

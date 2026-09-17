@@ -1,0 +1,10 @@
+{
+  "id": "json/wide-integer-safe",
+  "kind": "jsonDecoding",
+  "raw": "{\"v\":9007199254740991}",
+  "field": "v",
+  "expect": {
+    "valueKind": "integer",
+    "text": "9007199254740991"
+  }
+}

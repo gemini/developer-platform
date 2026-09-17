@@ -1,0 +1,12 @@
+{
+  "id": "websocket/subscriptions/private-balances-interval",
+  "kind": "wsSubscription",
+  "stream": "balances",
+  "options": {
+    "intervalMs": 1000
+  },
+  "expect": {
+    "method": "SUBSCRIBE",
+    "params": ["balances@account@1s"]
+  }
+}

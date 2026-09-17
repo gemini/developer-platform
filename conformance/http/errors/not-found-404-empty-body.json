@@ -1,0 +1,12 @@
+{
+  "id": "http/errors/not-found-404-empty-body",
+  "kind": "errorMapping",
+  "response": {
+    "status": 404,
+    "headers": {},
+    "body": ""
+  },
+  "expect": {
+    "kind": "not_found"
+  }
+}

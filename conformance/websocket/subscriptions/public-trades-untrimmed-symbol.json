@@ -1,0 +1,10 @@
+{
+  "id": "websocket/subscriptions/public-trades-untrimmed-symbol",
+  "kind": "wsSubscription",
+  "stream": "trades",
+  "symbol": " BTCUSD ",
+  "expect": {
+    "method": "SUBSCRIBE",
+    "params": ["btcusd@trade"]
+  }
+}
