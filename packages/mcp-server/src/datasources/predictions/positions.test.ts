@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import type { GeminiHttpClient } from '../client/http.js';
-import * as predictions from './predictions.js';
+import type { GeminiHttpClient } from '../../client/http.js';
+import * as predictions from './positions.js';
 
 // A fake client that records exactly how each datasource function called it,
 // without touching the network. This is the layer that would catch a wrong

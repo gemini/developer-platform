@@ -12,10 +12,10 @@ process.env.GEMINI_API_SECRET = 'test-api-secret';
 process.env.GEMINI_API_BASE_URL = 'https://api.gemini.invalid';
 delete process.env.GEMINI_ACCOUNT;
 
-const { GeminiHttpClient } = await import('../client/http.js');
-const { createPredictionTools } = await import('./predictions.js');
-const { annotationsFor, requiresConfirmation } = await import('./index.js');
-type ToolDefinition = ReturnType<typeof createPredictionTools>[number];
+const { GeminiHttpClient } = await import('../../client/http.js');
+const { createPredictionComboTools } = await import('./combos.js');
+const { annotationsFor, requiresConfirmation } = await import('../index.js');
+type ToolDefinition = ReturnType<typeof createPredictionComboTools>[number];
 
 function toolNamed(tools: ToolDefinition[], name: string): ToolDefinition {
   const t = tools.find((x) => x.name === name);
@@ -42,7 +42,7 @@ function stubFetch(body: string, status = 200) {
 }
 
 const client = new GeminiHttpClient();
-const tools = createPredictionTools(client);
+const tools = createPredictionComboTools(client);
 
 // ----------------------------------------------------------------------------
 // gemini_create_prediction_combo — schema validation

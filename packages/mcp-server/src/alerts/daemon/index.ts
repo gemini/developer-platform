@@ -16,7 +16,7 @@ import { appendAlertEvent } from '../log.js';
 import * as funds from '../../datasources/funds.js';
 import * as market from '../../datasources/market.js';
 import * as margin from '../../datasources/margin.js';
-import * as predictions from '../../datasources/predictions.js';
+import { listRecentlySettled } from '../../datasources/predictions/market-data.js';
 import type { BalanceSnapshot } from '../categories/balance.js';
 import type { TransferRecord } from '../categories/transfer.js';
 import type { FundingRateSnapshot } from '../categories/funding.js';
@@ -77,7 +77,7 @@ function buildFetchers(client: GeminiHttpClient): SchedulerFetchers {
     },
 
     predictionsSettled: async (): Promise<PredictionSnapshot> => {
-      const resp = await predictions.listRecentlySettled(client);
+      const resp = await listRecentlySettled(client);
       const events: PredictionEventRecord[] = resp.data.map((e) => ({
         id: e.id,
         ticker: e.ticker,

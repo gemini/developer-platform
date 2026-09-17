@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import JSONBig from 'json-bigint';
-import type { GeminiHttpClient } from '../client/http.js';
-import { createPredictionTools } from './predictions.js';
+import type { GeminiHttpClient } from '../../client/http.js';
+import { createPredictionPositionTools } from './positions.js';
 
 // Requests never leave this test — every call in these tests is intercepted
 // by the fake client before it reaches GeminiHttpClient's real networking
@@ -34,7 +34,7 @@ function recordingClient(response: unknown = {}) {
 }
 
 function toolNamed(client: GeminiHttpClient, name: string) {
-  const tool = createPredictionTools(client).find((t) => t.name === name);
+  const tool = createPredictionPositionTools(client).find((t) => t.name === name);
   if (!tool) throw new Error(`tool not found: ${name}`);
   return tool;
 }
