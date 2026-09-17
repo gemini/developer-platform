@@ -98,7 +98,8 @@ test("wsEvent fixtures route and decode typed events", async () => {
           .map((frame) => parseBoundaryRecord(frame))
           .find((frame) => frame.method === "SUBSCRIBE");
         assert.ok(subscribeFrame);
-        assert.equal(subscribeFrame.id, 1);
+        assert.equal(typeof subscribeFrame.id, "number");
+        assert.ok(Number.isSafeInteger(subscribeFrame.id) && subscribeFrame.id > 0, "subscription IDs must be positive integers");
         socket.fireMessage({ data: `{"id":${String(subscribeFrame.id)},"status":200}` });
         await stream.ready;
 

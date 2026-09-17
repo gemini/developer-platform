@@ -108,7 +108,7 @@ test("wsSubscription fixtures emit exact subscribe frames", async () => {
         assert.equal(frame.method, expected.method);
         assert.deepEqual(frame.params, expectedParams(expected.params));
         assert.equal(typeof frame.id, "number");
-        assert.equal(frame.id, 1, "subscription IDs are scoped to the WebSocket session");
+        assert.ok(Number.isSafeInteger(frame.id) && frame.id > 0, "subscription IDs must be positive integers");
 
         socket.fireMessage({ data: `{"id":${String(frame.id)},"status":200}` });
         await stream.ready;

@@ -95,6 +95,7 @@ async function runCase(value: ErrorFixture): Promise<void> {
     observed = error;
   }
   assert.ok(observed instanceof ApiError, "HTTP error must be an ApiError");
+  assert.equal(observed.status, value.response.status, "HTTP status must be preserved");
   const expectedClass = CLASS_BY_KIND[value.expect.kind];
   assert.ok(observed instanceof expectedClass, `expected ${value.expect.kind} to map to ${expectedClass.name}`);
   if (value.expect.reason !== undefined) assert.equal(observed.reason, value.expect.reason);
