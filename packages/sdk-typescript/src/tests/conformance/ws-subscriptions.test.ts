@@ -107,8 +107,12 @@ test("wsSubscription fixtures emit exact subscribe frames", async () => {
         assert.ok(expected);
         assert.equal(frame.method, expected.method);
         assert.deepEqual(frame.params, expectedParams(expected.params));
-        assert.equal(typeof frame.id, "number");
-        assert.ok(Number.isSafeInteger(frame.id) && frame.id > 0, "subscription IDs must be positive integers");
+        assert.ok(
+          typeof frame.id === "number" &&
+            Number.isSafeInteger(frame.id) &&
+            frame.id > 0,
+          "subscription IDs must be positive integers",
+        );
 
         socket.fireMessage({ data: `{"id":${String(frame.id)},"status":200}` });
         await stream.ready;
