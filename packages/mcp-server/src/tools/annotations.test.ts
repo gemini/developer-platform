@@ -33,6 +33,45 @@ const allTools: ToolDefinition[] = [
   ...createAlertTools(),
 ];
 
+// Every prediction-market tool, across all four PREDICT-8815 split factories.
+// Without this exhaustive list, a read-only prediction tool silently dropped
+// from one of the new factories (e.g. during a future edit to the split)
+// would leave every other test in this suite green, since only
+// destructive/write tools are separately enumerated below.
+const EXPECTED_PREDICTION_TOOLS = [
+  'gemini_list_prediction_events',
+  'gemini_get_prediction_event',
+  'gemini_get_prediction_event_strike',
+  'gemini_list_newly_listed_prediction_events',
+  'gemini_list_recently_settled_prediction_events',
+  'gemini_list_upcoming_prediction_events',
+  'gemini_list_prediction_categories',
+  'gemini_get_prediction_volume_metrics',
+  'gemini_place_prediction_order',
+  'gemini_cancel_prediction_order',
+  'gemini_place_prediction_order_batch',
+  'gemini_cancel_prediction_order_batch',
+  'gemini_get_prediction_active_orders',
+  'gemini_get_prediction_order_history',
+  'gemini_get_prediction_positions',
+  'gemini_get_prediction_settled_positions',
+  'gemini_list_prediction_combos',
+  'gemini_get_prediction_combo',
+  'gemini_create_prediction_combo',
+].sort();
+
+test('exactly the expected 19 prediction-market tools are present, across all four split factories', () => {
+  const predictionTools = [
+    ...createPredictionMarketDataTools(client),
+    ...createPredictionOrderTools(client),
+    ...createPredictionPositionTools(client),
+    ...createPredictionComboTools(client),
+  ]
+    .map((t) => t.name)
+    .sort();
+  assert.deepStrictEqual(predictionTools, EXPECTED_PREDICTION_TOOLS);
+});
+
 // Every tool that moves funds or places/cancels an order on the exchange.
 // This list is the regression guard for the `destructive: boolean` ->
 // `mutates` migration: dropping a tool from it would silently publish a
