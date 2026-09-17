@@ -29,7 +29,7 @@ platform-sized floating-point value.
 
 ## Case schemas
 
-The five `kind` values are described below. Fields not marked optional are
+The six `kind` values are described below. Fields not marked optional are
 required. `id` is always the full path `<suite id>/<case id>` and `kind` must
 match its manifest suite.
 
@@ -182,7 +182,7 @@ exception. Wide update IDs are compared by decimal text.
 
 A new SDK runner should iterate suites from `manifest.json` rather than
 hard-code case names, load each case from its suite directory, and implement
-all five schemas above. It should use an in-memory HTTP/WebSocket double,
+all six schemas above. It should use an in-memory HTTP/WebSocket double,
 perform independent signature verification, preserve raw numeric text, and
 fail on missing, extra, or unlisted fixtures. It must also compare the
 manifest exception IDs and every case exception reference with the reviewed

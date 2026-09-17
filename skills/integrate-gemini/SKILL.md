@@ -81,7 +81,7 @@ For the structured request/response schemas, fetch the catalog first, then use i
 - **Prediction Markets OpenAPI Spec**: `https://developer.gemini.com/specs/openapi/prediction-markets.yaml`
 - **Rendered API Specifications page**: `https://developer.gemini.com/api-specifications`
 
-This repository does not commit the OpenAPI/AsyncAPI files locally — fetch the URLs above rather than assuming a local `apis/` directory. The TypeScript SDK generators under `packages/sdk-typescript/scripts` consume the published specs and verify their reviewed content hashes; prefer the live spec URLs above when writing integration code.
+For SDK generation and conformance reviews, use the checked-in `specs/SOURCES.json` and verbatim files under `specs/`; `specs/refresh.mjs` is the only contract refresh command and is the only repository path that fetches specs. For live integration work, the URLs above remain the narrative/current source.
 
 If a fetched page or spec disagrees with this skill, trust the live source and tell the user what changed — don't silently paper over the discrepancy.
 
