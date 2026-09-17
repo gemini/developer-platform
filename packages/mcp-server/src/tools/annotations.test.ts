@@ -9,7 +9,10 @@ import { createFundTools } from './funds.js';
 import { createAccountTools } from './account.js';
 import { createMarginTools } from './margin.js';
 import { createStakingTools } from './staking.js';
-import { createPredictionTools } from './predictions.js';
+import { createPredictionMarketDataTools } from './predictions/market-data.js';
+import { createPredictionOrderTools } from './predictions/orders.js';
+import { createPredictionPositionTools } from './predictions/positions.js';
+import { createPredictionComboTools } from './predictions/combos.js';
 import { createAlertTools } from './alerts.js';
 
 // Tool construction only closes over the client; nothing calls it, so a stub
@@ -23,7 +26,10 @@ const allTools: ToolDefinition[] = [
   ...createAccountTools(client),
   ...createMarginTools(client),
   ...createStakingTools(client),
-  ...createPredictionTools(client),
+  ...createPredictionMarketDataTools(client),
+  ...createPredictionOrderTools(client),
+  ...createPredictionPositionTools(client),
+  ...createPredictionComboTools(client),
   ...createAlertTools(),
 ];
 

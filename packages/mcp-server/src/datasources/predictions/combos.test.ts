@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import type { GeminiHttpClient } from '../client/http.js';
-import { listCombos, getCombo, createCombo } from './predictions.js';
+import type { GeminiHttpClient } from '../../client/http.js';
+import { listCombos, getCombo, createCombo } from './combos.js';
 
 interface RecordedCall {
   method: 'publicGet' | 'authenticatedGet' | 'authenticatedPost';
