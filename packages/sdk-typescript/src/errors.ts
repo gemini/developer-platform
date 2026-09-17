@@ -198,6 +198,8 @@ export class ApiError extends SdkError {
       missingnonce: MissingNonce,
       invalidsignature: InvalidSignature,
       missingrole: MissingRole,
+      mustacceptterms: AcceptTermsRequired,
+      mustaccepterms: AcceptTermsRequired,
       accepttermsrequired: AcceptTermsRequired,
       termsnotaccepted: AcceptTermsRequired,
       predictionmarketstermsmustbeacceptedbeforeplacingorders: AcceptTermsRequired,
@@ -302,6 +304,8 @@ function reasonClassification(reason: string | undefined): Pick<ServerErrorClass
     case "missingrole":
     case "forbidden":
       return { code: "authorization_failed", category: "authorization" };
+    case "mustacceptterms":
+    case "mustaccepterms":
     case "accepttermsrequired":
     case "termsnotaccepted":
     case "predictionmarketstermsmustbeacceptedbeforeplacingorders":

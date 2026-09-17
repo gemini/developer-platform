@@ -1,0 +1,17 @@
+{
+  "id": "http/errors/rate-limited-429-retry-after",
+  "kind": "errorMapping",
+  "response": {
+    "status": 429,
+    "headers": {
+      "content-type": "application/json",
+      "retry-after": "3"
+    },
+    "body": "{\"result\":\"error\",\"reason\":\"RateLimit\",\"message\":\"Rate limit exceeded\"}"
+  },
+  "expect": {
+    "kind": "rate_limited",
+    "reason": "RateLimit",
+    "retryAfterSeconds": 3
+  }
+}

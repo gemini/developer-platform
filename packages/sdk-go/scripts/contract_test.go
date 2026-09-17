@@ -7,7 +7,6 @@ import (
 	"go/parser"
 	"go/token"
 	"os"
-	"path"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -18,16 +17,20 @@ import (
 )
 
 func TestGeneratedDecimalFieldsPreserveWireType(t *testing.T) {
+	policy, err := loadNumericOverlay()
+	if err != nil {
+		t.Fatalf("loading numeric overlay: %v", err)
+	}
 	for _, mod := range Modules {
 		t.Run(mod.ID, func(t *testing.T) {
-			raw, err := loadPublishedSpec(mod.SpecURL)
+			raw, err := loadVendoredSpec(mod.SpecID)
 			if err != nil {
-				t.Fatalf("reading spec %s: %v", mod.SpecURL, err)
+				t.Fatalf("reading spec %s: %v", mod.SpecID, err)
 			}
 			loader := openapi3.NewLoader()
-			doc, err := loader.LoadFromData(sanitizeSpecBytes(raw))
+			doc, err := loader.LoadFromData(sanitizeSpecBytes(raw, policy))
 			if err != nil {
-				t.Fatalf("loading spec %s: %v", mod.SpecURL, err)
+				t.Fatalf("loading spec %s: %v", mod.SpecID, err)
 			}
 			code, err := RenderModule(mod)
 			if err != nil {
@@ -45,7 +48,7 @@ func TestGeneratedDecimalFieldsPreserveWireType(t *testing.T) {
 					if property.Value == nil || property.Value.Type == nil || !property.Value.Type.Is("number") || property.Value.Format != "decimal" {
 						continue
 					}
-					want := "*openapi_types.DecimalNumber"
+					want := "*" + strings.Replace(policy.overlay.DecimalFormat.Go.NumberSchema, policy.overlay.DecimalFormat.Go.ImportAlias, "openapi_types", 1)
 					got, ok := fields[schemaName][field]
 					if !ok {
 						t.Errorf("%s.%s was not found in generated code", schemaName, field)
@@ -59,16 +62,20 @@ func TestGeneratedDecimalFieldsPreserveWireType(t *testing.T) {
 }
 
 func TestGeneratedWideIntegerFieldsAvoidPlatformSizedInts(t *testing.T) {
+	policy, err := loadNumericOverlay()
+	if err != nil {
+		t.Fatalf("loading numeric overlay: %v", err)
+	}
 	for _, mod := range Modules {
 		t.Run(mod.ID, func(t *testing.T) {
-			raw, err := loadPublishedSpec(mod.SpecURL)
+			raw, err := loadVendoredSpec(mod.SpecID)
 			if err != nil {
-				t.Fatalf("reading spec %s: %v", mod.SpecURL, err)
+				t.Fatalf("reading spec %s: %v", mod.SpecID, err)
 			}
 			loader := openapi3.NewLoader()
-			doc, err := loader.LoadFromData(sanitizeSpecBytes(raw))
+			doc, err := loader.LoadFromData(sanitizeSpecBytes(raw, policy))
 			if err != nil {
-				t.Fatalf("loading spec %s: %v", mod.SpecURL, err)
+				t.Fatalf("loading spec %s: %v", mod.SpecID, err)
 			}
 			code, err := RenderModule(mod)
 			if err != nil {
@@ -84,7 +91,7 @@ func TestGeneratedWideIntegerFieldsAvoidPlatformSizedInts(t *testing.T) {
 					continue
 				}
 				for field, property := range schemaRef.Value.Properties {
-					if _, wide := wideIntegerPropertyNames[field]; !wide || property.Value == nil || property.Value.Type == nil {
+					if _, wide := policy.wideIntegerPropertyNames[field]; !wide || property.Value == nil || property.Value.Type == nil {
 						continue
 					}
 					if len(property.Value.AllOf) > 0 || len(property.Value.AnyOf) > 0 || len(property.Value.OneOf) > 0 {
@@ -98,7 +105,7 @@ func TestGeneratedWideIntegerFieldsAvoidPlatformSizedInts(t *testing.T) {
 						t.Errorf("%s.%s was not found in generated code", schemaName, field)
 						continue
 					}
-					if field == "order_id" && (schemaName == "CancelOrderRequest" || schemaName == "OrderStatusRequest") {
+					if isUnsignedIntegerField(policy, schemaName, field) {
 						if got != "uint64" {
 							t.Errorf("%s.%s generated as %s, want uint64", schemaName, field, got)
 						}
@@ -111,6 +118,15 @@ func TestGeneratedWideIntegerFieldsAvoidPlatformSizedInts(t *testing.T) {
 			}
 		})
 	}
+}
+
+func isUnsignedIntegerField(policy *numericPolicy, schemaName, fieldName string) bool {
+	for _, location := range policy.overlay.UnsignedIntegers.Locations {
+		if location.Schema == schemaName && location.Property == fieldName {
+			return true
+		}
+	}
+	return false
 }
 
 func generatedFieldTypes(code string) (map[string]map[string]string, error) {
@@ -160,7 +176,7 @@ func TestOpenAPIContractDrift(t *testing.T) {
 		t.Run(mod.ID, func(t *testing.T) {
 			expectedCode, err := RenderModule(mod)
 			if err != nil {
-				t.Fatalf("failed to render module %s from spec %s: %v", mod.ID, mod.SpecURL, err)
+				t.Fatalf("failed to render module %s from spec %s: %v", mod.ID, mod.SpecID, err)
 			}
 
 			committedFile := filepath.Join("..", "generated", mod.Package, "types.gen.go")
@@ -193,14 +209,18 @@ func TestOpenAPIContractDrift(t *testing.T) {
 				}
 				t.Fatalf("Contract drift detected in %s! The committed code in %s does not match the current OpenAPI specification %s.\n"+
 					"Run 'go run ./scripts/generate.go' to regenerate and commit the updated models.",
-					mod.ID, committedFile, mod.SpecURL)
+					mod.ID, committedFile, mod.SpecID)
 			}
 		})
 	}
 }
 
 func TestNoOrphanedEndpoints(t *testing.T) {
-	specs := []string{restSpecURL, predictionMarketsSpecURL}
+	policy, err := loadNumericOverlay()
+	if err != nil {
+		t.Fatalf("loading numeric overlay: %v", err)
+	}
+	specs := []string{restSpecID, predictionMarketsSpecID}
 
 	allMappedTags := make(map[string]bool)
 	for _, mod := range Modules {
@@ -209,21 +229,22 @@ func TestNoOrphanedEndpoints(t *testing.T) {
 		}
 	}
 
-	for _, specURL := range specs {
-		t.Run(path.Base(specURL), func(t *testing.T) {
-			raw, err := loadPublishedSpec(specURL)
+	for _, specID := range specs {
+		specName := specBasename(specID)
+		t.Run(specName, func(t *testing.T) {
+			raw, err := loadVendoredSpec(specID)
 			if err != nil {
-				t.Fatalf("reading spec %s: %v", specURL, err)
+				t.Fatalf("reading spec %s: %v", specID, err)
 			}
 
 			loader := openapi3.NewLoader()
-			doc, err := loader.LoadFromData(sanitizeSpecBytes(raw))
+			doc, err := loader.LoadFromData(sanitizeSpecBytes(raw, policy))
 			if err != nil {
-				t.Fatalf("loading openapi doc %s: %v", specURL, err)
+				t.Fatalf("loading openapi doc %s: %v", specID, err)
 			}
 
 			if doc.Paths == nil {
-				t.Fatalf("spec %s has no paths", specURL)
+				t.Fatalf("spec %s has no paths", specID)
 			}
 
 			var orphanedOps []string
@@ -250,26 +271,31 @@ func TestNoOrphanedEndpoints(t *testing.T) {
 
 			if len(orphanedOps) > 0 {
 				t.Errorf("Found %d orphaned operations in %s not covered by any SDK module tags:\n  - %s",
-					len(orphanedOps), path.Base(specURL), strings.Join(orphanedOps, "\n  - "))
+					len(orphanedOps), specName, strings.Join(orphanedOps, "\n  - "))
 			}
 		})
 	}
 }
 
 func TestOperationIDsUnique(t *testing.T) {
-	specs := []string{restSpecURL, predictionMarketsSpecURL}
+	policy, err := loadNumericOverlay()
+	if err != nil {
+		t.Fatalf("loading numeric overlay: %v", err)
+	}
+	specs := []string{restSpecID, predictionMarketsSpecID}
 
-	for _, specURL := range specs {
-		t.Run(path.Base(specURL), func(t *testing.T) {
-			raw, err := loadPublishedSpec(specURL)
+	for _, specID := range specs {
+		specName := specBasename(specID)
+		t.Run(specName, func(t *testing.T) {
+			raw, err := loadVendoredSpec(specID)
 			if err != nil {
-				t.Fatalf("reading spec %s: %v", specURL, err)
+				t.Fatalf("reading spec %s: %v", specID, err)
 			}
 
 			loader := openapi3.NewLoader()
-			doc, err := loader.LoadFromData(sanitizeSpecBytes(raw))
+			doc, err := loader.LoadFromData(sanitizeSpecBytes(raw, policy))
 			if err != nil {
-				t.Fatalf("loading openapi doc %s: %v", specURL, err)
+				t.Fatalf("loading openapi doc %s: %v", specID, err)
 			}
 
 			seenIDs := make(map[string]string)
@@ -292,10 +318,10 @@ func TestOperationIDsUnique(t *testing.T) {
 }
 
 func TestAsyncAPIWebSocketStreams(t *testing.T) {
-	specURL := websocketSpecURL
-	raw, err := loadPublishedSpec(specURL)
+	specID := websocketSpecID
+	raw, err := loadVendoredSpec(specID)
 	if err != nil {
-		t.Fatalf("reading websocket spec %s: %v", specURL, err)
+		t.Fatalf("reading websocket spec %s: %v", specID, err)
 	}
 
 	var root struct {

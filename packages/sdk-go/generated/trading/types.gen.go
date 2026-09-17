@@ -2491,6 +2491,9 @@ type GetNotionalTradingVolumeJSONBody struct {
 
 	// Request The API endpoint path
 	Request string `json:"request"`
+
+	// Symbol Optional. The symbol to get fee promotions or specific fee schedule rates for.
+	Symbol *string `json:"symbol,omitempty"`
 }
 
 // GetNotionalTradingVolumeParams defines parameters for GetNotionalTradingVolume.
