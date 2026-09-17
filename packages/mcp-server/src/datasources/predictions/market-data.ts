@@ -18,8 +18,8 @@ export async function listEvents(
   } = {}
 ): Promise<EventsResponse> {
   const params: Record<string, string | string[]> = {};
-  if (opts.status?.length) params['status[]'] = opts.status;
-  if (opts.category?.length) params['category[]'] = opts.category;
+  if (opts.status?.length) params['status'] = opts.status;
+  if (opts.category?.length) params['category'] = opts.category;
   if (opts.search) params['search'] = opts.search;
   if (opts.limit !== undefined) params['limit'] = String(opts.limit);
   if (opts.offset !== undefined) params['offset'] = String(opts.offset);
@@ -45,7 +45,7 @@ export async function listNewlyListed(
   opts: { category?: string[]; limit?: number; offset?: number } = {}
 ): Promise<EventsResponse> {
   const params: Record<string, string | string[]> = {};
-  if (opts.category?.length) params['category[]'] = opts.category;
+  if (opts.category?.length) params['category'] = opts.category;
   if (opts.limit !== undefined) params['limit'] = String(opts.limit);
   if (opts.offset !== undefined) params['offset'] = String(opts.offset);
   return client.publicGet<EventsResponse>('/v1/prediction-markets/events/newly-listed', params);
@@ -56,7 +56,7 @@ export async function listRecentlySettled(
   opts: { category?: string[]; limit?: number; offset?: number } = {}
 ): Promise<EventsResponse> {
   const params: Record<string, string | string[]> = {};
-  if (opts.category?.length) params['category[]'] = opts.category;
+  if (opts.category?.length) params['category'] = opts.category;
   if (opts.limit !== undefined) params['limit'] = String(opts.limit);
   if (opts.offset !== undefined) params['offset'] = String(opts.offset);
   return client.publicGet<EventsResponse>('/v1/prediction-markets/events/recently-settled', params);
@@ -67,7 +67,7 @@ export async function listUpcoming(
   opts: { category?: string[]; limit?: number; offset?: number } = {}
 ): Promise<EventsResponse> {
   const params: Record<string, string | string[]> = {};
-  if (opts.category?.length) params['category[]'] = opts.category;
+  if (opts.category?.length) params['category'] = opts.category;
   if (opts.limit !== undefined) params['limit'] = String(opts.limit);
   if (opts.offset !== undefined) params['offset'] = String(opts.offset);
   return client.publicGet<EventsResponse>('/v1/prediction-markets/events/upcoming', params);
@@ -78,7 +78,7 @@ export async function listCategories(
   status?: EventStatus[]
 ): Promise<{ categories: string[] }> {
   const params: Record<string, string | string[]> = {};
-  if (status?.length) params['status[]'] = status;
+  if (status?.length) params['status'] = status;
   return client.publicGet<{ categories: string[] }>('/v1/prediction-markets/categories', params);
 }
 
