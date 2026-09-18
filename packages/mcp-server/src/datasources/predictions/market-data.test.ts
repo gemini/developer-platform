@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import type { GeminiHttpClient } from '../client/http.js';
-import * as predictions from './predictions.js';
+import type { GeminiHttpClient } from '../../client/http.js';
+import * as predictions from './market-data.js';
 
 // Regression coverage for PREDICT-8871: `category`/`status` were sent as
 // `category[]`/`status[]`, a key shape the live API silently ignores (it

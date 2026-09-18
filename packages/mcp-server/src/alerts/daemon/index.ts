@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { config } from '../../config.js';
 import { GeminiHttpClient } from '../../client/http.js';
+import { createSdkClient } from '../../client/sdk.js';
 import { WebSocketManager } from '../../websocket/manager.js';
 import { MarketDataStore } from '../../store/index.js';
 import { AlertStore } from '../store.js';
@@ -103,6 +104,9 @@ function buildWsAdapter(wsManager: WebSocketManager): SchedulerWsAdapter {
 
 async function main(): Promise<void> {
   const httpClient = new GeminiHttpClient();
+  // Constructed alongside the legacy client below; not consumed by any fetcher yet —
+  // PREDICT-8820 switches the settlement-alert fetcher over to it.
+  const sdkClient = await createSdkClient();
   const marketStore = new MarketDataStore();
   const wsManager = new WebSocketManager(config.wsUrl, marketStore);
   await wsManager.initialize();

@@ -1,5 +1,6 @@
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { createServer } from './server.js';
+import { createSdkClient } from './client/sdk.js';
 import { config } from './config.js';
 
 function validateConfig(): void {
@@ -33,7 +34,8 @@ function validateConfig(): void {
 
 async function main(): Promise<void> {
   validateConfig();
-  const server = createServer();
+  const sdkClient = await createSdkClient();
+  const server = createServer(sdkClient);
   const transport = new StdioServerTransport();
   await server.connect(transport);
   // Server is running, listening on stdio

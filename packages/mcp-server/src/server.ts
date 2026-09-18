@@ -5,6 +5,7 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import { GeminiHttpClient } from './client/http.js';
+import type { SdkClient } from './client/sdk.js';
 import { WebSocketManager } from './websocket/manager.js';
 import { config } from './config.js';
 import {
@@ -25,7 +26,7 @@ import {
 import { annotationsFor, requiresConfirmation } from './tools/index.js';
 import type { ToolDefinition } from './tools/index.js';
 
-export function createServer(): Server {
+export function createServer(sdkClient: SdkClient): Server {
   const server = new Server(
     {
       name: 'gemini-mcp',
