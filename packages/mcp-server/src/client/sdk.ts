@@ -21,7 +21,17 @@ export async function createSdkClient(
 ): Promise<SdkClient> {
   const auth =
     config.apiKey && config.apiSecret
-      ? new HmacAuth({ apiKey: config.apiKey, apiSecret: config.apiSecret })
+      ? // nonceMode defaults to "monotonic", which sends the nonce in milliseconds.
+        // Gemini's real REST API expects epoch-second nonces — the legacy signer this
+        // SDK replaces already sends Math.floor(Date.now() / 1000), and the SDK's own
+        // WebSocket auth hardcodes the same second-scale nonce for the same reason.
+        // Confirmed against production: the millisecond default fails every
+        // authenticated REST call with InvalidNonce (HTTP 400).
+        new HmacAuth({
+          apiKey: config.apiKey,
+          apiSecret: config.apiSecret,
+          nonceMode: 'time-based',
+        })
       : undefined;
 
   return createClient({ env: config.sdkEnv, auth, ...overrides });
