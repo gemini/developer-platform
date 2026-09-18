@@ -14,6 +14,15 @@
 import { createSdkClient } from '../src/client/sdk.js';
 import { config } from '../src/config.js';
 
+// The SDK normalizes schema-declared int64 fields (e.g. positions[].instrumentId) to
+// bigint, which plain JSON.stringify cannot serialize at all — it throws, not just
+// loses precision. This logging script only needs a human-readable value, not a
+// round-trippable one, so stringify each bigint rather than avoiding serialization
+// entirely.
+function stringifySafe(value: unknown): string {
+  return JSON.stringify(value, (_key, val) => (typeof val === 'bigint' ? val.toString() : val));
+}
+
 async function main(): Promise<void> {
   if (!config.apiKey || !config.apiSecret) {
     console.error(
@@ -29,12 +38,12 @@ async function main(): Promise<void> {
 
   console.log('[smoke:sdk] public call: predictions.getCategories()');
   const categories = await client.predictions.getCategories();
-  console.log(`[smoke:sdk] OK — received ${JSON.stringify(categories).length} bytes`);
+  console.log(`[smoke:sdk] OK — received ${stringifySafe(categories).length} bytes`);
 
   console.log('[smoke:sdk] authenticated call (read-only): predictions.getPositions()');
   const positions = await client.predictions.getPositions();
-  console.log(`[smoke:sdk] OK — received ${JSON.stringify(positions).length} bytes`);
-  console.log(`[smoke:sdk] positions payload: ${JSON.stringify(positions)}`);
+  console.log(`[smoke:sdk] OK — received ${stringifySafe(positions).length} bytes`);
+  console.log(`[smoke:sdk] positions payload: ${stringifySafe(positions)}`);
 
   client.close();
   console.log(`[smoke:sdk] done — authenticated call succeeded against ${config.sdkEnv}`);
