@@ -17,19 +17,35 @@ delete process.env.GEMINI_SDK_ENV;
 const { createSdkClient } = await import('./sdk.js');
 const { config } = await import('../config.js');
 
-test('createSdkClient defaults to production and resolves an authenticated client', async () => {
+test('createSdkClient wires the configured HmacAuth into an actual authenticated request', async () => {
   assert.strictEqual(config.sdkEnv, 'production');
 
-  const client = await createSdkClient();
+  // Exercise a real authenticated REST call (via an injected fake fetch, so nothing
+  // touches the network) and inspect the signed headers HttpTransport actually sent.
+  // Checking only that client.websocket.private.orders is a function — the previous
+  // version of this test — passes even if createSdkClient silently dropped the
+  // HmacAuth instance, since that surface exists regardless of whether auth is
+  // configured; only an authenticated call proves auth was wired through.
+  let capturedHeaders: Record<string, string> | undefined;
+  const client = await createSdkClient({
+    fetch: async (_url, init) => {
+      capturedHeaders = init.headers;
+      return new Response('{}', {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    },
+  });
   try {
-    assert.ok(client.predictions);
-    assert.ok(client.websocket);
-    // Auth was supplied, so the private WebSocket surface should be present. Checked
-    // without calling it — invoking .orders() here would open a real authenticated
-    // connection to production with fake credentials, which fails and leaks an
-    // unhandled rejection plus live reconnect timers. The "fails closed with no auth"
-    // contract is covered below, where requireAuth() throws before any connection is
-    // attempted, so nothing needs to actually connect to prove either behavior.
+    await client.predictions.getPositions();
+
+    assert.strictEqual(capturedHeaders?.['X-GEMINI-APIKEY'], process.env.SDK_TEST_FAKE_KEY);
+    assert.ok(capturedHeaders?.['X-GEMINI-SIGNATURE'], 'expected a computed HMAC signature header');
+
+    // client.websocket.private.orders remains a function once auth is configured — kept
+    // as a cheap structural check, not invoked (that would open a real authenticated
+    // WebSocket connection; see the "fails closed" test below for the meaningful WS
+    // assertion, which throws before any connection is attempted either way).
     assert.strictEqual(typeof client.websocket.private.orders, 'function');
   } finally {
     client.close();
