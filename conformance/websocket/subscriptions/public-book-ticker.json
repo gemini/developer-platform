@@ -1,0 +1,10 @@
+{
+  "id": "websocket/subscriptions/public-book-ticker",
+  "kind": "wsSubscription",
+  "stream": "bookTicker",
+  "symbol": "ETHUSD",
+  "expect": {
+    "method": "SUBSCRIBE",
+    "params": ["ethusd@bookTicker"]
+  }
+}

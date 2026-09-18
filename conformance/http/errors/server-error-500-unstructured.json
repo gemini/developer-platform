@@ -1,0 +1,12 @@
+{
+  "id": "http/errors/server-error-500-unstructured",
+  "kind": "errorMapping",
+  "response": {
+    "status": 500,
+    "headers": { "content-type": "text/plain" },
+    "body": "upstream unavailable"
+  },
+  "expect": {
+    "kind": "service_error"
+  }
+}

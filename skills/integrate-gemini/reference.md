@@ -15,7 +15,7 @@ This reference manual provides technical specifications, HMAC-SHA384 signing cod
 | **FIX Market Data** | Provisioned after FIX sandbox onboarding | Provisioned after FIX production onboarding | FIX 4.4 Specification |
 | **FIX Drop Copy** | Provisioned after FIX sandbox onboarding | Provisioned after FIX production onboarding | FIX 4.4 Specification |
 
-See [SKILL.md](SKILL.md#step-2-locate-canonical-specifications) for the live spec URLs — this repository does not commit them locally.
+For SDK work, use the checked-in `specs/SOURCES.json` and verbatim contract files; see [SKILL.md](SKILL.md#step-2-locate-canonical-specifications) for the review workflow. The URLs above remain the live integration sources.
 
 ---
 

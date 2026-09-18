@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "specs": [
+    {
+      "id": "rest",
+      "path": "openapi/rest.yaml",
+      "url": "https://developer.gemini.com/specs/openapi/rest.yaml",
+      "sha256": "a07130327a2346e640fc115271dd18984cb9389793acf9fcce6b97ad918e44e4",
+      "fetchedAt": "2026-09-16T22:39:02.865Z"
+    },
+    {
+      "id": "predictionMarkets",
+      "path": "openapi/prediction-markets.yaml",
+      "url": "https://developer.gemini.com/specs/openapi/prediction-markets.yaml",
+      "sha256": "1b7403cba3af9af5e64cdbf0a3f33a329876b5e48b2e13b8a9fffb347368b427",
+      "fetchedAt": "2026-09-16T22:39:03.027Z"
+    },
+    {
+      "id": "websocket",
+      "path": "asyncapi/websocket.yaml",
+      "url": "https://developer.gemini.com/specs/asyncapi/websocket.yaml",
+      "sha256": "d83c624336f16542c3f1f4554101e7fa19bbc703012ae7bcd780c401667a5def",
+      "fetchedAt": "2026-09-16T22:39:03.368Z"
+    }
+  ]
+}

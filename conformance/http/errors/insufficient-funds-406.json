@@ -1,0 +1,13 @@
+{
+  "id": "http/errors/insufficient-funds-406",
+  "kind": "errorMapping",
+  "response": {
+    "status": 406,
+    "headers": { "content-type": "application/json" },
+    "body": "{\"result\":\"error\",\"reason\":\"InsufficientFunds\",\"message\":\"Insufficient funds\"}"
+  },
+  "expect": {
+    "kind": "insufficient_funds",
+    "reason": "InsufficientFunds"
+  }
+}
