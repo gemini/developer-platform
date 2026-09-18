@@ -12,11 +12,17 @@ export type SdkClient = Awaited<ReturnType<typeof createClient>>;
 // configured, matching this package's existing public-only mode (see index.ts's
 // validateConfig) — authenticated SDK calls/streams will throw their own "auth required"
 // error if invoked without one.
-export async function createSdkClient(): Promise<SdkClient> {
+//
+// `overrides` exists for tests only (e.g. injecting a fake `fetch` to prove which
+// environment's URL a call actually targets without a live network round-trip). Real
+// callers (index.ts, alerts/daemon/index.ts) pass nothing.
+export async function createSdkClient(
+  overrides?: Partial<Parameters<typeof createClient>[0]>
+): Promise<SdkClient> {
   const auth =
     config.apiKey && config.apiSecret
       ? new HmacAuth({ apiKey: config.apiKey, apiSecret: config.apiSecret })
       : undefined;
 
-  return createClient({ env: config.sdkEnv, auth });
+  return createClient({ env: config.sdkEnv, auth, ...overrides });
 }

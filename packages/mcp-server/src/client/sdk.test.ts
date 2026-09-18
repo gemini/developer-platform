@@ -21,18 +21,47 @@ test('createSdkClient defaults to production and resolves an authenticated clien
   assert.strictEqual(config.sdkEnv, 'production');
 
   const client = await createSdkClient();
-
-  assert.ok(client.predictions);
-  assert.ok(client.websocket);
-  // Auth was supplied, so the private WebSocket surface should not fail closed.
-  assert.doesNotThrow(() => client.websocket.private.orders({ scope: 'account' }));
+  try {
+    assert.ok(client.predictions);
+    assert.ok(client.websocket);
+    // Auth was supplied, so the private WebSocket surface should be present. Checked
+    // without calling it — invoking .orders() here would open a real authenticated
+    // connection to production with fake credentials, which fails and leaks an
+    // unhandled rejection plus live reconnect timers. The "fails closed with no auth"
+    // contract is covered below, where requireAuth() throws before any connection is
+    // attempted, so nothing needs to actually connect to prove either behavior.
+    assert.strictEqual(typeof client.websocket.private.orders, 'function');
+  } finally {
+    client.close();
+  }
 });
 
 test('createSdkClient selects sandbox when GEMINI_SDK_ENV=sandbox', async () => {
   config.sdkEnv = 'sandbox';
+  const requestedUrls: string[] = [];
   try {
-    const client = await createSdkClient();
-    assert.ok(client.predictions);
+    // Inject a fake fetch instead of hitting the network, so the assertion is about
+    // which host createSdkClient actually targets — a hardcoded env in createClient
+    // would still make client.predictions truthy, so that alone doesn't prove anything.
+    const client = await createSdkClient({
+      fetch: async (url) => {
+        requestedUrls.push(url);
+        return new Response('[]', {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      },
+    });
+    try {
+      await client.predictions.getCategories();
+      assert.strictEqual(requestedUrls.length, 1);
+      assert.ok(
+        requestedUrls[0]!.startsWith('https://api.sandbox.gemini.com'),
+        `expected a sandbox URL, got ${requestedUrls[0]}`
+      );
+    } finally {
+      client.close();
+    }
   } finally {
     config.sdkEnv = 'production';
   }
@@ -45,10 +74,16 @@ test('createSdkClient omits auth in public-only mode, matching legacy fail-close
   config.apiSecret = '';
   try {
     const client = await createSdkClient();
-    assert.ok(client.predictions);
-    // No credentials configured — the private WS surface must fail closed, same as
-    // the legacy GeminiHttpClient does today for authenticated REST calls.
-    assert.throws(() => client.websocket.private.orders({ scope: 'account' }));
+    try {
+      assert.ok(client.predictions);
+      // No credentials configured — the private WS surface must fail closed, same as
+      // the legacy GeminiHttpClient does today for authenticated REST calls. This
+      // throws synchronously before any connection is attempted, so it's safe to call
+      // directly (unlike the authenticated case above).
+      assert.throws(() => client.websocket.private.orders({ scope: 'account' }));
+    } finally {
+      client.close();
+    }
   } finally {
     config.apiKey = savedKey;
     config.apiSecret = savedSecret;
