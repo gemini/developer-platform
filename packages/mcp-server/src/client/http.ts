@@ -28,6 +28,27 @@ const jsonParse = JSONBig({ storeAsString: true });
 // arrays are emitted as repeated keys (`status[]=a&status[]=b`).
 export type QueryParams = Record<string, string | string[] | undefined>;
 
+export class GeminiApiError extends Error {
+  constructor(
+    public readonly status: number,
+    public readonly body: string
+  ) {
+    super(`Gemini API error ${status}: ${body}`);
+    this.name = 'GeminiApiError';
+  }
+}
+
+export class GeminiTransportError extends Error {
+  constructor(
+    public readonly method: string,
+    public readonly endpoint: string,
+    cause: unknown
+  ) {
+    super(`Gemini transport error during ${method} ${endpoint}`, { cause });
+    this.name = 'GeminiTransportError';
+  }
+}
+
 function applyQuery(url: URL, params?: QueryParams): void {
   if (!params) return;
   for (const [key, value] of Object.entries(params)) {
@@ -120,19 +141,24 @@ export class GeminiHttpClient {
     };
     const url = new URL(`${this.baseUrl}${endpoint}`);
     applyQuery(url, params);
-    const res = await fetch(url.toString(), {
-      method,
-      headers,
-      body: requestBody,
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-    });
+    let res: Response;
+    try {
+      res = await fetch(url.toString(), {
+        method,
+        headers,
+        body: requestBody,
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      });
+    } catch (err: unknown) {
+      throw new GeminiTransportError(method, endpoint, err);
+    }
     return this.parseResponse<T>(res);
   }
 
   private async parseResponse<T>(res: Response): Promise<T> {
     const text = await res.text();
     if (!res.ok) {
-      throw new Error(`Gemini API error ${res.status}: ${text}`);
+      throw new GeminiApiError(res.status, text);
     }
     return jsonParse.parse(text) as T;
   }
