@@ -820,3 +820,77 @@ func TestLiveOrderBook_BBOListenerUnregister(t *testing.T) {
 	default:
 	}
 }
+
+func TestOrderBook_PriceCachePreservesFloatMetrics(t *testing.T) {
+	book := NewOrderBook("BTCUSD")
+
+	if err := book.ApplySnapshot(
+		1,
+		[][]string{{"65000.00", "1"}},
+		[][]string{{"65100.00", "1"}},
+	); err != nil {
+		t.Fatalf("ApplySnapshot failed: %v", err)
+	}
+
+	wantSpread, ok := book.Spread()
+	if !ok {
+		t.Fatal("expected spread")
+	}
+	wantMid, ok := book.Mid()
+	if !ok {
+		t.Fatal("expected mid")
+	}
+
+	// Repeated updates hit the price cache. Cached float values must remain
+	// identical to those produced when the prices were first parsed.
+	for i := 0; i < 100; i++ {
+		if err := book.ApplyLevel(true, "65000.00", "2"); err != nil {
+			t.Fatalf("ApplyLevel bid failed: %v", err)
+		}
+		if err := book.ApplyLevel(false, "65100.00", "2"); err != nil {
+			t.Fatalf("ApplyLevel ask failed: %v", err)
+		}
+
+		gotSpread, ok := book.Spread()
+		if !ok || gotSpread != wantSpread {
+			t.Fatalf("Spread = %v, %v; want %v, true", gotSpread, ok, wantSpread)
+		}
+		gotMid, ok := book.Mid()
+		if !ok || gotMid != wantMid {
+			t.Fatalf("Mid = %v, %v; want %v, true", gotMid, ok, wantMid)
+		}
+	}
+}
+
+func TestOrderBook_PriceCachePreservesExactPriceIdentity(t *testing.T) {
+	book := NewOrderBook("BTCUSD")
+
+	if err := book.ApplySnapshot(
+		1,
+		[][]string{
+			{"10000000000000000.01", "1"},
+			{"10000000000000000.02", "2"},
+		},
+		[][]string{{"10000000000000000.03", "1"}},
+	); err != nil {
+		t.Fatalf("ApplySnapshot failed: %v", err)
+	}
+
+	for i := 0; i < 100; i++ {
+		if err := book.ApplyLevel(true, "10000000000000000.01", "3"); err != nil {
+			t.Fatalf("ApplyLevel failed: %v", err)
+		}
+	}
+
+	bids := book.Bids(10)
+	if len(bids) != 2 {
+		t.Fatalf("got %d bids, want 2", len(bids))
+	}
+	if bids[0].Price != "10000000000000000.02" ||
+		bids[1].Price != "10000000000000000.01" {
+		t.Fatalf("cached prices changed exact ordering: %+v", bids)
+	}
+	if bids[1].Amount != "3" {
+		t.Fatalf("cached update changed wrong level: %+v", bids)
+	}
+}
