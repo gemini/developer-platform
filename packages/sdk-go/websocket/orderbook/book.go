@@ -36,9 +36,14 @@ type OrderBook struct {
 
 const maxCachedPriceLength = 128
 
+type cachedPriceValue struct {
+	decimal types.Decimal
+	val     float64
+}
+
 type decimalCache struct {
 	mu     sync.RWMutex
-	values map[string]types.Decimal
+	values map[string]cachedPriceValue
 }
 
 // NewOrderBook creates a new empty OrderBook for a symbol.
@@ -47,7 +52,7 @@ func NewOrderBook(symbol string) *OrderBook {
 		symbol:     symbol,
 		bids:       make([]PriceLevel, 0, 128),
 		asks:       make([]PriceLevel, 0, 128),
-		priceCache: decimalCache{values: make(map[string]types.Decimal)},
+		priceCache: decimalCache{values: make(map[string]cachedPriceValue)},
 	}
 }
 
@@ -127,7 +132,7 @@ func parseLevels(raw [][]string, allowZeroAmount bool, cache *decimalCache) ([]P
 }
 
 func parseLevel(priceStr, amountStr string, allowZeroAmount bool, cache *decimalCache) (PriceLevel, error) {
-	price, err := cachedPrice(cache, priceStr)
+	price, priceVal, err := cachedPrice(cache, priceStr)
 	if err != nil || !price.IsPositive() {
 		return PriceLevel{}, fmt.Errorf("price %q must be positive decimal", priceStr)
 	}
@@ -138,36 +143,42 @@ func parseLevel(priceStr, amountStr string, allowZeroAmount bool, cache *decimal
 	return PriceLevel{
 		Price:     priceStr,
 		Amount:    amountStr,
-		val:       price.Float64(),
+		val:       priceVal,
 		decimal:   price,
 		amountDec: amount,
 	}, nil
 }
 
-func cachedPrice(cache *decimalCache, raw string) (types.Decimal, error) {
+func cachedPrice(cache *decimalCache, raw string) (types.Decimal, float64, error) {
 	key := strings.TrimSpace(raw)
 	if cache != nil && len(key) <= maxCachedPriceLength {
 		cache.mu.RLock()
-		price, ok := cache.values[key]
+		cached, ok := cache.values[key]
 		cache.mu.RUnlock()
 		if ok {
-			return price, nil
+			return cached.decimal, cached.val, nil
 		}
 	}
 
 	price, err := types.ParseDecimal(raw)
 	if err != nil {
-		return types.Decimal{}, err
+		return types.Decimal{}, 0, err
 	}
+	priceVal := price.Float64()
+
 	if cache != nil && len(key) <= maxCachedPriceLength {
 		cache.mu.Lock()
 		if len(cache.values) >= 4096 {
 			clear(cache.values)
 		}
-		cache.values[key] = price
+		cache.values[key] = cachedPriceValue{
+			decimal: price,
+			val:     priceVal,
+		}
 		cache.mu.Unlock()
 	}
-	return price, nil
+
+	return price, priceVal, nil
 }
 
 // ApplyDiff atomically applies a batch of bid and ask level updates and updates the sequence ID under a single lock.
