@@ -4753,50 +4753,7 @@ export interface operations {
                     /**
                      * @example {
                      *       "symbols": [
-                     *         "PNUTGUSDPERP",
-                     *         "WIFGUSDPERP",
-                     *         "PYTHGUSDPERP",
-                     *         "MEWGUSDPERP",
-                     *         "BONKGUSDPERP",
-                     *         "BCHGUSDPERP",
-                     *         "BTCGUSDPERP",
-                     *         "BUSDUSD",
-                     *         "POLGUSDPERP",
-                     *         "FRAXUSD",
-                     *         "OPGUSDPERP",
-                     *         "DOTGUSDPERP",
-                     *         "TRUMPGUSDPERP",
-                     *         "GUSDGBP",
-                     *         "USDTUSD",
-                     *         "POPCATGUSDPERP",
-                     *         "FLOKIGUSDPERP",
-                     *         "MOODENGGUSDPERP",
-                     *         "LINKGUSDPERP",
-                     *         "ETHGUSDPERP",
-                     *         "UNIGUSDPERP",
-                     *         "MATICGUSDPERP",
-                     *         "USDTGUSD",
-                     *         "BNBGUSDPERP",
-                     *         "MIMUSD",
-                     *         "KSL2GUSDPERP",
-                     *         "LUSDUSD",
-                     *         "SHIBGUSDPERP",
-                     *         "AVAXGUSDPERP",
-                     *         "BOMEGUSDPERP",
-                     *         "USDCUSD",
-                     *         "HYPEGUSDPERP",
-                     *         "MOGGUSDPERP",
-                     *         "KT5GUSDPERP",
-                     *         "SOLGUSDPERP",
-                     *         "PEPEGUSDPERP",
-                     *         "DOGEGUSDPERP",
-                     *         "GUSDSGD",
-                     *         "INJGUSDPERP",
-                     *         "LTCGUSDPERP",
-                     *         "XRPGUSDPERP",
-                     *         "USTUSD",
-                     *         "GOATGUSDPERP",
-                     *         "DAIUSD"
+                     *         "BTCGUSDPERP"
                      *       ]
                      *     }
                      */
@@ -5606,6 +5563,11 @@ export interface operations {
                      * @example primary
                      */
                     account?: string;
+                    /**
+                     * @description Optional. The symbol to get fee promotions or specific fee schedule rates for.
+                     * @example btcusd
+                     */
+                    symbol?: string;
                 };
             };
         };

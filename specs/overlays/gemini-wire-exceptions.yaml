@@ -1,0 +1,37 @@
+version: 1
+exceptions:
+  - id: rest-nonce-json-type
+    summary: Signed REST payload nonce is an unquoted JSON number in TypeScript and a JSON string in Go.
+    typescript: src/transport/http.ts:1036 writes rawJSON(nonce)
+    go: auth/hmac.go:276-283 marshals the nonce string
+    tolerance: Conformance compares the nonce by decimal text, accepting a JSON number or a numeric JSON string.
+    cases: [http/hmac-requests/private-post-with-body, http/hmac-requests/private-post-empty-body]
+  - id: rest-payload-key-order
+    summary: Signed payload key order differs (TypeScript insertion order, Go lexicographic).
+    tolerance: Signature is verified against each SDK's own base64 payload, so key order is free on the wire.
+    cases: [http/hmac-requests/private-post-with-body]
+  - id: ws-subscription-id-scope
+    summary: Subscribe frame id is session-local in TypeScript and process-global in Go; neither exposes an injection seam.
+    tolerance: Conformance asserts method and params, and that id is a positive integer.
+    cases: [websocket/subscriptions/public-trades]
+  - id: ws-inbound-symbol-case
+    summary: Go uppercases the inbound top-level symbol; TypeScript delivers wire casing unchanged.
+    go: websocket/client_dispatch.go:113-158
+    tolerance: Conformance compares symbol fields case-insensitively.
+    cases: [websocket/events/trade]
+  - id: int64-static-typing
+    summary: Static int64 typing differs — TypeScript keys off format int64 only; Go additionally widens the overlay's wide-integer names.
+    tolerance: Declared in specs/overlays/numeric-types.yaml as appliesTo [go]; runtime exactness is asserted instead.
+    cases: [json/wide-integer-unsafe]
+  - id: http-406-insufficient-funds
+    summary: TypeScript maps bare HTTP 406 to InsufficientFunds; Go has no 406 sentinel and needs the reason field.
+    tolerance: Fixtures always carry the InsufficientFunds reason, which both SDKs classify.
+    cases: []
+  - id: rest-query-signing
+    summary: TypeScript can include the query string in the signed request path (signQuery); Go signs URL path only.
+    tolerance: Signing fixtures use query-free paths.
+    cases: []
+  - id: candle-timeframe-spelling
+    summary: Spec enum is 1m/5m/15m/30m/1h/6h/1d while its prose mentions 1day; the Go service forwards the caller's string unchanged and its own test uses 1hr.
+    tolerance: Unresolved upstream; no conformance case asserts a timeframe spelling.
+    cases: []

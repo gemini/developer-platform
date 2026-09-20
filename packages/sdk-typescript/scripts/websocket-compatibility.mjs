@@ -22,6 +22,43 @@ function isRfqDeliveryEnum(body) {
   );
 }
 
+const SETTLEMENT_COMPATIBILITY_DECLARATIONS = [
+  ["SettlementUpdate", `export interface SettlementUpdate {
+  type: 'settlements';
+  settlements: Settlement[];
+}`],
+  ["Settlement", `export interface Settlement {
+  symbol: string;
+  position: string;
+  payout?: string;
+  outcome: AnonymousSchema_135;
+}`],
+  ["AnonymousSchema_135", `export enum AnonymousSchema_135 {
+  YES = "yes",
+  NO = "no",
+  UNSPECIFIED = "unspecified",
+}`],
+];
+
+function hasDeclaration(source, name) {
+  return new RegExp(
+    `^\\s*(?:export\\s+)?(?:interface|enum|type|class)\\s+${name}\\b`,
+    "m",
+  ).test(source);
+}
+
+function appendSettlementCompatibility(source) {
+  const missing = SETTLEMENT_COMPATIBILITY_DECLARATIONS
+    .filter(([name]) => !hasDeclaration(source, name))
+    .map(([, declaration]) => declaration);
+  if (missing.length === 0) return source;
+  return `${source.trimEnd()}\n\n${missing.join("\n\n")}\n`;
+}
+
+export function addLegacySettlementTypes(source) {
+  return appendSettlementCompatibility(source);
+}
+
 // Preserve the public enum export emitted by the previous generated schema
 // numbering. Locate the RFQ delivery enum by its stable wire values because
 // Modelina's anonymous schema suffix can shift whenever the upstream schema
@@ -38,5 +75,5 @@ export function addCompatibilityAliases(source) {
 
   const alias = `export { ${generatedName} as AnonymousSchema_152 };`;
   if (source.includes(alias)) return source;
-  return `${source}\n\n/** @deprecated Use ${generatedName}. */\n${alias}`;
+  return `${source.trimEnd()}\n\n/** @deprecated Use ${generatedName}. */\n${alias}`;
 }

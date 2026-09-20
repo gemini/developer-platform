@@ -24,7 +24,10 @@ const (
 	ReasonOrderNotFound      = "OrderNotFound"
 	ReasonNoSuchOrder        = "NoSuchOrder"
 	ReasonSelfCrossPrevented = "SelfCrossPrevented"
-	ReasonMustAcceptTerms    = "MustAcceptTerms"
+	ReasonMustAcceptTerms     = "MustAcceptTerms"
+	ReasonMustAccepTerms      = "MustAccepTerms"
+	ReasonAcceptTermsRequired = "AcceptTermsRequired"
+	ReasonTermsNotAccepted    = "TermsNotAccepted"
 )
 
 // -----------------------------------------------------------------------------
@@ -100,18 +103,26 @@ func (e *ResyncRequiredError) Unwrap() error {
 
 // APIError represents a structured error response returned by the Gemini REST API.
 type APIError struct {
-	StatusCode int
-	Result     string      `json:"result,omitempty"`
-	Reason     string      `json:"reason,omitempty"`
-	Message    string      `json:"message,omitempty"`
-	RequestID  string      `json:"-"`
-	RawBody    []byte      `json:"-"`
-	Header     http.Header `json:"-"`
+	StatusCode   int
+	Result       string      `json:"result,omitempty"`
+	Reason       string      `json:"reason,omitempty"`
+	ErrorMessage string      `json:"error,omitempty"`
+	Message      string      `json:"message,omitempty"`
+	RequestID    string      `json:"-"`
+	RawBody      []byte      `json:"-"`
+	Header       http.Header `json:"-"`
+}
+
+func (e *APIError) reason() string {
+	if e.Reason != "" {
+		return e.Reason
+	}
+	return e.ErrorMessage
 }
 
 // IsDomain reports whether the APIError represents an exchange business logic/domain error.
 func (e *APIError) IsDomain() bool {
-	switch e.Reason {
+	switch e.reason() {
 	case "InvalidNonce", "GenericNonceError", "MissingNonce",
 		"InvalidSignature",
 		"RateLimit", "UsageLimit",
@@ -120,7 +131,7 @@ func (e *APIError) IsDomain() bool {
 		"MarketClosed", "TradingClosed",
 		"OrderNotFound", "NoSuchOrder",
 		"SelfCrossPrevented",
-		"MustAcceptTerms":
+		ReasonMustAcceptTerms, ReasonMustAccepTerms, ReasonAcceptTermsRequired, ReasonTermsNotAccepted:
 		return true
 	default:
 		return false
@@ -128,13 +139,14 @@ func (e *APIError) IsDomain() bool {
 }
 
 func (e *APIError) Error() string {
+	reason := e.reason()
 	msg := ""
-	if e.Reason != "" && e.Message != "" {
-		msg = fmt.Sprintf("gemini api error (status %d): %s - %s", e.StatusCode, e.Reason, e.Message)
+	if reason != "" && e.Message != "" {
+		msg = fmt.Sprintf("gemini api error (status %d): %s - %s", e.StatusCode, reason, e.Message)
 	} else if e.Message != "" {
 		msg = fmt.Sprintf("gemini api error (status %d): %s", e.StatusCode, e.Message)
-	} else if e.Reason != "" {
-		msg = fmt.Sprintf("gemini api error (status %d): %s", e.StatusCode, e.Reason)
+	} else if reason != "" {
+		msg = fmt.Sprintf("gemini api error (status %d): %s", e.StatusCode, reason)
 	} else {
 		msg = fmt.Sprintf("gemini api error (status %d): unstructured response body", e.StatusCode)
 	}
@@ -146,7 +158,7 @@ func (e *APIError) Error() string {
 }
 
 func (e *APIError) Unwrap() error {
-	switch e.Reason {
+	switch e.reason() {
 	case "MissingNonce":
 		return ErrMissingNonce
 	case "MissingRole":
@@ -165,7 +177,7 @@ func (e *APIError) Unwrap() error {
 		return ErrOrderNotFound
 	case "SelfCrossPrevented":
 		return ErrSelfCrossPrevented
-	case "MustAcceptTerms":
+	case ReasonMustAcceptTerms, ReasonMustAccepTerms, ReasonAcceptTermsRequired, ReasonTermsNotAccepted:
 		return ErrAcceptTermsRequired
 	default:
 		switch e.StatusCode {
@@ -193,10 +205,14 @@ func (e *APIError) Unwrap() error {
 
 // Is implements error matching for APIError.
 func (e *APIError) Is(target error) bool {
-	if target == ErrRateLimited && (e.StatusCode == http.StatusTooManyRequests || e.Reason == "RateLimit" || e.Reason == "UsageLimit") {
+	reason := e.reason()
+	if target == ErrRateLimited && (e.StatusCode == http.StatusTooManyRequests || reason == "RateLimit" || reason == "UsageLimit") {
 		return true
 	}
-	if target == ErrInvalidNonce && (e.Reason == "InvalidNonce" || e.Reason == "GenericNonceError" || e.Reason == "MissingNonce") {
+	if target == ErrAcceptTermsRequired && (reason == ReasonMustAcceptTerms || reason == ReasonMustAccepTerms || reason == ReasonAcceptTermsRequired || reason == ReasonTermsNotAccepted) {
+		return true
+	}
+	if target == ErrInvalidNonce && (reason == ReasonInvalidNonce || reason == ReasonGenericNonceError || reason == ReasonMissingNonce) {
 		return true
 	}
 	return false

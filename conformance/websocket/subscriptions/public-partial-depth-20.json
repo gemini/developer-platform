@@ -1,0 +1,13 @@
+{
+  "id": "websocket/subscriptions/public-partial-depth-20",
+  "kind": "wsSubscription",
+  "stream": "partialDepth",
+  "symbol": "BTCUSD",
+  "options": {
+    "levels": 20
+  },
+  "expect": {
+    "method": "SUBSCRIBE",
+    "params": ["btcusd@depth20"]
+  }
+}

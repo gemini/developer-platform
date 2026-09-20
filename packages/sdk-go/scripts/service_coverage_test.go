@@ -1,7 +1,6 @@
 package main
 
 import (
-	"path"
 	"strings"
 	"testing"
 
@@ -135,19 +134,23 @@ var sdkRESTOperationCoverage = map[string]restOperationCoverage{
 }
 
 func TestRESTOperationCoverageManifest(t *testing.T) {
-	specs := []string{restSpecURL, predictionMarketsSpecURL}
+	policy, err := loadNumericOverlay()
+	if err != nil {
+		t.Fatalf("loading numeric overlay: %v", err)
+	}
+	specs := []string{restSpecID, predictionMarketsSpecID}
 	seen := make(map[string]struct{})
 
-	for _, specURL := range specs {
-		specName := path.Base(specURL)
-		raw, err := loadPublishedSpec(specURL)
+	for _, specID := range specs {
+		specName := specBasename(specID)
+		raw, err := loadVendoredSpec(specID)
 		if err != nil {
-			t.Fatalf("reading spec %s: %v", specURL, err)
+			t.Fatalf("reading spec %s: %v", specID, err)
 		}
 		loader := openapi3.NewLoader()
-		doc, err := loader.LoadFromData(sanitizeSpecBytes(raw))
+		doc, err := loader.LoadFromData(sanitizeSpecBytes(raw, policy))
 		if err != nil {
-			t.Fatalf("loading openapi doc %s: %v", specURL, err)
+			t.Fatalf("loading openapi doc %s: %v", specID, err)
 		}
 
 		for path, item := range doc.Paths.Map() {

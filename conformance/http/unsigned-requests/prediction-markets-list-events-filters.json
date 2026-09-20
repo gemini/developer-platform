@@ -1,0 +1,16 @@
+{
+  "id": "http/unsigned-requests/prediction-markets-list-events-filters",
+  "kind": "unsignedRequest",
+  "operation": "predictions.listEvents",
+  "input": {
+    "status": ["active", "closed"]
+  },
+  "expect": {
+    "method": "GET",
+    "path": "/v1/prediction-markets/events",
+    "query": {
+      "status": ["active", "closed"]
+    },
+    "authHeaders": []
+  }
+}
