@@ -133,11 +133,15 @@ test("private request shapes the Gemini payload envelope", async () => {
   assert.equal(url, "https://api.sandbox.gemini.com/v1/prediction-markets/order");
   assert.equal(init.method, "POST");
 
-  // Fixed private-REST headers.
-  assert.equal(init.headers["Content-Length"], "0");
-  assert.equal(init.headers["Content-Type"], "text/plain");
+  // A request with real params now also gets them as a literal HTTP body — not just
+  // signed into the payload header — so servers that do a real json.Decode(r.Body)
+  // (e.g. combos) don't reject an empty body with a 400 (PREDICT-9072). The literal
+  // body carries only the operation's own fields, never the signed envelope's
+  // request/nonce.
+  assert.equal(init.headers["Content-Type"], "application/json");
+  assert.equal(init.headers["Content-Length"], undefined);
   assert.equal(init.headers["Cache-Control"], "no-cache");
-  assert.equal(init.body, undefined, "private REST parameters belong only in the signed payload");
+  assert.deepEqual(init.body ? JSON.parse(init.body) : undefined, { symbol: "BTCUSD", amount: "1.5" });
 
   // The payload is base64(JSON) with request + nonce + params.
   const b64 = init.headers["X-GEMINI-PAYLOAD"];
@@ -152,6 +156,35 @@ test("private request shapes the Gemini payload envelope", async () => {
   // Credential headers from the auth strategy are merged, signing that exact b64.
   assert.equal(init.headers["X-GEMINI-APIKEY"], "test-key");
   assert.equal(init.headers["X-GEMINI-SIGNATURE"], `sig(${b64})`);
+});
+
+test("private request with no params sends no body, keeping the fixed no-body headers (PREDICT-9072 no-regression guard)", async () => {
+  const { fetchImpl, last } = recordingFetch({ status: 200, body: '{"result":"ok"}' });
+  const client = new HttpTransport({ env: "sandbox", auth: stubAuth, fetchImpl });
+
+  await client.request({
+    method: "POST",
+    path: "/v1/positions",
+  });
+
+  const { init } = last();
+  assert.equal(init.headers["Content-Length"], "0");
+  assert.equal(init.headers["Content-Type"], "text/plain");
+  assert.equal(init.body, undefined, "an operation with no params must not send a literal body");
+});
+
+test("private request body serializes a bigint param losslessly, via the same stringifyJson used for the signed payload", async () => {
+  const { fetchImpl, last } = recordingFetch({ status: 200, body: '{"result":"ok"}' });
+  const client = new HttpTransport({ env: "sandbox", auth: stubAuth, fetchImpl });
+
+  await client.request({
+    method: "POST",
+    path: "/v1/prediction-markets/combos",
+    params: { contractId: 123456789012345678n },
+  });
+
+  const { init } = last();
+  assert.equal(init.body, '{"contractId":123456789012345678}');
 });
 
 test("declared query serialization preserves array and object wire formats", async () => {

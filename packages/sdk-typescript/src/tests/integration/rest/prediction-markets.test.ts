@@ -431,6 +431,39 @@ void test("generated body fields cannot replace authentication headers", async (
   );
 });
 
+void test("createCombo sends legs as a literal HTTP body, not just signed into the payload (PREDICT-9072)", async () => {
+  const requests: Request[] = [];
+  const auth = new HmacAuth({ apiKey: "key", apiSecret: "secret", now: () => 1000 });
+  const rest = new PredictionMarketsRest(new HttpTransport({
+    env: "sandbox",
+    auth,
+    fetchImpl: async (url, init) => {
+      requests.push({ url, init });
+      return jsonResponse(
+        200,
+        '{"alreadyExisted":false,"combo":{"id":1,"canonicalLegKey":"k","instrumentRegistered":false,"legCount":2,"legs":[]}}',
+      );
+    },
+  }));
+
+  const legs = [
+    { contractId: "111", requiredOutcome: "Yes" as const },
+    { contractId: "222", requiredOutcome: "No" as const },
+  ];
+  await rest.createCombo({ legs });
+
+  const { init } = requests[0]!;
+  assert.equal(init.headers["Content-Type"], "application/json");
+  assert.equal(init.headers["Content-Length"], undefined);
+  assert.deepEqual(init.body ? JSON.parse(init.body) : undefined, { legs });
+
+  // The signed payload still carries request/nonce alongside legs — the literal
+  // body above is a narrower, separate copy of just the operation's own fields.
+  const payload = parseBoundaryRecord(fromBase64(init.headers["X-GEMINI-PAYLOAD"]!));
+  assert.deepEqual(Object.keys(payload).sort(), ["legs", "nonce", "request"]);
+  assert.equal(payload.request, "/v1/prediction-markets/combos");
+});
+
 void test("T5e wrappers keep position filters in the query and volume fields in the signed body", async () => {
   const requests: Request[] = [];
   const auth = new HmacAuth({ apiKey: "key", apiSecret: "secret", now: () => 1000 });

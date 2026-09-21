@@ -248,9 +248,17 @@ async function assertSigned(request: Request): Promise<void> {
     request.init.headers["X-GEMINI-SIGNATURE"],
     await hmacSha384Hex("secret", encoded),
   );
-  assert.equal(request.init.headers["Content-Length"], "0");
-  assert.equal(request.init.headers["Content-Type"], "text/plain");
-  assert.equal(request.init.body, undefined);
+  // Operations with a real request body (requestBody: true) now send it as a literal
+  // HTTP body too, not just signed into X-GEMINI-PAYLOAD (PREDICT-9072) — assert
+  // internal consistency between the content headers and body presence, since this
+  // generic helper covers both body-bearing and bodyless operations across every domain.
+  if (request.init.body !== undefined) {
+    assert.equal(request.init.headers["Content-Type"], "application/json");
+    assert.equal(request.init.headers["Content-Length"], undefined);
+  } else {
+    assert.equal(request.init.headers["Content-Length"], "0");
+    assert.equal(request.init.headers["Content-Type"], "text/plain");
+  }
 }
 
 test("generated REST operation metadata covers the new module surfaces", () => {
