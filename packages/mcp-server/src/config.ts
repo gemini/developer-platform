@@ -16,12 +16,21 @@ function isSandboxBaseUrl(baseUrl: string): boolean {
   }
 }
 
-function resolveSdkEnv(baseUrl: string): 'sandbox' | 'production' {
-  const raw = process.env.GEMINI_SDK_ENV;
-  if (raw === undefined || raw === '') return isSandboxBaseUrl(baseUrl) ? 'sandbox' : 'production';
-  if (raw === 'sandbox' || raw === 'production') return raw;
+// Exported as a pure function of its two inputs (rather than reading
+// process.env.GEMINI_SDK_ENV internally) so every derivation path — sandbox/production
+// baseUrl, unset/empty override, explicit override, invalid override — is unit-testable
+// directly, without the env-var-before-import gymnastics module-load-time config
+// resolution otherwise requires (see config.test.ts).
+export function resolveSdkEnv(
+  baseUrl: string,
+  sdkEnvOverride: string | undefined
+): 'sandbox' | 'production' {
+  if (sdkEnvOverride === undefined || sdkEnvOverride === '') {
+    return isSandboxBaseUrl(baseUrl) ? 'sandbox' : 'production';
+  }
+  if (sdkEnvOverride === 'sandbox' || sdkEnvOverride === 'production') return sdkEnvOverride;
   throw new Error(
-    `Invalid GEMINI_SDK_ENV "${raw}": must be "sandbox" or "production" (or unset, which derives from GEMINI_API_BASE_URL).`
+    `Invalid GEMINI_SDK_ENV "${sdkEnvOverride}": must be "sandbox" or "production" (or unset, which derives from GEMINI_API_BASE_URL).`
   );
 }
 
@@ -33,5 +42,5 @@ export const config = {
   baseUrl,
   wsUrl: process.env.GEMINI_WS_URL ?? 'wss://ws.gemini.com',
   account: process.env.GEMINI_ACCOUNT ?? '',
-  sdkEnv: resolveSdkEnv(baseUrl),
+  sdkEnv: resolveSdkEnv(baseUrl, process.env.GEMINI_SDK_ENV),
 };
