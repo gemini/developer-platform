@@ -47,8 +47,20 @@ test('pickWhitelistedEnv only retains the documented vars', () => {
   });
 });
 
+// Regression guard for PREDICT-8820: an installed daemon derives config.sdkEnv from
+// whatever env vars actually reach its process, so an explicit GEMINI_SDK_ENV override
+// dropped here would silently diverge from the operator's intent once installed.
+test('pickWhitelistedEnv preserves an explicit GEMINI_SDK_ENV override', () => {
+  const picked = pickWhitelistedEnv({
+    GEMINI_API_BASE_URL: 'https://api.gemini.com',
+    GEMINI_SDK_ENV: 'sandbox',
+  });
+  assert.strictEqual(picked['GEMINI_SDK_ENV'], 'sandbox');
+});
+
 test('ENV_WHITELIST is the canonical list and does not include arbitrary HOME', () => {
   assert.ok(ENV_WHITELIST.includes('GEMINI_API_KEY'));
   assert.ok(ENV_WHITELIST.includes('GEMINI_API_SECRET'));
+  assert.ok(ENV_WHITELIST.includes('GEMINI_SDK_ENV'));
   assert.ok(!(ENV_WHITELIST as readonly string[]).includes('HOME'));
 });
