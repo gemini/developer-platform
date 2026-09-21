@@ -15,6 +15,44 @@ import type {
 // keeps the same contract it had against the legacy GeminiHttpClient.
 type SdkInput<M extends (...args: never[]) => unknown> = Parameters<M>[0];
 
+interface RawEvent {
+  settlementValue?: string;
+  settlementTime?: string;
+  // The SDK's generated `Event` schema places settlement data here instead —
+  // `resolvedAt` for the timestamp, `settlement.value` for the value — not the flat
+  // `settlementValue`/`settlementTime` fields PredictionEvent expects and that
+  // alerts/daemon/index.ts's settlement-alert fetcher reads directly off each event.
+  resolvedAt?: string | null;
+  settlement?: { value?: string | null } | null;
+  [key: string]: unknown;
+}
+
+// Normalize explicitly rather than trusting a blind cast, so a settled event's
+// settlement value/time survive the migration instead of silently becoming
+// undefined. Prefers an already-flat field if the API ever sends one directly.
+// Only sets settlementValue/settlementTime when a real value was found on either
+// shape, rather than always adding the keys, so an unsettled event's normalized
+// form has no more own properties than the legacy client ever produced for it.
+function normalizeEvent(raw: RawEvent): PredictionEvent {
+  const settlementValue = raw.settlementValue ?? raw.settlement?.value ?? undefined;
+  const settlementTime = raw.settlementTime ?? raw.resolvedAt ?? undefined;
+  const result: RawEvent = { ...raw };
+  delete result['settlement'];
+  delete result['resolvedAt'];
+  delete result['settlementValue'];
+  delete result['settlementTime'];
+  if (settlementValue !== undefined) result['settlementValue'] = settlementValue;
+  if (settlementTime !== undefined) result['settlementTime'] = settlementTime;
+  return result as unknown as PredictionEvent;
+}
+
+function normalizeEvents(raw: { data?: RawEvent[] }): EventsResponse {
+  return {
+    ...raw,
+    data: (raw.data ?? []).map(normalizeEvent),
+  } as unknown as EventsResponse;
+}
+
 export async function listEvents(
   client: SdkClient,
   opts: {
@@ -34,12 +72,12 @@ export async function listEvents(
   const response = await client.predictions.listEvents(
     input as SdkInput<typeof client.predictions.listEvents>
   );
-  return response as unknown as EventsResponse;
+  return normalizeEvents(response as unknown as { data?: RawEvent[] });
 }
 
 export async function getEvent(client: SdkClient, eventTicker: string): Promise<PredictionEvent> {
   const response = await client.predictions.getEvent({ eventTicker });
-  return response as unknown as PredictionEvent;
+  return normalizeEvent(response as unknown as RawEvent);
 }
 
 export async function getEventStrike(client: SdkClient, eventTicker: string): Promise<EventStrike> {
@@ -58,7 +96,7 @@ export async function listNewlyListed(
   const response = await client.predictions.listNewlyListedEvents(
     input as SdkInput<typeof client.predictions.listNewlyListedEvents>
   );
-  return response as unknown as EventsResponse;
+  return normalizeEvents(response as unknown as { data?: RawEvent[] });
 }
 
 export async function listRecentlySettled(
@@ -72,7 +110,7 @@ export async function listRecentlySettled(
   const response = await client.predictions.listRecentlySettledEvents(
     input as SdkInput<typeof client.predictions.listRecentlySettledEvents>
   );
-  return response as unknown as EventsResponse;
+  return normalizeEvents(response as unknown as { data?: RawEvent[] });
 }
 
 export async function listUpcoming(
@@ -86,7 +124,7 @@ export async function listUpcoming(
   const response = await client.predictions.listUpcomingEvents(
     input as SdkInput<typeof client.predictions.listUpcomingEvents>
   );
-  return response as unknown as EventsResponse;
+  return normalizeEvents(response as unknown as { data?: RawEvent[] });
 }
 
 export async function listCategories(

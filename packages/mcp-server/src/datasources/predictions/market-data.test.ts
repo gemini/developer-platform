@@ -51,6 +51,14 @@ test('listEvents sends category/status as plain (unbracketed) input keys', async
   assert.deepStrictEqual(call.input, { status: ['active'], category: ['Sports', 'Crypto'] });
 });
 
+test('listEvents forwards search, limit, and offset', async () => {
+  const { client, calls } = fakeClient({ data: [] });
+
+  await predictions.listEvents(client, { search: 'bitcoin', limit: 25, offset: 10 });
+
+  assert.deepStrictEqual(calls[0]!.input, { search: 'bitcoin', limit: 25, offset: 10 });
+});
+
 test('listUpcoming sends category as a plain (unbracketed) input key', async () => {
   const { client, calls } = fakeClient({ data: [] });
 
@@ -58,6 +66,14 @@ test('listUpcoming sends category as a plain (unbracketed) input key', async () 
 
   assert.strictEqual(calls[0]!.method, 'listUpcomingEvents');
   assert.deepStrictEqual(calls[0]!.input, { category: ['Sports'] });
+});
+
+test('listUpcoming forwards limit and offset', async () => {
+  const { client, calls } = fakeClient({ data: [] });
+
+  await predictions.listUpcoming(client, { limit: 25, offset: 10 });
+
+  assert.deepStrictEqual(calls[0]!.input, { limit: 25, offset: 10 });
 });
 
 test('listNewlyListed sends category as a plain (unbracketed) input key', async () => {
@@ -69,6 +85,14 @@ test('listNewlyListed sends category as a plain (unbracketed) input key', async 
   assert.deepStrictEqual(calls[0]!.input, { category: ['Sports'] });
 });
 
+test('listNewlyListed forwards limit and offset', async () => {
+  const { client, calls } = fakeClient({ data: [] });
+
+  await predictions.listNewlyListed(client, { limit: 25, offset: 10 });
+
+  assert.deepStrictEqual(calls[0]!.input, { limit: 25, offset: 10 });
+});
+
 test('listRecentlySettled sends category as a plain (unbracketed) input key', async () => {
   const { client, calls } = fakeClient({ data: [] });
 
@@ -76,6 +100,68 @@ test('listRecentlySettled sends category as a plain (unbracketed) input key', as
 
   assert.strictEqual(calls[0]!.method, 'listRecentlySettledEvents');
   assert.deepStrictEqual(calls[0]!.input, { category: ['Sports'] });
+});
+
+test('listRecentlySettled forwards limit and offset', async () => {
+  const { client, calls } = fakeClient({ data: [] });
+
+  await predictions.listRecentlySettled(client, { limit: 25, offset: 10 });
+
+  assert.deepStrictEqual(calls[0]!.input, { limit: 25, offset: 10 });
+});
+
+test('listRecentlySettled maps a settled event nested settlement.value/resolvedAt onto the legacy flat settlementValue/settlementTime shape', async () => {
+  const { client } = fakeClient({
+    data: [
+      {
+        id: 'evt-1',
+        ticker: 'FED260318',
+        status: 'settled',
+        resolvedAt: '2026-03-18T12:00:00.000Z',
+        settlement: { value: '87654.32' },
+      },
+    ],
+  });
+
+  const result = await predictions.listRecentlySettled(client);
+
+  assert.deepStrictEqual(result.data[0]?.settlementValue, '87654.32');
+  assert.deepStrictEqual(result.data[0]?.settlementTime, '2026-03-18T12:00:00.000Z');
+  // The raw SDK-shaped fields should not leak into the normalized event.
+  assert.ok(!('settlement' in result.data[0]!));
+  assert.ok(!('resolvedAt' in result.data[0]!));
+});
+
+test('listRecentlySettled prefers an already-flat settlementValue/settlementTime over the nested shape, if the API ever sends both', async () => {
+  const { client } = fakeClient({
+    data: [
+      {
+        id: 'evt-1',
+        ticker: 'FED260318',
+        status: 'settled',
+        settlementValue: 'flat-value',
+        settlementTime: 'flat-time',
+        resolvedAt: 'nested-time',
+        settlement: { value: 'nested-value' },
+      },
+    ],
+  });
+
+  const result = await predictions.listRecentlySettled(client);
+
+  assert.strictEqual(result.data[0]?.settlementValue, 'flat-value');
+  assert.strictEqual(result.data[0]?.settlementTime, 'flat-time');
+});
+
+test('listRecentlySettled leaves settlementValue/settlementTime unset for an event with no settlement data', async () => {
+  const { client } = fakeClient({
+    data: [{ id: 'evt-1', ticker: 'FED260318', status: 'active' }],
+  });
+
+  const result = await predictions.listRecentlySettled(client);
+
+  assert.ok(!('settlementValue' in result.data[0]!));
+  assert.ok(!('settlementTime' in result.data[0]!));
 });
 
 test('listCategories sends status as a plain (unbracketed) input key', async () => {
