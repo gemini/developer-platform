@@ -60,6 +60,12 @@ export const ENV_WHITELIST = [
   'GEMINI_ACCOUNT',
   'GEMINI_API_BASE_URL',
   'GEMINI_WS_URL',
+  // Without this, an operator who explicitly sets GEMINI_SDK_ENV to diverge from what
+  // GEMINI_API_BASE_URL alone would derive (see config.ts's resolveSdkEnv) has that
+  // override silently dropped when the daemon is installed as a persistent OS-supervised
+  // service — the installed daemon would then derive sdkEnv from baseUrl alone and
+  // fetch prediction-market settlements from a different environment than intended.
+  'GEMINI_SDK_ENV',
   'PATH',
 ] as const;
 

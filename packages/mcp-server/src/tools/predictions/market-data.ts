@@ -1,12 +1,12 @@
 import { z } from 'zod';
-import type { GeminiHttpClient } from '../../client/http.js';
+import type { SdkClient } from '../../client/sdk.js';
 import type { ToolDefinition } from '../index.js';
 import { wrapHandler } from '../index.js';
 import * as predictions from '../../datasources/predictions/market-data.js';
 
 const EventStatusEnum = z.enum(['approved', 'active', 'closed', 'under_review', 'settled', 'invalid']);
 
-export function createPredictionMarketDataTools(client: GeminiHttpClient): ToolDefinition[] {
+export function createPredictionMarketDataTools(client: SdkClient): ToolDefinition[] {
   return [
     {
       name: 'gemini_list_prediction_events',
