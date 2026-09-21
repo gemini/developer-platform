@@ -1,10 +1,10 @@
 import { z } from 'zod';
-import type { GeminiHttpClient } from '../../client/http.js';
+import type { SdkClient } from '../../client/sdk.js';
 import type { ToolDefinition } from '../index.js';
 import { wrapHandler } from '../index.js';
 import * as predictions from '../../datasources/predictions/positions.js';
 
-export function createPredictionPositionTools(client: GeminiHttpClient): ToolDefinition[] {
+export function createPredictionPositionTools(sdkClient: SdkClient): ToolDefinition[] {
   return [
     {
       name: 'gemini_get_prediction_positions',
@@ -32,7 +32,7 @@ export function createPredictionPositionTools(client: GeminiHttpClient): ToolDef
             'Sort order. Bare field name uses its default direction (positionValue/unrealizedPnl: descending, expiryDate: ascending); prefix with + or - to override.'
           ),
       }),
-      handler: wrapHandler((args) => predictions.getPositions(client, args)),
+      handler: wrapHandler((args) => predictions.getPositions(sdkClient, args)),
     },
     {
       name: 'gemini_get_prediction_settled_positions',
@@ -68,7 +68,7 @@ export function createPredictionPositionTools(client: GeminiHttpClient): ToolDef
           .optional()
           .describe('Include early-sell cash-outs from the same time window as sibling fields'),
       }),
-      handler: wrapHandler((args) => predictions.getSettledPositions(client, args)),
+      handler: wrapHandler((args) => predictions.getSettledPositions(sdkClient, args)),
     },
   ];
 }
