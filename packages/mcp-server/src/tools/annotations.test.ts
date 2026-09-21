@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import type { GeminiHttpClient } from '../client/http.js';
+import type { SdkClient } from '../client/sdk.js';
 import { annotationsFor, requiresConfirmation } from './index.js';
 import type { ToolDefinition } from './index.js';
 import { createMarketTools } from './market.js';
@@ -18,6 +19,7 @@ import { createAlertTools } from './alerts.js';
 // Tool construction only closes over the client; nothing calls it, so a stub
 // is enough and no network or credentials are involved.
 const client = {} as GeminiHttpClient;
+const sdkClient = {} as SdkClient;
 
 const allTools: ToolDefinition[] = [
   ...createMarketTools(client),
@@ -28,7 +30,7 @@ const allTools: ToolDefinition[] = [
   ...createStakingTools(client),
   ...createPredictionMarketDataTools(client),
   ...createPredictionOrderTools(client),
-  ...createPredictionPositionTools(client),
+  ...createPredictionPositionTools(sdkClient),
   ...createPredictionComboTools(client),
   ...createAlertTools(),
 ];
@@ -64,7 +66,7 @@ test('exactly the expected 19 prediction-market tools are present, across all fo
   const predictionTools = [
     ...createPredictionMarketDataTools(client),
     ...createPredictionOrderTools(client),
-    ...createPredictionPositionTools(client),
+    ...createPredictionPositionTools(sdkClient),
     ...createPredictionComboTools(client),
   ]
     .map((t) => t.name)

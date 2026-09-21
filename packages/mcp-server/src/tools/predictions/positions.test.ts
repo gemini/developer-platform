@@ -1,39 +1,37 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import JSONBig from 'json-bigint';
-import type { GeminiHttpClient } from '../../client/http.js';
+import type { SdkClient } from '../../client/sdk.js';
 import { createPredictionPositionTools } from './positions.js';
 
-// Requests never leave this test — every call in these tests is intercepted
-// by the fake client before it reaches GeminiHttpClient's real networking
-// code.
-function fakeClient(response: unknown = {}) {
+// Requests never leave this test — every call in these tests is intercepted by the
+// fake SDK client before it would reach the real @gemini-markets/sdk transport.
+function fakeClient(getPositionsResponse: unknown = {}, getSettledPositionsResponse: unknown = {}) {
   return {
-    publicGet: async () => response,
-    authenticatedGet: async () => response,
-    authenticatedPost: async () => response,
-  } as unknown as GeminiHttpClient;
+    predictions: {
+      getPositions: async () => getPositionsResponse,
+      getSettledPositions: async () => getSettledPositionsResponse,
+    },
+  } as unknown as SdkClient;
 }
 
-// Unlike fakeClient above, this records the endpoint/params of each call —
-// needed to prove the handler actually reaches the settled endpoint with the
-// parsed filters, not just that it returns whatever authenticatedPost hands
-// back (a fakeClient stub returns the fixture regardless of which endpoint,
-// or even which datasource function, was actually invoked).
+// Unlike fakeClient above, this records the input object of each settled-positions
+// call — needed to prove the handler actually reaches the SDK with the parsed
+// filters, not just that it returns whatever the fixture hands back.
 function recordingClient(response: unknown = {}) {
-  const calls: { endpoint: string; params?: unknown }[] = [];
+  const calls: { input?: unknown }[] = [];
   const client = {
-    publicGet: async () => response,
-    authenticatedGet: async () => response,
-    authenticatedPost: async (endpoint: string, _body?: unknown, params?: unknown) => {
-      calls.push({ endpoint, params });
-      return response;
+    predictions: {
+      getPositions: async () => response,
+      getSettledPositions: async (input?: unknown) => {
+        calls.push({ input });
+        return response;
+      },
     },
-  } as unknown as GeminiHttpClient;
+  } as unknown as SdkClient;
   return { client, calls };
 }
 
-function toolNamed(client: GeminiHttpClient, name: string) {
+function toolNamed(client: SdkClient, name: string) {
   const tool = createPredictionPositionTools(client).find((t) => t.name === name);
   if (!tool) throw new Error(`tool not found: ${name}`);
   return tool;
@@ -52,15 +50,6 @@ function parsedOutput(result: { content: { type: string; text?: string }[] }): u
   const inner = text.replace(/^<tool-output[^>]*>\n/, '').replace(/\n<\/tool-output>$/, '');
   return JSON.parse(inner);
 }
-
-// Same precision-preserving parser the real GeminiHttpClient uses
-// (src/client/http.ts). Used here to turn hand-written raw JSON text — with
-// a 17-18 digit accountId/instrumentId as a bare JSON number, exactly as the
-// API sends it — into the object a real client call would hand to the
-// datasource layer. Building the fixture via JSON.stringify of a JS object
-// literal would not prove anything: an 18-digit numeric literal in JS source
-// is already truncated before any parser sees it.
-const jsonParse = JSONBig({ storeAsString: true });
 
 // ----------------------------------------------------------------------------
 // Sort enums — client-side zod constraint, independent of API validation
@@ -111,7 +100,7 @@ test('gemini_get_prediction_settled_positions does not fabricate absent roll-up 
     total: 1,
   };
 
-  const tool = toolNamed(fakeClient(response), 'gemini_get_prediction_settled_positions');
+  const tool = toolNamed(fakeClient(undefined, response), 'gemini_get_prediction_settled_positions');
   const result = await tool.handler(tool.inputSchema.parse({}));
   const parsed = parsedOutput(result) as Record<string, unknown>;
 
@@ -122,7 +111,8 @@ test('gemini_get_prediction_settled_positions does not fabricate absent roll-up 
 });
 
 // ----------------------------------------------------------------------------
-// withCashOuts=true — sibling fields survive passthrough
+// withCashOuts=true — sibling fields survive passthrough (mapped, since
+// accountId/instrumentId arrive as bigint and must come out as strings)
 // ----------------------------------------------------------------------------
 
 test('gemini_get_prediction_settled_positions passes through cashOuts and totalCashOut* fields', async () => {
@@ -130,10 +120,10 @@ test('gemini_get_prediction_settled_positions passes through cashOuts and totalC
     positions: [{ instrumentSymbol: 'GEMI-A', payout: '100.00' }],
     cashOuts: [
       {
-        accountId: '123',
+        accountId: 123n,
         costBasis: '20.00',
         filledQuantity: '5',
-        instrumentId: '456',
+        instrumentId: 456n,
         instrumentSymbol: 'GEMI-B',
         netProfit: '5.00',
         proceeds: '25.00',
@@ -146,22 +136,34 @@ test('gemini_get_prediction_settled_positions passes through cashOuts and totalC
     totalCashOutNetProfit: '5.00',
   };
 
-  const tool = toolNamed(fakeClient(response), 'gemini_get_prediction_settled_positions');
+  const tool = toolNamed(fakeClient(undefined, response), 'gemini_get_prediction_settled_positions');
   const result = await tool.handler(tool.inputSchema.parse({ withCashOuts: true }));
   const parsed = parsedOutput(result) as Record<string, unknown>;
 
-  assert.deepStrictEqual(parsed['cashOuts'], response.cashOuts);
+  assert.deepStrictEqual(parsed['cashOuts'], [
+    {
+      accountId: '123',
+      costBasis: '20.00',
+      filledQuantity: '5',
+      instrumentId: '456',
+      instrumentSymbol: 'GEMI-B',
+      netProfit: '5.00',
+      proceeds: '25.00',
+      side: 'sell',
+      timestamp: '2026-01-01T00:00:00Z',
+    },
+  ]);
   assert.strictEqual(parsed['totalCashOutProceeds'], '25.00');
   assert.strictEqual(parsed['totalCashOutCostBasis'], '20.00');
   assert.strictEqual(parsed['totalCashOutNetProfit'], '5.00');
 });
 
 // ----------------------------------------------------------------------------
-// Wiring — the handler must actually reach the settled endpoint with the
-// parsed filters, not just relay whatever authenticatedPost returns
+// Wiring — the handler must actually reach the SDK with the parsed filters,
+// not just relay whatever the fixture hands back
 // ----------------------------------------------------------------------------
 
-test('gemini_get_prediction_settled_positions calls the settled endpoint with the parsed filters', async () => {
+test('gemini_get_prediction_settled_positions calls the SDK with the parsed filters, unchanged', async () => {
   const { client, calls } = recordingClient({ positions: [] });
   const tool = toolNamed(client, 'gemini_get_prediction_settled_positions');
 
@@ -178,30 +180,39 @@ test('gemini_get_prediction_settled_positions calls the settled endpoint with th
   );
 
   assert.strictEqual(calls.length, 1);
-  assert.strictEqual(calls[0]!.endpoint, '/v1/prediction-markets/positions/settled');
-  assert.deepStrictEqual(calls[0]!.params, {
+  assert.deepStrictEqual(calls[0]!.input, {
     eventTicker: 'FEDJAN26',
-    limit: '25',
-    offset: '0',
+    limit: 25,
+    offset: 0,
     sort: '-payout',
     search: 'fed',
     category: 'Politics',
-    withCashOuts: 'true',
+    withCashOuts: true,
   });
 });
 
 // ----------------------------------------------------------------------------
-// Int64 precision — a 17-18 digit accountId/instrumentId must survive
-// verbatim, as it would arrive over the wire as a bare JSON number
+// Int64 precision — an 18-digit accountId/instrumentId must survive verbatim.
+// The SDK hands these back as real bigint values (a bigint literal is exact
+// in JS source, unlike a plain numeric literal past MAX_SAFE_INTEGER), and
+// the datasource's mapper must stringify them rather than let them reach
+// wrapHandler's JSON.stringify, which cannot serialize bigint at all.
 // ----------------------------------------------------------------------------
 
 test('gemini_get_prediction_settled_positions preserves 18-digit accountId/instrumentId precision', async () => {
-  const raw =
-    '{"positions":[{"accountId":123456789012345678,"instrumentId":987654321098765432,' +
-    '"instrumentSymbol":"GEMI-A","payout":"100.00","outcome":"yes"}]}';
-  const response = jsonParse.parse(raw);
+  const response = {
+    positions: [
+      {
+        accountId: 123456789012345678n,
+        instrumentId: 987654321098765432n,
+        instrumentSymbol: 'GEMI-A',
+        payout: '100.00',
+        outcome: 'yes',
+      },
+    ],
+  };
 
-  const tool = toolNamed(fakeClient(response), 'gemini_get_prediction_settled_positions');
+  const tool = toolNamed(fakeClient(undefined, response), 'gemini_get_prediction_settled_positions');
   const result = await tool.handler(tool.inputSchema.parse({}));
   const text = textOf(result);
 
