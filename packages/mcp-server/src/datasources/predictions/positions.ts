@@ -56,7 +56,7 @@ function mapSettledPosition(p: SdkSettledPosition): SettledPosition {
   return {
     accountId: p.accountId !== undefined ? p.accountId.toString() : undefined,
     contractMetadata: mapContractMetadata(p.contractMetadata),
-    costBasis: p.costBasis ?? undefined,
+    costBasis: p.costBasis,
     instrumentId: p.instrumentId !== undefined ? p.instrumentId.toString() : undefined,
     instrumentSymbol: p.instrumentSymbol,
     netProfit: p.netProfit ?? undefined,
