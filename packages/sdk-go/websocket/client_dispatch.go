@@ -52,23 +52,21 @@ func (c *Client) dispatchFrame(stop <-chan struct{}, payload []byte, generation 
 	// the explicit event discriminator before the heuristic market-data probes
 	// below; otherwise an order update can be silently delivered as a trade.
 	if bytes.Contains(payload, bOrder) || bytes.Contains(payload, bOrderUpdate) {
-		var eventEnvelope map[string]json.RawMessage
-		if err := json.Unmarshal(payload, &eventEnvelope); err == nil {
-			var explicitType string
-			if rawType, ok := eventEnvelope["e"]; ok {
-				_ = json.Unmarshal(rawType, &explicitType)
-			}
-			if explicitType == "order" || explicitType == "orderUpdate" {
-				var order OrderEvent
-				if err := json.Unmarshal(payload, &order); err == nil {
-					for _, subs := range tables.orderSubs {
-						for _, sub := range subs {
-							sub.send(stop, &order)
-						}
+		var eventEnvelope struct {
+			EventType string `json:"e"`
+			EventTime int64  `json:"E"`
+		}
+		if err := json.Unmarshal(payload, &eventEnvelope); err == nil &&
+			(eventEnvelope.EventType == "order" || eventEnvelope.EventType == "orderUpdate") {
+			var order OrderEvent
+			if err := json.Unmarshal(payload, &order); err == nil {
+				for _, subs := range tables.orderSubs {
+					for _, sub := range subs {
+						sub.send(stop, &order)
 					}
 				}
-				return nil
 			}
+			return nil
 		}
 	}
 
