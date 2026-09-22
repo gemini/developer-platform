@@ -89,7 +89,7 @@
     "@types/node": "^22",
     "@types/ws": "^8.18.1",
     "esbuild": "^0.28.2",
-    "miniflare": "5.20260825.0-alpha",
+    "miniflare": "^5.20260921.0-alpha",
     "openapi-typescript": "7.13.0",
     "tsx": "^4",
     "typescript": "^5.7",

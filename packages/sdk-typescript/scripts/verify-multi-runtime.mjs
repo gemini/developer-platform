@@ -211,7 +211,6 @@ try {
         workers: [{
           config: {
             name: "sdk-browser",
-            type: "worker",
             compatibilityDate: "2024-01-01",
           },
           legacy: {
