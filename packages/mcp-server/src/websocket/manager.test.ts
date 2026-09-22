@@ -213,7 +213,7 @@ test('subscribe() sends the wire channel name with correct casing for spot vs pr
 
 test('subscribeContractStatus() subscribes exactly once through the SDK public stream', async () => {
   const { sdkClient, contractStatusStreams } = createFakeSdkClient();
-  const manager = new WebSocketManager('ws://unused', sdkClient);
+  const manager = new WebSocketManager('unused', sdkClient);
 
   await manager.subscribeContractStatus();
 
@@ -223,7 +223,7 @@ test('subscribeContractStatus() subscribes exactly once through the SDK public s
 
 test('subscribeContractStatus() is idempotent — a second call does not open a second SDK stream', async () => {
   const { sdkClient, contractStatusStreams } = createFakeSdkClient();
-  const manager = new WebSocketManager('ws://unused', sdkClient);
+  const manager = new WebSocketManager('unused', sdkClient);
 
   await manager.subscribeContractStatus();
   await manager.subscribeContractStatus();
@@ -233,7 +233,7 @@ test('subscribeContractStatus() is idempotent — a second call does not open a 
 
 test('subscribeContractStatus() deduplicates truly concurrent callers', async () => {
   const { sdkClient, contractStatusStreams } = createFakeSdkClient();
-  const manager = new WebSocketManager('ws://unused', sdkClient);
+  const manager = new WebSocketManager('unused', sdkClient);
 
   // Both calls start before either has awaited anything, so both would
   // observe "not subscribed yet" without the pendingSubscriptions guard —
@@ -253,7 +253,7 @@ test('an SDK contractStatus frame lands in the store with the contract ID intact
   const BIG_CONTRACT_ID = 145828833218573125n;
 
   const { sdkClient, contractStatusStreams } = createFakeSdkClient();
-  const manager = new WebSocketManager('ws://unused', sdkClient);
+  const manager = new WebSocketManager('unused', sdkClient);
   const beforeIngestion = Date.now();
 
   await manager.subscribeContractStatus();
@@ -292,7 +292,7 @@ test('an SDK contractStatus frame lands in the store with the contract ID intact
 
 test('an SDK contractStatus frame without a strike price leaves strikePrice unset', async () => {
   const { sdkClient, contractStatusStreams } = createFakeSdkClient();
-  const manager = new WebSocketManager('ws://unused', sdkClient);
+  const manager = new WebSocketManager('unused', sdkClient);
 
   await manager.subscribeContractStatus();
   // A real settlement event omits `p` entirely — only strike-setting events
@@ -328,7 +328,7 @@ function withCredentials(apiKey: string, apiSecret: string, run: () => Promise<v
 test('subscribeAccountOrders() subscribes exactly once through the SDK private stream', async () => {
   await withCredentials('test-key', 'test-secret', async () => {
     const { sdkClient, orderStreams } = createFakeSdkClient();
-    const manager = new WebSocketManager('ws://unused', sdkClient);
+    const manager = new WebSocketManager('unused', sdkClient);
 
     await manager.subscribeAccountOrders();
 
@@ -340,7 +340,7 @@ test('subscribeAccountOrders() subscribes exactly once through the SDK private s
 test('subscribeAccountOrders() throws clearly, without touching the SDK, when credentials are not configured', async () => {
   await withCredentials('', '', async () => {
     const { sdkClient, orderStreams } = createFakeSdkClient();
-    const manager = new WebSocketManager('ws://unused', sdkClient);
+    const manager = new WebSocketManager('unused', sdkClient);
 
     await assert.rejects(() => manager.subscribeAccountOrders(), /GEMINI_API_KEY and GEMINI_API_SECRET/);
     assert.strictEqual(orderStreams.length, 0);
@@ -350,7 +350,7 @@ test('subscribeAccountOrders() throws clearly, without touching the SDK, when cr
 test('subscribeAccountOrders() deduplicates truly concurrent callers', async () => {
   await withCredentials('test-key', 'test-secret', async () => {
     const { sdkClient, orderStreams } = createFakeSdkClient();
-    const manager = new WebSocketManager('ws://unused', sdkClient);
+    const manager = new WebSocketManager('unused', sdkClient);
 
     await Promise.all([manager.subscribeAccountOrders(), manager.subscribeAccountOrders()]);
 
@@ -378,7 +378,7 @@ test('a fill-shaped SDK orderUpdate frame lands in the order store, not the trad
 
   await withCredentials('test-key', 'test-secret', async () => {
     const { sdkClient, orderStreams } = createFakeSdkClient();
-    const manager = new WebSocketManager('ws://unused', sdkClient);
+    const manager = new WebSocketManager('unused', sdkClient);
 
     await manager.subscribeAccountOrders();
 
@@ -438,7 +438,7 @@ test('a canceled SDK orderUpdate frame is captured with its reject reason', asyn
   // mishandles a terminal state without a fill wouldn't pass unnoticed.
   await withCredentials('test-key', 'test-secret', async () => {
     const { sdkClient, orderStreams } = createFakeSdkClient();
-    const manager = new WebSocketManager('ws://unused', sdkClient);
+    const manager = new WebSocketManager('unused', sdkClient);
 
     await manager.subscribeAccountOrders();
 
@@ -473,7 +473,7 @@ test('a canceled SDK orderUpdate frame is captured with its reject reason', asyn
 
 test('subscribeContractStatus() propagates a rejected subscribe ack and does not record a subscription', async () => {
   const { sdkClient, contractStatusStreams } = createFakeSdkClient({ autoAck: false });
-  const manager = new WebSocketManager('ws://unused', sdkClient);
+  const manager = new WebSocketManager('unused', sdkClient);
 
   const attempt = manager.subscribeContractStatus();
   contractStatusStreams[0]!.failReady(new Error('subscribe rejected with status 400'));
