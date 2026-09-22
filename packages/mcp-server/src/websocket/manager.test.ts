@@ -146,6 +146,7 @@ interface FakeSdk {
   sdkClient: SdkClient;
   contractStatusStreams: FakeWebSocketStream<unknown>[];
   orderStreams: FakeWebSocketStream<unknown>[];
+  orderSubscriptionOptions: unknown[];
 }
 
 // By default the fake ack's the subscribe on the next microtask, mirroring
@@ -154,6 +155,7 @@ function createFakeSdkClient(options?: { autoAck?: boolean }): FakeSdk {
   const autoAck = options?.autoAck ?? true;
   const contractStatusStreams: FakeWebSocketStream<unknown>[] = [];
   const orderStreams: FakeWebSocketStream<unknown>[] = [];
+  const orderSubscriptionOptions: unknown[] = [];
 
   const sdkClient = {
     websocket: {
@@ -166,7 +168,8 @@ function createFakeSdkClient(options?: { autoAck?: boolean }): FakeSdk {
         },
       },
       private: {
-        orders: () => {
+        orders: (opts: unknown) => {
+          orderSubscriptionOptions.push(opts);
           const stream = new FakeWebSocketStream<unknown>();
           orderStreams.push(stream);
           if (autoAck) queueMicrotask(() => stream.ackReady());
@@ -176,7 +179,7 @@ function createFakeSdkClient(options?: { autoAck?: boolean }): FakeSdk {
     },
   } as unknown as SdkClient;
 
-  return { sdkClient, contractStatusStreams, orderStreams };
+  return { sdkClient, contractStatusStreams, orderStreams, orderSubscriptionOptions };
 }
 
 test('subscribe() sends the wire channel name with correct casing for spot vs prediction symbols', async () => {
@@ -327,13 +330,20 @@ function withCredentials(apiKey: string, apiSecret: string, run: () => Promise<v
 
 test('subscribeAccountOrders() subscribes exactly once through the SDK private stream', async () => {
   await withCredentials('test-key', 'test-secret', async () => {
-    const { sdkClient, orderStreams } = createFakeSdkClient();
+    const { sdkClient, orderStreams, orderSubscriptionOptions } = createFakeSdkClient();
     const manager = new WebSocketManager('unused', sdkClient);
 
     await manager.subscribeAccountOrders();
 
     assert.strictEqual(orderStreams.length, 1);
     assert.deepStrictEqual(manager.getState().subscriptions, ['orders@account']);
+    // Regression guard: the account-wide channel name recorded above only
+    // proves *this manager* thinks it subscribed to the account scope — it
+    // doesn't prove that's what was actually requested from the SDK. Assert
+    // the literal options passed to private.orders() so a future change to
+    // `{ scope: 'session' }` fails here instead of silently subscribing to
+    // the wrong feed.
+    assert.deepStrictEqual(orderSubscriptionOptions, [{ scope: 'account' }]);
   });
 });
 
