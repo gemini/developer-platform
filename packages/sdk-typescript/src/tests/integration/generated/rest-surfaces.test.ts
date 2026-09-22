@@ -252,6 +252,15 @@ async function assertSigned(request: Request): Promise<void> {
   // HTTP body too, not just signed into X-GEMINI-PAYLOAD (PREDICT-9072) — assert
   // internal consistency between the content headers and body presence, since this
   // generic helper covers both body-bearing and bodyless operations across every domain.
+  //
+  // Deliberately not derived from the signed payload's own keys: a requestBody:true
+  // operation called with zero actual fields (e.g. getRoles, oauth revoke) signs
+  // exactly {request, nonce} — indistinguishable, by payload content alone, from a
+  // requestBody:false query-only operation. Resolving that needs the operation's own
+  // metadata (requestBody flag) cross-referenced per call site, which is real scope
+  // beyond this helper — precise, per-operation regression coverage for the fix
+  // itself already lives in transport/http.ts's own test file (a dedicated no-body
+  // guard and a createCombo integration test), not here.
   if (request.init.body !== undefined) {
     assert.equal(request.init.headers["Content-Type"], "application/json");
     assert.equal(request.init.headers["Content-Length"], undefined);
