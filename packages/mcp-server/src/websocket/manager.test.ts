@@ -441,6 +441,38 @@ test('a fill-shaped SDK orderUpdate frame lands in the order store, not the trad
   });
 });
 
+test('a bigint order timestamp within IEEE-754 rounding distance of a millisecond boundary is not shifted', async () => {
+  // 50ns before an exact millisecond boundary — well within the ~256ns
+  // spacing between representable doubles at this magnitude (see
+  // sdkEventTimeMs's doc comment). Narrowing to Number before dividing, as
+  // the pre-fix code did, rounds this fixture up to the boundary itself and
+  // lands one millisecond too high; dividing in bigint space first must not.
+  const BOUNDARY_MS = 1_789_420_240_479n;
+  const NANOS_E = BOUNDARY_MS * 1_000_000n - 50n;
+  const BIG_ORDER_ID = 145828833218573126n;
+
+  await withCredentials('test-key', 'test-secret', async () => {
+    const { sdkClient, orderStreams } = createFakeSdkClient();
+    const manager = new WebSocketManager('unused', sdkClient);
+
+    await manager.subscribeAccountOrders();
+
+    orderStreams[0]!.emitMessage({
+      e: 'orderUpdate',
+      E: NANOS_E,
+      s: 'GEMI-PRES2028-VANCE',
+      i: BIG_ORDER_ID,
+      X: 'NEW',
+    });
+
+    const store = manager.getStore();
+    const order = await waitForOrder(store, '145828833218573126');
+
+    assert.ok(order, 'order update must have been captured');
+    assert.strictEqual(order?.eventTimeMs, Number(BOUNDARY_MS) - 1);
+  });
+});
+
 test('a canceled SDK orderUpdate frame is captured with its reject reason', async () => {
   // The only other manager-level order fixture is a FILLED event — this
   // covers the non-fill terminal case (CANCELED, with a reject/cancel
@@ -498,4 +530,28 @@ test('subscribeContractStatus() propagates a rejected subscribe ack and does not
   await retry;
   assert.strictEqual(contractStatusStreams.length, 2);
   assert.deepStrictEqual(manager.getState().subscriptions, ['contractStatus']);
+});
+
+test('disconnect() closes the SDK contractStatus stream', async () => {
+  const { sdkClient, contractStatusStreams } = createFakeSdkClient();
+  const manager = new WebSocketManager('unused', sdkClient);
+
+  await manager.subscribeContractStatus();
+  assert.strictEqual(contractStatusStreams[0]!.closed, false);
+
+  manager.disconnect();
+  assert.strictEqual(contractStatusStreams[0]!.closed, true);
+});
+
+test('disconnect() closes the SDK orders@account stream', async () => {
+  await withCredentials('test-key', 'test-secret', async () => {
+    const { sdkClient, orderStreams } = createFakeSdkClient();
+    const manager = new WebSocketManager('unused', sdkClient);
+
+    await manager.subscribeAccountOrders();
+    assert.strictEqual(orderStreams[0]!.closed, false);
+
+    manager.disconnect();
+    assert.strictEqual(orderStreams[0]!.closed, true);
+  });
 });

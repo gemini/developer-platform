@@ -30,6 +30,23 @@ export function toEventTimeMs(rawTimestamp: number): number {
   return rawTimestamp >= NANOSECOND_MAGNITUDE_THRESHOLD ? Math.floor(rawTimestamp / 1_000_000) : rawTimestamp;
 }
 
+// bigint-safe variant for the SDK's `number | bigint` timestamp fields.
+// Narrowing a nanosecond-scale bigint to `number` *before* dividing (as
+// toEventTimeMs does for its plain-number legacy callers) can round the
+// value across a millisecond boundary — nanosecond epoch values are ~1.79e18
+// today, which only has ~256ns of spacing between representable doubles, so
+// a raw value within that spacing of a millisecond boundary rounds up before
+// the division ever happens. Dividing in bigint space first, and narrowing
+// only the much smaller millisecond quotient, avoids that.
+function sdkEventTimeMs(rawTimestamp: number | bigint): number {
+  if (typeof rawTimestamp === 'bigint') {
+    return rawTimestamp >= BigInt(NANOSECOND_MAGNITUDE_THRESHOLD)
+      ? Number(rawTimestamp / 1_000_000n)
+      : Number(rawTimestamp);
+  }
+  return toEventTimeMs(rawTimestamp);
+}
+
 // The SDK's lossless WebSocket parser types large integer fields (contract/
 // order/trade IDs) as `number | bigint` to avoid the precision loss a plain
 // JSON.parse would cause on 17-18 digit values — see stream.ts's
@@ -78,9 +95,9 @@ function orderUpdateFromSdk(msg: OrderUpdate): Omit<CachedOrderUpdate, 'timestam
     feeAmount: msg.n,
     isMaker: msg.m,
     rejectReason: msg.r,
-    // Same magnitude-detection treatment as the legacy orderUpdate wire
-    // handler applied to this field — see toEventTimeMs's doc comment.
-    eventTimeMs: toEventTimeMs(Number(msg.E)),
+    // sdkEventTimeMs, not toEventTimeMs(Number(msg.E)) — see its doc
+    // comment for why narrowing to Number before dividing loses precision.
+    eventTimeMs: sdkEventTimeMs(msg.E),
   };
 }
 
