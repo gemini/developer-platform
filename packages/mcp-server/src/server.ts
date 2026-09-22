@@ -64,7 +64,7 @@ export function createServer(sdkClient: SdkClient): Server {
   );
 
   const client = new GeminiHttpClient();
-  const wsManager = new WebSocketManager(config.wsUrl);
+  const wsManager = new WebSocketManager(config.wsUrl, sdkClient);
 
   const allTools: ToolDefinition[] = [
     ...createMarketTools(client),

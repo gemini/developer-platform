@@ -1,7 +1,9 @@
-import { GeminiWebSocketClient, isTradeMessage, isDepthMessage, isBookTickerMessage, isTickerMessage, isContractStatusMessage, isOrderUpdateMessage, isSubscribeResponse } from '../client/websocket.js';
+import { GeminiWebSocketClient, isTradeMessage, isDepthMessage, isBookTickerMessage, isTickerMessage, isSubscribeResponse } from '../client/websocket.js';
 import { MarketDataStore } from '../store/index.js';
 import { config } from '../config.js';
-import type { WSMessage, WSConnectionStatus, WSManagerState, WSChannel } from '../types/websocket.js';
+import type { SdkClient } from '../client/sdk.js';
+import type { ContractStatus, OrderUpdate, WebSocketStream } from '@gemini-markets/sdk/server';
+import type { WSMessage, WSConnectionStatus, WSManagerState, WSChannel, CachedOrderUpdate } from '../types/websocket.js';
 
 /**
  * Normalize a symbol into the casing Gemini's WS channel names expect.
@@ -28,11 +30,66 @@ export function toEventTimeMs(rawTimestamp: number): number {
   return rawTimestamp >= NANOSECOND_MAGNITUDE_THRESHOLD ? Math.floor(rawTimestamp / 1_000_000) : rawTimestamp;
 }
 
+// The SDK's lossless WebSocket parser types large integer fields (contract/
+// order/trade IDs) as `number | bigint` to avoid the precision loss a plain
+// JSON.parse would cause on 17-18 digit values — see stream.ts's
+// estimateFrameBytes and the SDK's own websocket.test.ts. `String()` on
+// either a safe-integer `number` or a `bigint` yields the exact decimal
+// digits with no exponential notation, which is exactly what this package's
+// Cached*/store types (string IDs) need.
+function idToString(id: number | bigint): string {
+  return String(id);
+}
+
+/**
+ * Reshape the SDK's `ContractStatus` push frame into the positional args
+ * `MarketDataStore.updateContractStatus` expects. Contract status's `E` is
+ * milliseconds already (unlike order/trade/bookTicker's nanosecond-scale
+ * `E`), so it's passed straight through — no toEventTimeMs conversion, same
+ * as the legacy wire handler this replaces.
+ */
+function contractStatusArgsFromSdk(msg: ContractStatus): Parameters<MarketDataStore['updateContractStatus']> {
+  return [msg.s, msg.k, msg.c, idToString(msg.i), msg.o, msg.n, msg.p, Number(msg.E)];
+}
+
+/**
+ * Reshape the SDK's `OrderUpdate` push frame into the object
+ * `MarketDataStore.updateOrder` expects. The enum-typed fields (`S`/`o`/`X`/
+ * `O`) carry the same literal string values as this package's Cached*
+ * unions at runtime; the cast just bridges the generated enum's nominal
+ * type to those plain string-literal unions.
+ */
+function orderUpdateFromSdk(msg: OrderUpdate): Omit<CachedOrderUpdate, 'timestamp'> {
+  return {
+    orderId: idToString(msg.i),
+    clientOrderId: msg.c,
+    symbol: msg.s,
+    side: msg.S as unknown as 'BUY' | 'SELL' | undefined,
+    orderType: msg.o as unknown as string | undefined,
+    status: msg.X as unknown as string,
+    outcome: msg.O as unknown as 'YES' | 'NO' | undefined,
+    price: msg.p,
+    stopPrice: msg.P,
+    quantity: msg.q,
+    remainingQty: msg.z,
+    executedQty: msg.Z,
+    lastExecutedPrice: msg.L,
+    tradeId: msg.t !== undefined ? idToString(msg.t) : undefined,
+    feeAmount: msg.n,
+    isMaker: msg.m,
+    rejectReason: msg.r,
+    // Same magnitude-detection treatment as the legacy orderUpdate wire
+    // handler applied to this field — see toEventTimeMs's doc comment.
+    eventTimeMs: toEventTimeMs(Number(msg.E)),
+  };
+}
+
 /**
  * WebSocket manager that integrates client and store
  */
 export class WebSocketManager {
   private client: GeminiWebSocketClient;
+  private sdkClient: SdkClient;
   private store: MarketDataStore;
   private status: WSConnectionStatus = 'disconnected';
   private lastConnected?: number;
@@ -43,10 +100,20 @@ export class WebSocketManager {
   // (the store isn't updated until the wire call resolves), so both send a
   // subscribe request — Gemini can deliver duplicate events or reject the
   // second one. Concurrent callers now await the same in-flight promise.
+  // Shared by both the legacy wire subscribe() path and the SDK-backed
+  // contractStatus/orders@account streams below — the channel-name keys
+  // ('btcusd@bookTicker' vs 'contractStatus'/'orders@account') never
+  // collide, so one map safely dedupes both.
   private pendingSubscriptions: Map<string, Promise<void>> = new Map();
+  // SDK-backed public/private streams for contractStatus and orders@account.
+  // Kept so disconnect() can release them; only set once subscribed
+  // successfully (see subscribeOnce below).
+  private contractStatusStream?: WebSocketStream<ContractStatus>;
+  private orderUpdateStream?: WebSocketStream<OrderUpdate>;
 
-  constructor(wsUrl: string, store?: MarketDataStore) {
+  constructor(wsUrl: string, sdkClient: SdkClient, store?: MarketDataStore) {
     this.client = new GeminiWebSocketClient(wsUrl);
+    this.sdkClient = sdkClient;
     this.store = store || new MarketDataStore();
 
     // Register message handler
@@ -75,8 +142,12 @@ export class WebSocketManager {
   /**
    * Subscribe to a single channel, deduplicating concurrent callers and
    * recording the subscription only once the wire call actually succeeds.
+   * `doSubscribe` performs the actual subscribe — defaulting to the legacy
+   * wire client for bookTicker/trade/depth/ticker channels — so
+   * contractStatus/orders@account can plug in the SDK-backed streams below
+   * while sharing this same dedup guard.
    */
-  private subscribeOnce(channelStr: string): Promise<void> {
+  private subscribeOnce(channelStr: string, doSubscribe?: () => Promise<void>): Promise<void> {
     if (this.store.hasSubscription(channelStr)) {
       console.error(`[WSManager] Already subscribed to ${channelStr}`);
       return Promise.resolve();
@@ -85,8 +156,9 @@ export class WebSocketManager {
     const pending = this.pendingSubscriptions.get(channelStr);
     if (pending) return pending;
 
-    const promise = this.client
-      .subscribe([channelStr])
+    const subscribeAction = doSubscribe ?? (() => this.client.subscribe([channelStr]).then(() => undefined));
+
+    const promise = subscribeAction()
       .then(() => {
         this.store.addSubscription(channelStr);
         console.error(`[WSManager] Subscribed to ${channelStr}`);
@@ -183,27 +255,51 @@ export class WebSocketManager {
 
   /**
    * Subscribe to the global contractStatus channel (prediction-market
-   * strike/settlement lifecycle events). Unlike bookTicker/trade/depth,
-   * this has no per-symbol wire subscription — Gemini pushes every
-   * contract's status changes on one shared channel (confirmed against
-   * sdk-go's SubscribeContractStatus, which sends the literal channel name
-   * "contractStatus" regardless of the symbol callers filter by). Callers
-   * read a specific symbol's latest status back out of the store.
+   * strike/settlement lifecycle events) via the SDK's public
+   * `client.websocket.public.contractStatus()` stream. Unlike bookTicker/
+   * trade/depth, this has no per-symbol wire subscription — Gemini pushes
+   * every contract's status changes on one shared channel (confirmed
+   * against sdk-go's SubscribeContractStatus, which sends the literal
+   * channel name "contractStatus" regardless of the symbol callers filter
+   * by). Callers read a specific symbol's latest status back out of the
+   * store. Reconnect/backoff for this stream is handled inside the SDK.
    */
   async subscribeContractStatus(): Promise<void> {
-    return this.subscribeOnce('contractStatus');
+    return this.subscribeOnce('contractStatus', () => this.startContractStatusStream());
+  }
+
+  private async startContractStatusStream(): Promise<void> {
+    const stream = this.sdkClient.websocket.public.contractStatus();
+    stream.on('message', (msg) => this.handleContractStatusMessage(msg));
+    try {
+      await stream.ready;
+    } catch (err) {
+      void stream.close();
+      throw err;
+    }
+    // Only retained once the subscribe ack lands, matching subscribeOnce's
+    // "record the subscription only once the wire call actually succeeds".
+    this.contractStatusStream = stream;
+  }
+
+  private handleContractStatusMessage(msg: ContractStatus): void {
+    try {
+      this.store.updateContractStatus(...contractStatusArgsFromSdk(msg));
+    } catch (err) {
+      console.error('[WSManager] Error handling contractStatus message:', err);
+    }
   }
 
   /**
    * Subscribe to the authenticated orders@account channel (fill/cancel/
-   * reject confirmation for every order on the account). Like
+   * reject confirmation for every order on the account) via the SDK's
+   * `client.websocket.private.orders({ scope: 'account' })` stream. Like
    * contractStatus, this is one global channel — no per-symbol wire
-   * subscription — and requires credentials at the WebSocket connection
-   * upgrade itself (handled in GeminiWebSocketClient.connect()), not a
-   * post-connect handshake. Throws immediately if credentials aren't
-   * configured, mirroring GeminiHttpClient.authenticatedPost's guard,
-   * rather than attempting the subscribe and getting a confusing late
-   * rejection from Gemini.
+   * subscription. Throws immediately if credentials aren't configured,
+   * mirroring GeminiHttpClient.authenticatedPost's guard, rather than
+   * attempting the subscribe and getting a confusing late rejection from
+   * either Gemini or the SDK's own "authenticated WebSocket operation
+   * requires auth" error.
    */
   async subscribeAccountOrders(): Promise<void> {
     if (!config.apiKey || !config.apiSecret) {
@@ -212,7 +308,27 @@ export class WebSocketManager {
           'must be set in the MCP server environment. This tool is unavailable in public-only mode.'
       );
     }
-    return this.subscribeOnce('orders@account');
+    return this.subscribeOnce('orders@account', () => this.startAccountOrdersStream());
+  }
+
+  private async startAccountOrdersStream(): Promise<void> {
+    const stream = this.sdkClient.websocket.private.orders({ scope: 'account' });
+    stream.on('message', (msg) => this.handleOrderUpdateMessage(msg));
+    try {
+      await stream.ready;
+    } catch (err) {
+      void stream.close();
+      throw err;
+    }
+    this.orderUpdateStream = stream;
+  }
+
+  private handleOrderUpdateMessage(msg: OrderUpdate): void {
+    try {
+      this.store.updateOrder(orderUpdateFromSdk(msg));
+    } catch (err) {
+      console.error('[WSManager] Error handling orderUpdate message:', err);
+    }
   }
 
   /**
@@ -225,54 +341,12 @@ export class WebSocketManager {
         return;
       }
 
-      // Handle contract status messages (checked ahead of the legacy
-      // duck-typed guards below on principle — see toChannelSymbol's sibling
-      // fix for why an unrelated guard silently swallowing a new message
-      // shape is the kind of bug worth guarding against up front).
-      if (isContractStatusMessage(message)) {
-        this.store.updateContractStatus(
-          message.s,
-          message.k,
-          message.c,
-          message.i,
-          message.o,
-          message.n,
-          message.p,
-          message.E
-        );
-        return;
-      }
-
-      // Handle authenticated order lifecycle events — checked before
-      // isTradeMessage below on purpose. A fill event's t/q/m fields
-      // duck-type match isTradeMessage's check exactly; sdk-go's own
-      // dispatcher hit this and fixed it the same way (explicit
-      // discriminator first). Getting this order wrong means a fill
-      // silently corrupts the spot price/trade cache instead of reaching
-      // the order store.
-      if (isOrderUpdateMessage(message)) {
-        this.store.updateOrder({
-          orderId: message.i,
-          clientOrderId: message.c,
-          symbol: message.s,
-          side: message.S,
-          orderType: message.o,
-          status: message.X,
-          outcome: message.O,
-          price: message.p,
-          stopPrice: message.P,
-          quantity: message.q,
-          remainingQty: message.z,
-          executedQty: message.Z,
-          lastExecutedPrice: message.L,
-          tradeId: message.t,
-          feeAmount: message.n,
-          isMaker: message.m,
-          rejectReason: message.r,
-          eventTimeMs: toEventTimeMs(message.E),
-        });
-        return;
-      }
+      // contractStatus and orderUpdate/order messages no longer arrive here —
+      // subscribeContractStatus()/subscribeAccountOrders() now push those
+      // through the SDK's own WebSocketStream objects (see
+      // startContractStatusStream/startAccountOrdersStream above), which
+      // route straight to handleContractStatusMessage/handleOrderUpdateMessage
+      // without going through the legacy client's message handler at all.
 
       // Handle trade messages
       if (isTradeMessage(message)) {
@@ -350,6 +424,12 @@ export class WebSocketManager {
    */
   disconnect(): void {
     this.client.disconnect();
+    // Release the SDK-backed contractStatus/orders@account streams too, if
+    // any were ever established — otherwise their underlying WebSocket
+    // sessions (and the SDK's own reconnect loop for them) would outlive
+    // this manager.
+    void this.contractStatusStream?.close();
+    void this.orderUpdateStream?.close();
     this.status = 'disconnected';
     console.error('[WSManager] Disconnected');
   }

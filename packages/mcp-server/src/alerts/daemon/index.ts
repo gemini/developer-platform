@@ -106,7 +106,7 @@ async function main(): Promise<void> {
   const httpClient = new GeminiHttpClient();
   const sdkClient = await createSdkClient();
   const marketStore = new MarketDataStore();
-  const wsManager = new WebSocketManager(config.wsUrl, marketStore);
+  const wsManager = new WebSocketManager(config.wsUrl, sdkClient, marketStore);
   await wsManager.initialize();
 
   const store = new AlertStore();
