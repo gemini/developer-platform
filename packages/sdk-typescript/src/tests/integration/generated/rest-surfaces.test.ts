@@ -561,6 +561,10 @@ test("Perpetuals wrappers shape public, authenticated JSON, and file requests", 
     account: "primary",
     nonce: 1004,
   });
+  // The signed GET keeps its params in the payload only — native fetch rejects a
+  // GET with a body — while the signed POSTs also send them as a literal body.
+  assert.equal(requests[5]?.init.body, undefined);
+  assert.deepEqual(JSON.parse(requests[4]!.init.body!), { account: "primary" });
   assert.deepEqual(file.bytes, fileBytes);
   assert.equal(
     file.contentType,

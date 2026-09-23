@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
+import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import type { AddressInfo } from "node:net";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
@@ -29,6 +31,7 @@ import {
   serializeError,
 } from "../errors.js";
 import { fromBase64 } from "../utils/encoding.js";
+import { PerpetualsRest } from "../generated/perpetuals/rest.js";
 import type { BoundaryRecord, BoundaryValue } from "../utils/boundary-value.js";
 import { parseBoundaryRecord } from "../tests/support/http-fixtures.js";
 
@@ -185,6 +188,89 @@ test("private request body serializes a bigint param losslessly, via the same st
 
   const { init } = last();
   assert.equal(init.body, '{"contractId":123456789012345678}');
+});
+
+// Fake fetchImpls don't enforce fetch's rule that GET/HEAD requests cannot carry a
+// body, so these go through the runtime's native fetch against a local server.
+async function withLocalServer(
+  respond: (req: IncomingMessage, res: ServerResponse) => void,
+  run: (baseUrl: string, received: () => { method?: string; url?: string; headers: IncomingMessage["headers"]; body: string }) => Promise<void>,
+): Promise<void> {
+  let received: { method?: string; url?: string; headers: IncomingMessage["headers"]; body: string } | undefined;
+  const server = createServer((req, res) => {
+    const chunks: Buffer[] = [];
+    req.on("data", (chunk: Buffer) => chunks.push(chunk));
+    req.on("end", () => {
+      received = { method: req.method, url: req.url, headers: req.headers, body: Buffer.concat(chunks).toString("utf8") };
+      respond(req, res);
+    });
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  try {
+    const { port } = server.address() as AddressInfo;
+    await run(`http://127.0.0.1:${port}`, () => {
+      if (!received) throw new Error("server never received a request");
+      return received;
+    });
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  }
+}
+
+test("native fetch: signed GET file report (perpetuals.getFundingPaymentReportFile) sends no body and succeeds", async () => {
+  const fileBytes = new Uint8Array([1, 2, 3, 4]);
+  await withLocalServer(
+    (_req, res) => {
+      res.writeHead(200, {
+        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "Content-Disposition": "attachment; filename=funding-payment-report.xlsx",
+      });
+      res.end(Buffer.from(fileBytes));
+    },
+    async (baseUrl, received) => {
+      const perpetuals = new PerpetualsRest(new HttpTransport({ env: "sandbox", baseUrl, auth: stubAuth }));
+
+      const file = await perpetuals.getFundingPaymentReportFile({
+        fromDate: "2026-01-01",
+        toDate: "2026-01-31",
+        numRows: 10,
+        account: "primary",
+      });
+
+      assert.deepEqual(file.bytes, fileBytes);
+      const req = received();
+      assert.equal(req.method, "GET");
+      assert.equal(req.url, "/v1/perpetuals/fundingpaymentreport/records.xlsx?fromDate=2026-01-01&toDate=2026-01-31&numRows=10");
+      assert.equal(req.body, "", "a GET must never carry a literal body");
+      assert.equal(req.headers["content-type"], "text/plain");
+      const signed = JSON.parse(fromBase64(String(req.headers["x-gemini-payload"])));
+      assert.equal(signed.account, "primary", "GET params stay in the signed payload");
+    },
+  );
+});
+
+test("native fetch: signed POST with params delivers the literal JSON body", async () => {
+  await withLocalServer(
+    (_req, res) => {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end('{"result":"ok"}');
+    },
+    async (baseUrl, received) => {
+      const client = new HttpTransport({ env: "sandbox", baseUrl, auth: stubAuth });
+
+      await client.request({
+        method: "POST",
+        path: "/v1/prediction-markets/combos",
+        params: { legs: [{ symbol: "GEMI-A", side: "yes" }] },
+      });
+
+      const req = received();
+      assert.equal(req.method, "POST");
+      assert.equal(req.headers["content-type"], "application/json");
+      assert.deepEqual(JSON.parse(req.body), { legs: [{ symbol: "GEMI-A", side: "yes" }] });
+      assert.equal(req.headers["content-length"], String(Buffer.byteLength(req.body)));
+    },
+  );
 });
 
 test("declared query serialization preserves array and object wire formats", async () => {

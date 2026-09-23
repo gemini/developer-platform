@@ -1051,7 +1051,10 @@ export class HttpTransport {
       // exclusively from the signed X-GEMINI-PAYLOAD header. Send the operation's own
       // fields (never the signed envelope's `request`/`nonce`) as a second, literal
       // copy whenever there's an actual body to send, so both endpoint styles work.
-      const body = stableParams !== undefined ? stringifyJson(stableParams) : undefined;
+      // GET is excluded: native fetch rejects a body on GET/HEAD, and signed GET
+      // operations (e.g. perpetuals.getFundingPaymentReportFile) carry their params
+      // in the signed payload only, exactly as before.
+      const body = stableParams !== undefined && method !== "GET" ? stringifyJson(stableParams) : undefined;
       // Add auth headers first so the fixed envelope headers always win.
       // This prevents an auth strategy from replacing the payload or content headers.
       const headers = {
