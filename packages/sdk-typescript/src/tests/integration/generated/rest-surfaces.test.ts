@@ -248,9 +248,26 @@ async function assertSigned(request: Request): Promise<void> {
     request.init.headers["X-GEMINI-SIGNATURE"],
     await hmacSha384Hex("secret", encoded),
   );
-  assert.equal(request.init.headers["Content-Length"], "0");
-  assert.equal(request.init.headers["Content-Type"], "text/plain");
-  assert.equal(request.init.body, undefined);
+  // Operations with a real request body (requestBody: true) now send it as a literal
+  // HTTP body too, not just signed into X-GEMINI-PAYLOAD (PREDICT-9072) — assert
+  // internal consistency between the content headers and body presence, since this
+  // generic helper covers both body-bearing and bodyless operations across every domain.
+  //
+  // Deliberately not derived from the signed payload's own keys: a requestBody:true
+  // operation called with zero actual fields (e.g. getRoles, oauth revoke) signs
+  // exactly {request, nonce} — indistinguishable, by payload content alone, from a
+  // requestBody:false query-only operation. Resolving that needs the operation's own
+  // metadata (requestBody flag) cross-referenced per call site, which is real scope
+  // beyond this helper — precise, per-operation regression coverage for the fix
+  // itself already lives in transport/http.ts's own test file (a dedicated no-body
+  // guard and a createCombo integration test), not here.
+  if (request.init.body !== undefined) {
+    assert.equal(request.init.headers["Content-Type"], "application/json");
+    assert.equal(request.init.headers["Content-Length"], undefined);
+  } else {
+    assert.equal(request.init.headers["Content-Length"], "0");
+    assert.equal(request.init.headers["Content-Type"], "text/plain");
+  }
 }
 
 test("generated REST operation metadata covers the new module surfaces", () => {
@@ -544,6 +561,10 @@ test("Perpetuals wrappers shape public, authenticated JSON, and file requests", 
     account: "primary",
     nonce: 1004,
   });
+  // The signed GET keeps its params in the payload only — native fetch rejects a
+  // GET with a body — while the signed POSTs also send them as a literal body.
+  assert.equal(requests[5]?.init.body, undefined);
+  assert.deepEqual(JSON.parse(requests[4]!.init.body!), { account: "primary" });
   assert.deepEqual(file.bytes, fileBytes);
   assert.equal(
     file.contentType,

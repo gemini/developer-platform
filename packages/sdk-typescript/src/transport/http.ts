@@ -1046,20 +1046,30 @@ export class HttpTransport {
       if (reservedHeader) {
         throw new SdkError(`AuthStrategy returned reserved header ${reservedHeader}`);
       }
+      // Some newer server-side handlers (e.g. combos) do a real `json.Decode(r.Body)`
+      // and reject an empty body with a 400, unlike older private endpoints that read
+      // exclusively from the signed X-GEMINI-PAYLOAD header. Send the operation's own
+      // fields (never the signed envelope's `request`/`nonce`) as a second, literal
+      // copy whenever there's an actual body to send, so both endpoint styles work.
+      // GET is excluded: native fetch rejects a body on GET/HEAD, and signed GET
+      // operations (e.g. perpetuals.getFundingPaymentReportFile) carry their params
+      // in the signed payload only, exactly as before.
+      const body = stableParams !== undefined && method !== "GET" ? stringifyJson(stableParams) : undefined;
       // Add auth headers first so the fixed envelope headers always win.
       // This prevents an auth strategy from replacing the payload or content headers.
       const headers = {
         ...stableHeaders,
         ...credentials,
-        "Content-Length": "0",
-        "Content-Type": "text/plain",
+        ...(body !== undefined
+          ? { "Content-Type": "application/json" }
+          : { "Content-Length": "0", "Content-Type": "text/plain" }),
         "Cache-Control": "no-cache",
         "X-GEMINI-PAYLOAD": b64,
         ...(options.responseContract
           ? { Accept: options.responseContract.responseContentTypes.join(", ") }
           : null),
       } satisfies RequestHeaders;
-      return headers;
+      return { headers, body };
     };
 
     return this.send<T>(
@@ -1104,7 +1114,7 @@ export class HttpTransport {
     return this.send<T>(
       options.method,
       withQuery(options.path, options.query, options.queryParameters),
-      async () => stableHeaders,
+      async () => ({ headers: stableHeaders }),
       options.responseInt64Paths,
       options.responseMode,
       options.responseContract,
@@ -1136,7 +1146,7 @@ export class HttpTransport {
   private async send<T = BoundaryValue>(
     method: HttpMethod,
     path: string,
-    buildHeaders: (signal?: AbortSignal) => Promise<Record<string, string>>,
+    buildRequest: (signal?: AbortSignal) => Promise<{ headers: Record<string, string>; body?: string }>,
     responseInt64Paths: readonly Int64Path[] = [],
     responseMode: RestResponseMode = "json",
     responseContract?: RestResponseContract,
@@ -1189,8 +1199,9 @@ export class HttpTransport {
     const execution = deadline(requestOptions, this.timeoutMs);
     try { for (let attempt = 0; ; attempt++) {
       let headers: Record<string, string>;
+      let requestBody: string | undefined;
       try {
-        headers = await withSignal(buildHeaders(execution.signal), execution.signal);
+        ({ headers, body: requestBody } = await withSignal(buildRequest(execution.signal), execution.signal));
       } catch (cause) {
         emit("error", "request.failure", responseMetadata(undefined, attempt), undefined, cause);
         throw cause;
@@ -1214,7 +1225,7 @@ export class HttpTransport {
       const requestStartTime = Date.now();
       try {
         response = await withSignal(
-          this.fetchImpl(requestUrl, { method, headers, signal: execution.signal, redirect: "manual" }),
+          this.fetchImpl(requestUrl, { method, headers, body: requestBody, signal: execution.signal, redirect: "manual" }),
           execution.signal,
         );
       } catch (cause) {
