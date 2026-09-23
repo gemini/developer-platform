@@ -1,0 +1,1618 @@
+asyncapi: 3.0.0
+info:
+  title: Gemini WebSocket API
+  version: 0.10.7
+  description: |
+    Machine-readable contract for the production Gemini WebSocket API at
+    `wss://ws.gemini.com`.
+
+    This specification models the shared JSON request/response envelope, market
+    data streams, authenticated order/balance/position streams (including terminal
+    Prediction Markets settlement details), WebSocket order management methods,
+    and Prediction Markets combo RFQ streams/methods that
+    are documented in the Gemini API docs.
+
+    The combo RFQ streams and methods are available in production for beta testing.
+    Quoting requires an eligible account with the required capabilities.
+
+    Symbols may be spot/derivatives symbols such as `btcusd` or prediction
+    market instrument symbols such as `GEMI-BTC05M2606011000-UP`, depending on
+    the product surface.
+  contact:
+    name: Gemini API Support
+defaultContentType: application/json
+x-gemini-coverage:
+  legend:
+    machine-readable: Request, response, or event payload fields are modeled in this spec.
+    partial: The documented request or event is modeled, but at least one result payload is intentionally broad because the docs do not enumerate its fields.
+    docs-only: The surface is documented for humans but not modeled in this spec.
+  streams:
+    - name: "{symbol}@bookTicker"
+      status: machine-readable
+      auth: public
+      docs: /websocket/streams#book-ticker
+    - name: "{symbol}@depth5"
+      status: machine-readable
+      auth: public
+      docs: /websocket/streams#l2-partial-depth-streams
+    - name: "{symbol}@depth10"
+      status: machine-readable
+      auth: public
+      docs: /websocket/streams#l2-partial-depth-streams
+    - name: "{symbol}@depth20"
+      status: machine-readable
+      auth: public
+      docs: /websocket/streams#l2-partial-depth-streams
+    - name: "{symbol}@depth5@100ms"
+      status: machine-readable
+      auth: public
+      docs: /websocket/streams#l2-partial-depth-streams
+    - name: "{symbol}@depth10@100ms"
+      status: machine-readable
+      auth: public
+      docs: /websocket/streams#l2-partial-depth-streams
+    - name: "{symbol}@depth20@100ms"
+      status: machine-readable
+      auth: public
+      docs: /websocket/streams#l2-partial-depth-streams
+    - name: "{symbol}@depth"
+      status: machine-readable
+      auth: public
+      docs: /websocket/streams#l2-differential-depth-streams
+    - name: "{symbol}@depth@100ms"
+      status: machine-readable
+      auth: public
+      docs: /websocket/streams#l2-differential-depth-streams
+    - name: "{symbol}@trade"
+      status: machine-readable
+      auth: public
+      docs: /websocket/streams#trade-stream
+    - name: orders@account
+      status: machine-readable
+      auth: authenticated
+      docs: /websocket/streams#order-events
+    - name: orders@session
+      status: machine-readable
+      auth: authenticated
+      docs: /websocket/streams#order-events
+    - name: balances@account
+      status: machine-readable
+      auth: authenticated
+      docs: /websocket/streams#balance-updates
+    - name: balances@account@1s
+      status: machine-readable
+      auth: authenticated
+      docs: /websocket/streams#balance-updates
+    - name: positions@account
+      status: machine-readable
+      auth: authenticated
+      docs: /prediction-markets/websocket/streams#position-updates
+    - name: positions@account@1s
+      status: machine-readable
+      auth: authenticated
+      docs: /prediction-markets/websocket/streams#position-updates
+    - name: contractStatus
+      status: machine-readable
+      auth: public
+      docs: /websocket/streams#contract-status
+    - name: requestForQuote
+      status: machine-readable
+      auth: public
+      docs: /prediction-markets/combos-rfq/websocket-streams#requestforquote
+      notes: Combo RFQ WebSocket surface is available in production for beta testing; quoting requires an eligible account with the required capabilities.
+    - name: requestForQuote@account
+      status: machine-readable
+      auth: authenticated
+      docs: /prediction-markets/combos-rfq/websocket-streams#requestforquoteaccount
+      notes: Combo RFQ WebSocket surface is available in production for beta testing; quoting requires an eligible account with the required capabilities.
+    - name: requestForQuote@session
+      status: machine-readable
+      auth: authenticated
+      docs: /prediction-markets/combos-rfq/websocket-streams#requestforquotesession
+      notes: Combo RFQ WebSocket surface is available in production for beta testing; quoting requires an eligible account with the required capabilities.
+  methods:
+    - name: conninfo
+      status: partial
+      auth: public
+      docs: /websocket/playground#method-conninfo
+      notes: Request envelope is modeled; result fields are not enumerated in the docs.
+    - name: ping
+      status: partial
+      auth: public
+      docs: /websocket/playground#method-ping
+      notes: Request envelope is modeled; result fields are not enumerated in the docs.
+    - name: time
+      status: partial
+      auth: public
+      docs: /websocket/playground#method-time
+      notes: Request envelope is modeled; result fields are not enumerated in the docs.
+    - name: SUBSCRIBE
+      status: machine-readable
+      auth: conditional
+      docs: /prediction-markets/websocket/playground#method-subscribe
+    - name: subscribe
+      status: machine-readable
+      auth: conditional
+      docs: /trading/websocket/playground#method-subscribe
+    - name: UNSUBSCRIBE
+      status: machine-readable
+      auth: conditional
+      docs: /prediction-markets/websocket/playground#method-unsubscribe
+    - name: unsubscribe
+      status: machine-readable
+      auth: conditional
+      docs: /trading/websocket/playground#method-unsubscribe
+    - name: LIST_SUBSCRIPTIONS
+      status: machine-readable
+      auth: conditional
+      docs: /prediction-markets/websocket/playground#method-list_subscriptions
+    - name: list_subscriptions
+      status: machine-readable
+      auth: conditional
+      docs: /trading/websocket/playground#method-list_subscriptions
+    - name: depth
+      status: machine-readable
+      auth: public
+      docs: /websocket/playground#method-depth
+    - name: order.place
+      status: partial
+      auth: authenticated
+      docs: /websocket/playground#method-order.place
+      notes: Request payload is modeled; rely on `orderUpdate` events for authoritative lifecycle state.
+    - name: order.cancel
+      status: partial
+      auth: authenticated
+      docs: /websocket/playground#method-order.cancel
+      notes: Request payload is modeled; rely on `orderUpdate` events for authoritative lifecycle state.
+    - name: order.cancel_all
+      status: partial
+      auth: authenticated
+      docs: /websocket/playground#method-order.cancel_all
+      notes: Request payload is modeled; result fields are not enumerated in the docs.
+    - name: order.cancel_session
+      status: partial
+      auth: authenticated
+      docs: /websocket/playground#method-order.cancel_session
+      notes: Request payload is modeled; result fields are not enumerated in the docs.
+    - name: rfq.submit_quote
+      status: machine-readable
+      auth: authenticated
+      docs: /prediction-markets/combos-rfq/quote-methods#rfqsubmit_quote
+      notes: Combo RFQ WebSocket surface is available in production for beta testing; quoting requires an eligible account with the required capabilities.
+    - name: rfq.withdraw_quote
+      status: machine-readable
+      auth: authenticated
+      docs: /prediction-markets/combos-rfq/quote-methods#rfqwithdraw_quote
+      notes: Combo RFQ WebSocket surface is available in production for beta testing; quoting requires an eligible account with the required capabilities.
+    - name: rfq.confirm_quote
+      status: machine-readable
+      auth: authenticated
+      docs: /prediction-markets/combos-rfq/quote-methods#rfqconfirm_quote
+      notes: Combo RFQ WebSocket surface is available in production for beta testing; quoting requires an eligible account with the required capabilities.
+x-gemini-authentication:
+  timing: websocket-upgrade
+  alternatives:
+    - scheme: geminiApiKeySignature
+      summary: HMAC-signed, account-scoped Gemini API key headers.
+    - scheme: geminiOAuthBearer
+      summary: OAuth 2.0 bearer token in the Authorization header.
+  notes:
+    - Authentication, when required, is supplied during the initial WebSocket upgrade; clients cannot authenticate or rotate credentials after the connection opens.
+    - Browser WebSocket clients cannot send custom upgrade headers for authenticated streams and methods; use a non-browser client or server-side proxy.
+    - Public streams and utility methods do not require authentication. Account/session streams, order methods, and combo RFQ quote methods require one of the listed authentication alternatives.
+servers:
+  production:
+    host: ws.gemini.com
+    protocol: wss
+    pathname: /
+    description: Production WebSocket API.
+  sandbox:
+    host: ws.sandbox.gemini.com
+    protocol: wss
+    pathname: /
+    description: Sandbox environment.
+channels:
+  connection:
+    address: /
+    title: WebSocket connection
+    description: |
+      JSON request/response control plane over a single WebSocket connection.
+      Authentication, when required, is supplied during the WebSocket upgrade.
+    messages:
+      conninfoRequest:
+        $ref: '#/components/messages/ConninfoRequest'
+      pingRequest:
+        $ref: '#/components/messages/PingRequest'
+      timeRequest:
+        $ref: '#/components/messages/TimeRequest'
+      subscribeRequest:
+        $ref: '#/components/messages/SubscribeRequest'
+      unsubscribeRequest:
+        $ref: '#/components/messages/UnsubscribeRequest'
+      listSubscriptionsRequest:
+        $ref: '#/components/messages/ListSubscriptionsRequest'
+      depthRequest:
+        $ref: '#/components/messages/DepthRequest'
+      orderPlaceRequest:
+        $ref: '#/components/messages/OrderPlaceRequest'
+      orderCancelRequest:
+        $ref: '#/components/messages/OrderCancelRequest'
+      orderCancelAllRequest:
+        $ref: '#/components/messages/OrderCancelAllRequest'
+      orderCancelSessionRequest:
+        $ref: '#/components/messages/OrderCancelSessionRequest'
+      rfqSubmitQuoteRequest:
+        $ref: '#/components/messages/RfqSubmitQuoteRequest'
+      rfqWithdrawQuoteRequest:
+        $ref: '#/components/messages/RfqWithdrawQuoteRequest'
+      rfqConfirmQuoteRequest:
+        $ref: '#/components/messages/RfqConfirmQuoteRequest'
+      genericSuccessResponse:
+        $ref: '#/components/messages/GenericSuccessResponse'
+      listSubscriptionsResponse:
+        $ref: '#/components/messages/ListSubscriptionsResponse'
+      depthResponse:
+        $ref: '#/components/messages/DepthResponse'
+      orderActionResponse:
+        $ref: '#/components/messages/OrderActionResponse'
+      rfqSubmitQuoteResponse:
+        $ref: '#/components/messages/RfqSubmitQuoteResponse'
+      rfqWithdrawQuoteResponse:
+        $ref: '#/components/messages/RfqWithdrawQuoteResponse'
+      rfqConfirmQuoteResponse:
+        $ref: '#/components/messages/RfqConfirmQuoteResponse'
+      errorResponse:
+        $ref: '#/components/messages/ErrorResponse'
+  bookTicker:
+    address: "{symbol}@bookTicker"
+    messages:
+      bookTicker:
+        $ref: '#/components/messages/BookTicker'
+    parameters:
+      symbol:
+        $ref: '#/components/parameters/symbol'
+  depth5:
+    address: "{symbol}@depth5"
+    messages:
+      orderBookSnapshot:
+        $ref: '#/components/messages/OrderBookSnapshot'
+    parameters:
+      symbol:
+        $ref: '#/components/parameters/symbol'
+  depth10:
+    address: "{symbol}@depth10"
+    messages:
+      orderBookSnapshot:
+        $ref: '#/components/messages/OrderBookSnapshot'
+    parameters:
+      symbol:
+        $ref: '#/components/parameters/symbol'
+  depth20:
+    address: "{symbol}@depth20"
+    messages:
+      orderBookSnapshot:
+        $ref: '#/components/messages/OrderBookSnapshot'
+    parameters:
+      symbol:
+        $ref: '#/components/parameters/symbol'
+  depth5Fast:
+    address: "{symbol}@depth5@100ms"
+    messages:
+      orderBookSnapshot:
+        $ref: '#/components/messages/OrderBookSnapshot'
+    parameters:
+      symbol:
+        $ref: '#/components/parameters/symbol'
+  depth10Fast:
+    address: "{symbol}@depth10@100ms"
+    messages:
+      orderBookSnapshot:
+        $ref: '#/components/messages/OrderBookSnapshot'
+    parameters:
+      symbol:
+        $ref: '#/components/parameters/symbol'
+  depth20Fast:
+    address: "{symbol}@depth20@100ms"
+    messages:
+      orderBookSnapshot:
+        $ref: '#/components/messages/OrderBookSnapshot'
+    parameters:
+      symbol:
+        $ref: '#/components/parameters/symbol'
+  depth:
+    address: "{symbol}@depth"
+    messages:
+      depthUpdate:
+        $ref: '#/components/messages/DepthUpdate'
+    parameters:
+      symbol:
+        $ref: '#/components/parameters/symbol'
+  depthFast:
+    address: "{symbol}@depth@100ms"
+    messages:
+      depthUpdate:
+        $ref: '#/components/messages/DepthUpdate'
+    parameters:
+      symbol:
+        $ref: '#/components/parameters/symbol'
+  trade:
+    address: "{symbol}@trade"
+    messages:
+      trade:
+        $ref: '#/components/messages/Trade'
+    parameters:
+      symbol:
+        $ref: '#/components/parameters/symbol'
+  ordersAccount:
+    address: orders@account
+    messages:
+      orderUpdate:
+        $ref: '#/components/messages/OrderUpdate'
+  ordersSession:
+    address: orders@session
+    messages:
+      orderUpdate:
+        $ref: '#/components/messages/OrderUpdate'
+  balancesAccount:
+    address: balances@account
+    messages:
+      balanceUpdate:
+        $ref: '#/components/messages/BalanceUpdate'
+  balancesAccountSnapshot:
+    address: balances@account@1s
+    messages:
+      balanceUpdate:
+        $ref: '#/components/messages/BalanceUpdate'
+  positionsAccount:
+    address: positions@account
+    messages:
+      positionReport:
+        $ref: '#/components/messages/PositionReport'
+  positionsAccountSnapshot:
+    address: positions@account@1s
+    messages:
+      positionReport:
+        $ref: '#/components/messages/PositionReport'
+  contractStatus:
+    address: contractStatus
+    messages:
+      contractStatus:
+        $ref: '#/components/messages/ContractStatus'
+  requestForQuote:
+    address: requestForQuote
+    messages:
+      requestForQuote:
+        $ref: '#/components/messages/RfqPublicEvent'
+  requestForQuoteAccount:
+    address: requestForQuote@account
+    messages:
+      requestForQuote:
+        $ref: '#/components/messages/RfqPrivateDelivery'
+  requestForQuoteSession:
+    address: requestForQuote@session
+    messages:
+      requestForQuote:
+        $ref: '#/components/messages/RfqPrivateDelivery'
+operations:
+  sendRequests:
+    action: send
+    channel:
+      $ref: '#/channels/connection'
+    x-gemini-auth:
+      required: conditional
+      timing: websocket-upgrade
+      notes: Public utility methods, public stream subscriptions, and the depth request work without authentication. Order management, combo RFQ quote methods, and subscriptions to authenticated stream names require an already-authenticated WebSocket connection; see each coverage entry's `auth` value.
+    messages:
+      - $ref: '#/channels/connection/messages/conninfoRequest'
+      - $ref: '#/channels/connection/messages/pingRequest'
+      - $ref: '#/channels/connection/messages/timeRequest'
+      - $ref: '#/channels/connection/messages/subscribeRequest'
+      - $ref: '#/channels/connection/messages/unsubscribeRequest'
+      - $ref: '#/channels/connection/messages/listSubscriptionsRequest'
+      - $ref: '#/channels/connection/messages/depthRequest'
+      - $ref: '#/channels/connection/messages/orderPlaceRequest'
+      - $ref: '#/channels/connection/messages/orderCancelRequest'
+      - $ref: '#/channels/connection/messages/orderCancelAllRequest'
+      - $ref: '#/channels/connection/messages/orderCancelSessionRequest'
+      - $ref: '#/channels/connection/messages/rfqSubmitQuoteRequest'
+      - $ref: '#/channels/connection/messages/rfqWithdrawQuoteRequest'
+      - $ref: '#/channels/connection/messages/rfqConfirmQuoteRequest'
+  receiveResponses:
+    action: receive
+    channel:
+      $ref: '#/channels/connection'
+    x-gemini-auth:
+      required: conditional
+      timing: websocket-upgrade
+      notes: The response envelope is shared by public and authenticated methods. Authentication requirements are modeled on authenticated request messages and private stream receive operations.
+    messages:
+      - $ref: '#/channels/connection/messages/genericSuccessResponse'
+      - $ref: '#/channels/connection/messages/listSubscriptionsResponse'
+      - $ref: '#/channels/connection/messages/depthResponse'
+      - $ref: '#/channels/connection/messages/orderActionResponse'
+      - $ref: '#/channels/connection/messages/rfqSubmitQuoteResponse'
+      - $ref: '#/channels/connection/messages/rfqWithdrawQuoteResponse'
+      - $ref: '#/channels/connection/messages/rfqConfirmQuoteResponse'
+      - $ref: '#/channels/connection/messages/errorResponse'
+  receiveBookTicker:
+    action: receive
+    channel:
+      $ref: '#/channels/bookTicker'
+    messages:
+      - $ref: '#/channels/bookTicker/messages/bookTicker'
+  receivePartialDepth:
+    action: receive
+    channel:
+      $ref: '#/channels/depth10'
+    messages:
+      - $ref: '#/channels/depth10/messages/orderBookSnapshot'
+  receivePartialDepth5:
+    action: receive
+    channel:
+      $ref: '#/channels/depth5'
+    messages:
+      - $ref: '#/channels/depth5/messages/orderBookSnapshot'
+  receivePartialDepth20:
+    action: receive
+    channel:
+      $ref: '#/channels/depth20'
+    messages:
+      - $ref: '#/channels/depth20/messages/orderBookSnapshot'
+  receivePartialDepth5Fast:
+    action: receive
+    channel:
+      $ref: '#/channels/depth5Fast'
+    messages:
+      - $ref: '#/channels/depth5Fast/messages/orderBookSnapshot'
+  receivePartialDepth10Fast:
+    action: receive
+    channel:
+      $ref: '#/channels/depth10Fast'
+    messages:
+      - $ref: '#/channels/depth10Fast/messages/orderBookSnapshot'
+  receivePartialDepth20Fast:
+    action: receive
+    channel:
+      $ref: '#/channels/depth20Fast'
+    messages:
+      - $ref: '#/channels/depth20Fast/messages/orderBookSnapshot'
+  receiveDifferentialDepth:
+    action: receive
+    channel:
+      $ref: '#/channels/depthFast'
+    messages:
+      - $ref: '#/channels/depthFast/messages/depthUpdate'
+  receiveDifferentialDepthStandard:
+    action: receive
+    channel:
+      $ref: '#/channels/depth'
+    messages:
+      - $ref: '#/channels/depth/messages/depthUpdate'
+  receiveTrades:
+    action: receive
+    channel:
+      $ref: '#/channels/trade'
+    messages:
+      - $ref: '#/channels/trade/messages/trade'
+  receiveOrderUpdates:
+    action: receive
+    channel:
+      $ref: '#/channels/ordersAccount'
+    security:
+      - $ref: '#/components/securitySchemes/geminiApiKeySignature'
+      - $ref: '#/components/securitySchemes/geminiOAuthBearer'
+    x-gemini-auth:
+      required: true
+      timing: websocket-upgrade
+      alternatives: [geminiApiKeySignature, geminiOAuthBearer]
+    messages:
+      - $ref: '#/channels/ordersAccount/messages/orderUpdate'
+  receiveSessionOrderUpdates:
+    action: receive
+    channel:
+      $ref: '#/channels/ordersSession'
+    security:
+      - $ref: '#/components/securitySchemes/geminiApiKeySignature'
+      - $ref: '#/components/securitySchemes/geminiOAuthBearer'
+    x-gemini-auth:
+      required: true
+      timing: websocket-upgrade
+      alternatives: [geminiApiKeySignature, geminiOAuthBearer]
+    messages:
+      - $ref: '#/channels/ordersSession/messages/orderUpdate'
+  receiveBalanceUpdates:
+    action: receive
+    channel:
+      $ref: '#/channels/balancesAccount'
+    security:
+      - $ref: '#/components/securitySchemes/geminiApiKeySignature'
+      - $ref: '#/components/securitySchemes/geminiOAuthBearer'
+    x-gemini-auth:
+      required: true
+      timing: websocket-upgrade
+      alternatives: [geminiApiKeySignature, geminiOAuthBearer]
+    messages:
+      - $ref: '#/channels/balancesAccount/messages/balanceUpdate'
+  receiveBalanceSnapshots:
+    action: receive
+    channel:
+      $ref: '#/channels/balancesAccountSnapshot'
+    security:
+      - $ref: '#/components/securitySchemes/geminiApiKeySignature'
+      - $ref: '#/components/securitySchemes/geminiOAuthBearer'
+    x-gemini-auth:
+      required: true
+      timing: websocket-upgrade
+      alternatives: [geminiApiKeySignature, geminiOAuthBearer]
+    messages:
+      - $ref: '#/channels/balancesAccountSnapshot/messages/balanceUpdate'
+  receivePositionReports:
+    action: receive
+    channel:
+      $ref: '#/channels/positionsAccount'
+    security:
+      - $ref: '#/components/securitySchemes/geminiApiKeySignature'
+      - $ref: '#/components/securitySchemes/geminiOAuthBearer'
+    x-gemini-auth:
+      required: true
+      timing: websocket-upgrade
+      alternatives: [geminiApiKeySignature, geminiOAuthBearer]
+    messages:
+      - $ref: '#/channels/positionsAccount/messages/positionReport'
+  receivePositionReportSnapshots:
+    action: receive
+    channel:
+      $ref: '#/channels/positionsAccountSnapshot'
+    security:
+      - $ref: '#/components/securitySchemes/geminiApiKeySignature'
+      - $ref: '#/components/securitySchemes/geminiOAuthBearer'
+    x-gemini-auth:
+      required: true
+      timing: websocket-upgrade
+      alternatives: [geminiApiKeySignature, geminiOAuthBearer]
+    messages:
+      - $ref: '#/channels/positionsAccountSnapshot/messages/positionReport'
+  receiveContractStatus:
+    action: receive
+    channel:
+      $ref: '#/channels/contractStatus'
+    messages:
+      - $ref: '#/channels/contractStatus/messages/contractStatus'
+  receiveRfqPublicEvents:
+    action: receive
+    channel:
+      $ref: '#/channels/requestForQuote'
+    messages:
+      - $ref: '#/channels/requestForQuote/messages/requestForQuote'
+  receiveRfqPrivateDeliveries:
+    action: receive
+    channel:
+      $ref: '#/channels/requestForQuoteAccount'
+    security:
+      - $ref: '#/components/securitySchemes/geminiApiKeySignature'
+      - $ref: '#/components/securitySchemes/geminiOAuthBearer'
+    x-gemini-auth:
+      required: true
+      timing: websocket-upgrade
+      alternatives: [geminiApiKeySignature, geminiOAuthBearer]
+      capabilities: [view_orders]
+    messages:
+      - $ref: '#/channels/requestForQuoteAccount/messages/requestForQuote'
+  receiveRfqSessionDeliveries:
+    action: receive
+    channel:
+      $ref: '#/channels/requestForQuoteSession'
+    security:
+      - $ref: '#/components/securitySchemes/geminiApiKeySignature'
+      - $ref: '#/components/securitySchemes/geminiOAuthBearer'
+    x-gemini-auth:
+      required: true
+      timing: websocket-upgrade
+      alternatives: [geminiApiKeySignature, geminiOAuthBearer]
+      capabilities: [view_orders]
+    messages:
+      - $ref: '#/channels/requestForQuoteSession/messages/requestForQuote'
+components:
+  securitySchemes:
+    geminiApiKeySignature:
+      type: httpApiKey
+      name: X-GEMINI-APIKEY
+      in: header
+      description: |
+        Account-scoped Gemini API key supplied during the WebSocket upgrade.
+        This scheme represents the full Gemini HMAC-signed header set. A valid
+        handshake also includes `X-GEMINI-NONCE`, `X-GEMINI-PAYLOAD`, and
+        `X-GEMINI-SIGNATURE`; `X-GEMINI-PAYLOAD` is `base64(string(nonce))`,
+        and `X-GEMINI-SIGNATURE` is `hex(hmac_sha384(payload, api_secret))`.
+        Only account-scoped keys with time-based nonces are accepted; master or
+        group keys are rejected with HTTP 401.
+      x-gemini-required-headers:
+        - X-GEMINI-APIKEY
+        - X-GEMINI-NONCE
+        - X-GEMINI-PAYLOAD
+        - X-GEMINI-SIGNATURE
+      x-gemini-key-scope: account
+      x-gemini-nonce: time-based
+      x-gemini-signature-algorithm: HMAC-SHA384
+    geminiOAuthBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: Gemini OAuth 2.0 access token
+      description: |
+        OAuth 2.0 access token supplied as `Authorization: Bearer <access_token>`
+        during the WebSocket upgrade. The token must include scopes/capabilities
+        for the private streams or methods used on the connection.
+  parameters:
+    symbol:
+      description: |
+        Exchange symbol. For trading markets this may be a symbol like `btcusd`.
+        For prediction markets this is an instrument symbol such as
+        `GEMI-BTC05M2606011000-UP`.
+  messages:
+    ConninfoRequest:
+      name: ConninfoRequest
+      title: conninfo request
+      payload:
+        $ref: '#/components/schemas/ConninfoRequest'
+    PingRequest:
+      name: PingRequest
+      title: ping request
+      payload:
+        $ref: '#/components/schemas/PingRequest'
+    TimeRequest:
+      name: TimeRequest
+      title: time request
+      payload:
+        $ref: '#/components/schemas/TimeRequest'
+    SubscribeRequest:
+      name: SubscribeRequest
+      title: subscribe request
+      payload:
+        $ref: '#/components/schemas/SubscribeRequest'
+    UnsubscribeRequest:
+      name: UnsubscribeRequest
+      title: unsubscribe request
+      payload:
+        $ref: '#/components/schemas/UnsubscribeRequest'
+    ListSubscriptionsRequest:
+      name: ListSubscriptionsRequest
+      title: list subscriptions request
+      payload:
+        $ref: '#/components/schemas/ListSubscriptionsRequest'
+    DepthRequest:
+      name: DepthRequest
+      title: depth request
+      payload:
+        $ref: '#/components/schemas/DepthRequest'
+    OrderPlaceRequest:
+      name: OrderPlaceRequest
+      title: order.place request
+      x-gemini-auth:
+        required: true
+        timing: websocket-upgrade
+        alternatives: [geminiApiKeySignature, geminiOAuthBearer]
+        roles: [Trader]
+      payload:
+        $ref: '#/components/schemas/OrderPlaceRequest'
+    OrderCancelRequest:
+      name: OrderCancelRequest
+      title: order.cancel request
+      x-gemini-auth:
+        required: true
+        timing: websocket-upgrade
+        alternatives: [geminiApiKeySignature, geminiOAuthBearer]
+        roles: [Trader]
+      payload:
+        $ref: '#/components/schemas/OrderCancelRequest'
+    OrderCancelAllRequest:
+      name: OrderCancelAllRequest
+      title: order.cancel_all request
+      x-gemini-auth:
+        required: true
+        timing: websocket-upgrade
+        alternatives: [geminiApiKeySignature, geminiOAuthBearer]
+        roles: [Trader]
+      payload:
+        $ref: '#/components/schemas/OrderCancelAllRequest'
+    OrderCancelSessionRequest:
+      name: OrderCancelSessionRequest
+      title: order.cancel_session request
+      x-gemini-auth:
+        required: true
+        timing: websocket-upgrade
+        alternatives: [geminiApiKeySignature, geminiOAuthBearer]
+        roles: [Trader]
+      payload:
+        $ref: '#/components/schemas/OrderCancelSessionRequest'
+    RfqSubmitQuoteRequest:
+      name: RfqSubmitQuoteRequest
+      title: rfq.submit_quote request
+      x-gemini-auth:
+        required: true
+        timing: websocket-upgrade
+        alternatives: [geminiApiKeySignature, geminiOAuthBearer]
+        capabilities: [place_orders]
+      payload:
+        $ref: '#/components/schemas/RfqSubmitQuoteRequest'
+    RfqWithdrawQuoteRequest:
+      name: RfqWithdrawQuoteRequest
+      title: rfq.withdraw_quote request
+      x-gemini-auth:
+        required: true
+        timing: websocket-upgrade
+        alternatives: [geminiApiKeySignature, geminiOAuthBearer]
+        capabilities: [cancel_orders]
+      payload:
+        $ref: '#/components/schemas/RfqWithdrawQuoteRequest'
+    RfqConfirmQuoteRequest:
+      name: RfqConfirmQuoteRequest
+      title: rfq.confirm_quote request
+      x-gemini-auth:
+        required: true
+        timing: websocket-upgrade
+        alternatives: [geminiApiKeySignature, geminiOAuthBearer]
+        capabilities: [place_orders]
+      payload:
+        $ref: '#/components/schemas/RfqConfirmQuoteRequest'
+    GenericSuccessResponse:
+      name: GenericSuccessResponse
+      title: generic success response
+      payload:
+        $ref: '#/components/schemas/GenericSuccessResponse'
+    ListSubscriptionsResponse:
+      name: ListSubscriptionsResponse
+      title: list subscriptions response
+      payload:
+        $ref: '#/components/schemas/ListSubscriptionsResponse'
+    DepthResponse:
+      name: DepthResponse
+      title: depth response
+      payload:
+        $ref: '#/components/schemas/DepthResponse'
+    OrderActionResponse:
+      name: OrderActionResponse
+      title: order action response
+      payload:
+        $ref: '#/components/schemas/OrderActionResponse'
+    RfqSubmitQuoteResponse:
+      name: RfqSubmitQuoteResponse
+      title: rfq.submit_quote response
+      payload:
+        $ref: '#/components/schemas/RfqSubmitQuoteResponse'
+    RfqWithdrawQuoteResponse:
+      name: RfqWithdrawQuoteResponse
+      title: rfq.withdraw_quote response
+      payload:
+        $ref: '#/components/schemas/RfqWithdrawQuoteResponse'
+    RfqConfirmQuoteResponse:
+      name: RfqConfirmQuoteResponse
+      title: rfq.confirm_quote response
+      payload:
+        $ref: '#/components/schemas/RfqConfirmQuoteResponse'
+    ErrorResponse:
+      name: ErrorResponse
+      title: error response
+      payload:
+        $ref: '#/components/schemas/ErrorResponse'
+    BookTicker:
+      name: BookTicker
+      title: book ticker
+      payload:
+        $ref: '#/components/schemas/BookTicker'
+    OrderBookSnapshot:
+      name: OrderBookSnapshot
+      title: order book snapshot
+      payload:
+        $ref: '#/components/schemas/OrderBookSnapshot'
+    DepthUpdate:
+      name: DepthUpdate
+      title: L2 differential depth update
+      payload:
+        $ref: '#/components/schemas/DepthUpdate'
+    Trade:
+      name: Trade
+      title: trade
+      payload:
+        $ref: '#/components/schemas/Trade'
+    OrderUpdate:
+      name: OrderUpdate
+      title: order update
+      payload:
+        $ref: '#/components/schemas/OrderUpdate'
+    BalanceUpdate:
+      name: BalanceUpdate
+      title: balance update
+      payload:
+        $ref: '#/components/schemas/BalanceUpdate'
+    PositionReport:
+      name: PositionReport
+      title: position report
+      payload:
+        $ref: '#/components/schemas/PositionReport'
+    ContractStatus:
+      name: ContractStatus
+      title: contract status
+      payload:
+        $ref: '#/components/schemas/ContractStatus'
+    RfqPublicEvent:
+      name: RfqPublicEvent
+      title: public request-for-quote event
+      payload:
+        $ref: '#/components/schemas/RfqPublicEvent'
+    RfqPrivateDelivery:
+      name: RfqPrivateDelivery
+      title: private request-for-quote delivery
+      payload:
+        $ref: '#/components/schemas/RfqPrivateDelivery'
+  schemas:
+    CorrelationId:
+      description: Client-chosen id, echoed on the matching response.
+      oneOf:
+        - type: string
+        - type: integer
+    NanosecondTimestamp:
+      type: integer
+      format: int64
+      description: |
+        Unix timestamp in nanoseconds. Values exceed JavaScript's safe integer
+        range; JavaScript clients that need exact values should parse
+        losslessly.
+    MillisecondTimestamp:
+      type: integer
+      format: int64
+      description: Unix timestamp in milliseconds.
+    DecimalString:
+      type: string
+      description: Decimal value encoded as a string.
+    PriceLevel:
+      type: array
+      description: |
+        `[price, quantity]` tuple; both values are decimal strings. A quantity
+        of zero removes that price level in differential depth updates.
+      items:
+        type: string
+      minItems: 2
+      maxItems: 2
+    RequestBase:
+      type: object
+      required: [id, method]
+      properties:
+        id:
+          $ref: '#/components/schemas/CorrelationId'
+        method:
+          type: string
+      additionalProperties: true
+    ConninfoRequest:
+      allOf:
+        - $ref: '#/components/schemas/RequestBase'
+        - type: object
+          required: [method]
+          properties:
+            method:
+              type: string
+              const: conninfo
+            params:
+              type: object
+              additionalProperties: true
+    PingRequest:
+      allOf:
+        - $ref: '#/components/schemas/RequestBase'
+        - type: object
+          required: [method]
+          properties:
+            method:
+              type: string
+              const: ping
+            params:
+              type: object
+              additionalProperties: true
+    TimeRequest:
+      allOf:
+        - $ref: '#/components/schemas/RequestBase'
+        - type: object
+          required: [method]
+          properties:
+            method:
+              type: string
+              const: time
+            params:
+              type: object
+              additionalProperties: true
+    SubscribeRequest:
+      allOf:
+        - $ref: '#/components/schemas/RequestBase'
+        - type: object
+          required: [method, params]
+          properties:
+            method:
+              type: string
+              pattern: ^(SUBSCRIBE|subscribe)$
+              description: |
+                `SUBSCRIBE` for Prediction Markets docs; lowercase `subscribe`
+                is also accepted by the shared Trading WebSocket docs.
+            params:
+              type: array
+              description: Stream names to subscribe to.
+              items:
+                type: string
+    UnsubscribeRequest:
+      allOf:
+        - $ref: '#/components/schemas/RequestBase'
+        - type: object
+          required: [method, params]
+          properties:
+            method:
+              type: string
+              pattern: ^(UNSUBSCRIBE|unsubscribe)$
+              description: |
+                `UNSUBSCRIBE` for Prediction Markets docs; lowercase
+                `unsubscribe` is also accepted by the shared Trading WebSocket
+                docs.
+            params:
+              type: array
+              description: Stream names to unsubscribe from.
+              items:
+                type: string
+    ListSubscriptionsRequest:
+      allOf:
+        - $ref: '#/components/schemas/RequestBase'
+        - type: object
+          required: [method]
+          properties:
+            method:
+              type: string
+              pattern: ^(LIST_SUBSCRIPTIONS|list_subscriptions)$
+              description: |
+                `LIST_SUBSCRIPTIONS` for Prediction Markets docs; lowercase
+                `list_subscriptions` is also accepted by the shared Trading
+                WebSocket docs.
+            params:
+              type: object
+              additionalProperties: true
+    DepthRequest:
+      allOf:
+        - $ref: '#/components/schemas/RequestBase'
+        - type: object
+          required: [method, params]
+          properties:
+            method:
+              type: string
+              const: depth
+            params:
+              type: object
+              required: [symbol]
+              properties:
+                symbol:
+                  type: string
+                limit:
+                  type: integer
+                  minimum: 1
+                  maximum: 5000
+                  default: 100
+              additionalProperties: true
+    OrderPlaceRequest:
+      allOf:
+        - $ref: '#/components/schemas/RequestBase'
+        - type: object
+          required: [method, params]
+          properties:
+            method:
+              type: string
+              const: order.place
+            params:
+              $ref: '#/components/schemas/OrderPlaceParams'
+    OrderCancelRequest:
+      allOf:
+        - $ref: '#/components/schemas/RequestBase'
+        - type: object
+          required: [method, params]
+          properties:
+            method:
+              type: string
+              const: order.cancel
+            params:
+              $ref: '#/components/schemas/OrderCancelParams'
+    OrderCancelAllRequest:
+      allOf:
+        - $ref: '#/components/schemas/RequestBase'
+        - type: object
+          required: [method]
+          properties:
+            method:
+              type: string
+              const: order.cancel_all
+            params:
+              type: object
+              additionalProperties: true
+    OrderCancelSessionRequest:
+      allOf:
+        - $ref: '#/components/schemas/RequestBase'
+        - type: object
+          required: [method]
+          properties:
+            method:
+              type: string
+              const: order.cancel_session
+            params:
+              type: object
+              additionalProperties: true
+    RfqSubmitQuoteRequest:
+      allOf:
+        - $ref: '#/components/schemas/RequestBase'
+        - type: object
+          required: [method, params]
+          properties:
+            method:
+              type: string
+              const: rfq.submit_quote
+            params:
+              $ref: '#/components/schemas/RfqSubmitQuoteParams'
+    RfqWithdrawQuoteRequest:
+      allOf:
+        - $ref: '#/components/schemas/RequestBase'
+        - type: object
+          required: [method, params]
+          properties:
+            method:
+              type: string
+              const: rfq.withdraw_quote
+            params:
+              $ref: '#/components/schemas/RfqWithdrawQuoteParams'
+    RfqConfirmQuoteRequest:
+      allOf:
+        - $ref: '#/components/schemas/RequestBase'
+        - type: object
+          required: [method, params]
+          properties:
+            method:
+              type: string
+              const: rfq.confirm_quote
+            params:
+              $ref: '#/components/schemas/RfqConfirmQuoteParams'
+    ResponseBase:
+      type: object
+      required: [id, status]
+      properties:
+        id:
+          $ref: '#/components/schemas/CorrelationId'
+        status:
+          type: integer
+          description: HTTP-style status code.
+      additionalProperties: true
+    GenericSuccessResponse:
+      allOf:
+        - $ref: '#/components/schemas/ResponseBase'
+        - type: object
+          properties:
+            result:
+              description: Method-specific result. Some utility result fields are not enumerated in the docs.
+    ListSubscriptionsResponse:
+      allOf:
+        - $ref: '#/components/schemas/ResponseBase'
+        - type: object
+          properties:
+            result:
+              type: array
+              items:
+                type: string
+    DepthResponse:
+      allOf:
+        - $ref: '#/components/schemas/ResponseBase'
+        - type: object
+          properties:
+            result:
+              $ref: '#/components/schemas/OrderBookSnapshot'
+    OrderActionResponse:
+      allOf:
+        - $ref: '#/components/schemas/ResponseBase'
+        - type: object
+          properties:
+            result:
+              type: object
+              description: |
+                Method-specific order result. Order lifecycle state is carried
+                authoritatively on the `orderUpdate` stream.
+              additionalProperties: true
+    RfqSubmitQuoteResponse:
+      allOf:
+        - $ref: '#/components/schemas/ResponseBase'
+        - type: object
+          properties:
+            result:
+              type: object
+              required: [rfqId, quoteId]
+              properties:
+                rfqId:
+                  type: string
+                quoteId:
+                  type: string
+              additionalProperties: true
+    RfqWithdrawQuoteResponse:
+      allOf:
+        - $ref: '#/components/schemas/ResponseBase'
+        - type: object
+          properties:
+            result:
+              type: object
+              required: [rfqId, quoteId]
+              properties:
+                rfqId:
+                  type: string
+                quoteId:
+                  type: string
+              additionalProperties: true
+    RfqConfirmQuoteResponse:
+      allOf:
+        - $ref: '#/components/schemas/ResponseBase'
+        - type: object
+          properties:
+            result:
+              type: object
+              required: [rfqId, quoteId, confirmed]
+              properties:
+                rfqId:
+                  type: string
+                quoteId:
+                  type: string
+                confirmed:
+                  type: boolean
+              additionalProperties: true
+    ErrorResponse:
+      allOf:
+        - $ref: '#/components/schemas/ResponseBase'
+        - type: object
+          required: [error]
+          properties:
+            error:
+              $ref: '#/components/schemas/WsError'
+    WsError:
+      type: object
+      required: [code, msg]
+      properties:
+        code:
+          type: integer
+          description: Internal error code, e.g. -1002.
+        msg:
+          type: string
+          description: Human-readable error message.
+      additionalProperties: true
+    OrderPlaceParams:
+      type: object
+      required: [symbol, side, type, timeInForce, quantity]
+      properties:
+        symbol:
+          type: string
+        side:
+          type: string
+          enum: [BUY, SELL]
+        type:
+          type: string
+          enum: [LIMIT, MARKET]
+          description: Use LIMIT with price and stopPrice for a stop-limit order. For this WebSocket contract, BUY stopPrice may be equal to or below price and SELL stopPrice may be equal to or above price. The order event reports its type as STOP_LIMIT. The legacy REST order endpoint has separate strict inequality rules.
+        timeInForce:
+          type: string
+          enum: [GTC, IOC, FOK, MOC]
+        price:
+          $ref: '#/components/schemas/DecimalString'
+        stopPrice:
+          $ref: '#/components/schemas/DecimalString'
+        quantity:
+          $ref: '#/components/schemas/DecimalString'
+        clientOrderId:
+          type: string
+        eventOutcome:
+          type: string
+          enum: [YES, NO]
+          description: Required for prediction market event contracts.
+      additionalProperties: true
+    OrderCancelParams:
+      type: object
+      required: [orderId]
+      properties:
+        orderId:
+          oneOf:
+            - type: string
+            - type: integer
+      additionalProperties: true
+    OrderBookSnapshot:
+      type: object
+      description: Snapshot payload used by partial depth streams and the `depth` method.
+      required: [lastUpdateId, bids, asks]
+      properties:
+        lastUpdateId:
+          type: integer
+          format: int64
+        bids:
+          type: array
+          items:
+            $ref: '#/components/schemas/PriceLevel'
+        asks:
+          type: array
+          items:
+            $ref: '#/components/schemas/PriceLevel'
+      additionalProperties: true
+    BookTicker:
+      type: object
+      required: [u, E, s, b, B, a, A]
+      properties:
+        u:
+          type: integer
+          format: int64
+          description: Update ID.
+        E:
+          $ref: '#/components/schemas/NanosecondTimestamp'
+        s:
+          type: string
+        b:
+          $ref: '#/components/schemas/DecimalString'
+        B:
+          $ref: '#/components/schemas/DecimalString'
+        a:
+          $ref: '#/components/schemas/DecimalString'
+        A:
+          $ref: '#/components/schemas/DecimalString'
+        c:
+          $ref: '#/components/schemas/DecimalString'
+          description: Last trade price, present once the book has traded.
+        C:
+          $ref: '#/components/schemas/DecimalString'
+          description: Last trade size, present once the book has traded.
+      additionalProperties: true
+    DepthUpdate:
+      type: object
+      description: >
+        L2 depth frame. With the `snapshot` connection parameter set — `-1` for the
+        full book, a positive N for the top N levels — the FIRST frame after
+        subscribing is the snapshot (b/a hold absolute levels, and U..u identifies
+        the update range covered by the frame); every frame after it is an incremental
+        diff. There is no separate snapshot message and no lastUpdateId field. Apply
+        frames in order, using u as the last applied update ID; if a frame's U skips
+        ahead of the last applied u, discard the book and resubscribe to resync.
+      required: [e, E, s, U, u, b, a]
+      properties:
+        e:
+          type: string
+          const: depthUpdate
+        E:
+          $ref: '#/components/schemas/NanosecondTimestamp'
+        s:
+          type: string
+        U:
+          type: integer
+          format: int64
+        u:
+          type: integer
+          format: int64
+        b:
+          type: array
+          items:
+            $ref: '#/components/schemas/PriceLevel'
+        a:
+          type: array
+          items:
+            $ref: '#/components/schemas/PriceLevel'
+      additionalProperties: true
+    Trade:
+      type: object
+      required: [E, s, t, p, q, m]
+      properties:
+        E:
+          $ref: '#/components/schemas/NanosecondTimestamp'
+        s:
+          type: string
+        t:
+          type: integer
+          format: int64
+        p:
+          $ref: '#/components/schemas/DecimalString'
+        q:
+          $ref: '#/components/schemas/DecimalString'
+        m:
+          type: boolean
+          description: Whether the buyer is the maker.
+      additionalProperties: true
+    OrderUpdate:
+      type: object
+      description: |
+        Authenticated order lifecycle event. Fields with empty or zero values may
+        be omitted from the event.
+      required: [e, E, s, i, X, T]
+      properties:
+        e:
+          type: string
+          const: orderUpdate
+        E:
+          $ref: '#/components/schemas/NanosecondTimestamp'
+        s:
+          type: string
+        i:
+          type: integer
+          format: int64
+        c:
+          type: string
+          description: Client order ID. For RFQ maker fills, this is the clientId supplied to rfq.submit_quote, or Gemini's deterministic RFQ client order ID when clientId is omitted.
+        S:
+          type: string
+          enum: [BUY, SELL]
+        o:
+          type: string
+          enum: [LIMIT, MARKET, STOP_LIMIT, STOP_MARKET]
+        X:
+          type: string
+          enum: [NEW, OPEN, FILLED, PARTIALLY_FILLED, CANCELED, REJECTED, MODIFIED]
+        O:
+          type: string
+          enum: [YES, NO]
+          description: Event outcome for prediction market contracts.
+        p:
+          $ref: '#/components/schemas/DecimalString'
+        P:
+          $ref: '#/components/schemas/DecimalString'
+          description: Stop price, `0` when not a stop order.
+        q:
+          $ref: '#/components/schemas/DecimalString'
+        z:
+          $ref: '#/components/schemas/DecimalString'
+          description: Remaining quantity.
+        Z:
+          $ref: '#/components/schemas/DecimalString'
+          description: |
+            Executed quantity. For `FILLED` / `PARTIALLY_FILLED`, this is the
+            last execution quantity. For `CANCELED` and other events, this is
+            cumulative executed quantity over the order lifetime.
+        L:
+          $ref: '#/components/schemas/DecimalString'
+        t:
+          type: integer
+          format: int64
+        n:
+          $ref: '#/components/schemas/DecimalString'
+          description: Fee amount, only present on fill events.
+        m:
+          type: boolean
+          description: Maker flag on fills.
+        r:
+          type: string
+          description: Rejection or cancellation reason.
+        T:
+          $ref: '#/components/schemas/NanosecondTimestamp'
+      additionalProperties: true
+    BalanceUpdate:
+      type: object
+      required: [e, E, u, B]
+      properties:
+        e:
+          type: string
+          const: balanceUpdate
+        E:
+          $ref: '#/components/schemas/NanosecondTimestamp'
+        u:
+          $ref: '#/components/schemas/NanosecondTimestamp'
+        B:
+          type: array
+          items:
+            $ref: '#/components/schemas/Balance'
+      additionalProperties: true
+    Balance:
+      type: object
+      required: [a, f, c]
+      properties:
+        a:
+          type: string
+          description: Asset code.
+        f:
+          $ref: '#/components/schemas/DecimalString'
+        c:
+          $ref: '#/components/schemas/DecimalString'
+      additionalProperties: true
+    PositionReport:
+      type: object
+      required: [e, E, u, A, P]
+      properties:
+        e:
+          type: string
+          const: positionReport
+        E:
+          $ref: '#/components/schemas/NanosecondTimestamp'
+        u:
+          $ref: '#/components/schemas/NanosecondTimestamp'
+        A:
+          type: integer
+          format: int64
+          description: Account ID.
+        P:
+          type: array
+          items:
+            $ref: '#/components/schemas/PositionRow'
+      additionalProperties: true
+    PositionRow:
+      type: object
+      required: [t, s, a]
+      properties:
+        t:
+          type: string
+          description: Product type; event contracts use `ec`.
+        s:
+          type: string
+        a:
+          type: array
+          items:
+            $ref: '#/components/schemas/NamedAmount'
+      additionalProperties: true
+    NamedAmount:
+      type: object
+      required: [t, v]
+      properties:
+        t:
+          type: string
+          description: Amount label, such as `position` or `settlement_payout`.
+        v:
+          $ref: '#/components/schemas/DecimalString'
+          description: Decimal amount. The `position` amount is a signed quantity; `settlement_payout` is the settlement payout.
+        c:
+          type: string
+          description: Optional asset code, such as `usd` for settlement payouts.
+        o:
+          type: string
+          enum: [YES, NO, UNSPECIFIED]
+          description: Settlement outcome. Present on `settlement_payout` amounts in terminal event-contract position rows.
+      additionalProperties: true
+    ContractStatus:
+      type: object
+      required: [e, E, s, k, c, i, o, n]
+      properties:
+        e:
+          type: string
+          const: contractStatus
+        E:
+          $ref: '#/components/schemas/MillisecondTimestamp'
+        s:
+          type: string
+        k:
+          type: string
+          description: Event ticker.
+        c:
+          type: string
+          description: Contract ticker.
+        i:
+          type: integer
+          format: int64
+        p:
+          $ref: '#/components/schemas/DecimalString'
+          description: Strike price, omitted for Up/Down contracts until populated.
+        o:
+          type: string
+          description: Previous status.
+        n:
+          type: string
+          description: New status.
+      additionalProperties: true
+    RfqClientId:
+      type: string
+      description: Optional client order ID for tracking the maker fill. It is emitted as the fill event's c field. It must contain only printable ASCII characters and be at most 36 characters. Keep it unique for the maker account because the venue does not deduplicate it.
+    RfqSubmitQuoteParams:
+      type: object
+      required: [rfqId, price, quantity]
+      properties:
+        rfqId:
+          type: string
+        price:
+          $ref: '#/components/schemas/DecimalString'
+        quantity:
+          $ref: '#/components/schemas/DecimalString'
+        validUntil:
+          $ref: '#/components/schemas/MillisecondTimestamp'
+        clientId:
+          $ref: '#/components/schemas/RfqClientId'
+      additionalProperties: true
+    RfqWithdrawQuoteParams:
+      type: object
+      required: [rfqId, quoteId]
+      properties:
+        rfqId:
+          type: string
+        quoteId:
+          type: string
+      additionalProperties: true
+    RfqConfirmQuoteParams:
+      type: object
+      required: [rfqId, quoteId, confirm]
+      properties:
+        rfqId:
+          type: string
+        quoteId:
+          type: string
+        confirm:
+          type: boolean
+      additionalProperties: true
+    RfqLeg:
+      type: object
+      required: [c, o]
+      properties:
+        c:
+          type: string
+          description: CMS contract id.
+        o:
+          type: string
+          enum: [YES, NO]
+        s:
+          type: string
+          description: This leg's own instrument symbol, when available. Distinct from the combo-level `s` on the enclosing event.
+          example: "GEMI-XRPUSD-260828"
+      additionalProperties: true
+    RfqLifecycleState:
+      type: string
+      enum: [OPEN, PENDING_ACCEPTANCE, CONFIRMING, FINALIZING, FINALIZED, CANCELLED, EXPIRED, FAILED]
+    RfqQuoteStatus:
+      type: string
+      enum: [ACTIVE, WITHDRAWN, EXPIRED, WON, LOST]
+    RfqPublicEvent:
+      type: object
+      required: [e, E, r, l, S]
+      properties:
+        e:
+          type: string
+          const: requestForQuote
+        E:
+          $ref: '#/components/schemas/MillisecondTimestamp'
+        r:
+          type: string
+          description: RFQ ID.
+        s:
+          type: string
+          description: The combo's deterministic instrument symbol, when available. Market makers can use it to place a CLOB order on the combo, activating its book on demand.
+        l:
+          type: array
+          items:
+            $ref: '#/components/schemas/RfqLeg'
+        n:
+          $ref: '#/components/schemas/DecimalString'
+          description: Requested notional size, mutually exclusive with `q`.
+        q:
+          $ref: '#/components/schemas/DecimalString'
+          description: Requested contract quantity, mutually exclusive with `n`. The RFQ quantity grid can be whole contracts or 0.01 fractional contracts.
+        f:
+          $ref: '#/components/schemas/DecimalString'
+          description: Execution quantity calculated when the requester accepts.
+        S:
+          $ref: '#/components/schemas/RfqLifecycleState'
+        w:
+          $ref: '#/components/schemas/MillisecondTimestamp'
+        x:
+          $ref: '#/components/schemas/MillisecondTimestamp'
+        c:
+          $ref: '#/components/schemas/MillisecondTimestamp'
+      additionalProperties: true
+    RfqPrivateDelivery:
+      type: object
+      required: [e, i, E, r, x, S]
+      properties:
+        e:
+          type: string
+          const: requestForQuote
+        i:
+          type: string
+          description: Durable lifecycle-event UUID for at-least-once deduplication.
+        E:
+          $ref: '#/components/schemas/MillisecondTimestamp'
+        r:
+          type: string
+          description: RFQ ID.
+        x:
+          type: string
+          enum: [CLOSED, ACCEPTED, CONFIRMED, DECLINED, FINALIZED, FAILED]
+          description: Customer-visible lifecycle transition.
+        S:
+          $ref: '#/components/schemas/RfqLifecycleState'
+        q:
+          type: string
+          description: Quote ID on authenticated delivery streams.
+        p:
+          $ref: '#/components/schemas/DecimalString'
+        sz:
+          $ref: '#/components/schemas/DecimalString'
+        qs:
+          $ref: '#/components/schemas/RfqQuoteStatus'
+        vu:
+          $ref: '#/components/schemas/MillisecondTimestamp'
+      additionalProperties: true

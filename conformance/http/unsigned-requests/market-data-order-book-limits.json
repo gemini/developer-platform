@@ -1,0 +1,19 @@
+{
+  "id": "http/unsigned-requests/market-data-order-book-limits",
+  "kind": "unsignedRequest",
+  "operation": "marketData.getCurrentOrderBook",
+  "input": {
+    "symbol": "BTCUSD",
+    "limit_bids": 1,
+    "limit_asks": 1
+  },
+  "expect": {
+    "method": "GET",
+    "path": "/v1/book/BTCUSD",
+    "query": {
+      "limit_asks": ["1"],
+      "limit_bids": ["1"]
+    },
+    "authHeaders": []
+  }
+}

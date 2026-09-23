@@ -37,6 +37,7 @@ npx skills add gemini/developer-platform -a claude-code --all -g -y
 | [`gemini-candles`](gemini-candles/) | Display terminal candlestick charts for Gemini trading pairs |
 | [`gemini-developer`](gemini-developer/) | Guide for building integrations with the Gemini API |
 | [`integrate-gemini`](integrate-gemini/) | Production integration skill for Gemini REST, WebSocket (wss://ws.gemini.com), and FIX 4.4 |
+| [`sdk-conformance-review`](sdk-conformance-review/) | Review any SDK against checked-in API specs and shared conformance fixtures |
 
 ## Manual installation
 

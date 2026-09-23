@@ -1,0 +1,13 @@
+{
+  "id": "http/errors/terms-required-400-accept-terms-required",
+  "kind": "errorMapping",
+  "response": {
+    "status": 400,
+    "headers": { "content-type": "application/json" },
+    "body": "{\"result\":\"error\",\"reason\":\"AcceptTermsRequired\",\"message\":\"Terms must be accepted before placing orders\"}"
+  },
+  "expect": {
+    "kind": "terms_required",
+    "reason": "AcceptTermsRequired"
+  }
+}
