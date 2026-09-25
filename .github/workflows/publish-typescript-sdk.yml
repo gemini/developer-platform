@@ -160,10 +160,14 @@ jobs:
           const existingResponse = await fetch(`${apiUrl}${refPath}`, { headers });
           if (existingResponse.ok) {
             const existingRef = await existingResponse.json();
-            if (existingRef.object.type !== "tag") {
-              throw new Error(`release tag is not annotated: ${tag}`);
+            let existingCommit;
+            if (existingRef.object.type === "tag") {
+              existingCommit = (await request(`/repos/${repository}/git/tags/${existingRef.object.sha}`)).object.sha;
+            } else if (existingRef.object.type === "commit") {
+              existingCommit = existingRef.object.sha;
+            } else {
+              throw new Error(`release tag has unexpected object type: ${existingRef.object.type}`);
             }
-            const existingCommit = (await request(`/repos/${repository}/git/tags/${existingRef.object.sha}`)).object.sha;
             if (existingCommit !== mergeSha) {
               throw new Error(`release tag already points to ${existingCommit}, expected ${mergeSha}`);
             }
@@ -173,25 +177,10 @@ jobs:
               throw new Error(`GitHub API ${existingResponse.status} while checking ${tag}`);
             }
 
-            const tagObject = await request(`/repos/${repository}/git/tags`, {
-              method: "POST",
-              headers: { "content-type": "application/json" },
-              body: JSON.stringify({
-                tag,
-                message: `Release TypeScript SDK ${tag}`,
-                object: mergeSha,
-                type: "commit",
-                tagger: {
-                  name: "github-actions[bot]",
-                  email: "41898282+github-actions[bot]@users.noreply.github.com",
-                  date: new Date().toISOString(),
-                },
-              }),
-            });
             await request(`/repos/${repository}/git/refs`, {
               method: "POST",
               headers: { "content-type": "application/json" },
-              body: JSON.stringify({ ref: `refs/tags/${tag}`, sha: tagObject.sha }),
+              body: JSON.stringify({ ref: `refs/tags/${tag}`, sha: mergeSha }),
             });
             console.log(`created release tag ${tag} for ${mergeSha}`);
           }
@@ -245,9 +234,16 @@ jobs:
           test "$RELEASE_REF_TYPE" = tag
 
           tag_ref="repos/${REPOSITORY}/git/ref/tags/${RELEASE_TAG}"
-          test "$(gh api "$tag_ref" --jq '.object.type')" = tag
+          tag_type="$(gh api "$tag_ref" --jq '.object.type')"
           tag_object="$(gh api "$tag_ref" --jq '.object.sha')"
-          tagged_commit="$(gh api "repos/${REPOSITORY}/git/tags/${tag_object}" --jq '.object.sha')"
+          if [ "$tag_type" = tag ]; then
+            tagged_commit="$(gh api "repos/${REPOSITORY}/git/tags/${tag_object}" --jq '.object.sha')"
+          elif [ "$tag_type" = commit ]; then
+            tagged_commit="$tag_object"
+          else
+            echo "release tag has unexpected object type: $tag_type" >&2
+            exit 1
+          fi
           test "$tagged_commit" = "$RELEASE_COMMIT"
 
           tag_version="${RELEASE_TAG#typescript-sdk-v}"
@@ -398,9 +394,16 @@ jobs:
           set -euo pipefail
           test "$RELEASE_REF" = "refs/tags/$RELEASE_TAG"
           tag_ref="repos/${REPOSITORY}/git/ref/tags/${RELEASE_TAG}"
-          test "$(gh api "$tag_ref" --jq '.object.type')" = tag
+          tag_type="$(gh api "$tag_ref" --jq '.object.type')"
           tag_object="$(gh api "$tag_ref" --jq '.object.sha')"
-          tagged_commit="$(gh api "repos/${REPOSITORY}/git/tags/${tag_object}" --jq '.object.sha')"
+          if [ "$tag_type" = tag ]; then
+            tagged_commit="$(gh api "repos/${REPOSITORY}/git/tags/${tag_object}" --jq '.object.sha')"
+          elif [ "$tag_type" = commit ]; then
+            tagged_commit="$tag_object"
+          else
+            echo "release tag has unexpected object type: $tag_type" >&2
+            exit 1
+          fi
           test "$tagged_commit" = "$RELEASE_COMMIT"
 
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
