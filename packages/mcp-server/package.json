@@ -24,7 +24,7 @@
     "smoke:sdk": "tsx scripts/smoke-sdk.ts"
   },
   "dependencies": {
-    "@gemini-markets/sdk": "^0.1.0",
+    "@gemini-markets/sdk": "^0.1.1",
     "@modelcontextprotocol/sdk": "^1.27.1",
     "json-bigint": "^1.0.0",
     "node-notifier": "^10.0.1",

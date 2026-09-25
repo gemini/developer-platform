@@ -31,7 +31,7 @@ const allTools: ToolDefinition[] = [
   ...createPredictionMarketDataTools(sdkClient),
   ...createPredictionOrderTools(client),
   ...createPredictionPositionTools(sdkClient),
-  ...createPredictionComboTools(client),
+  ...createPredictionComboTools(sdkClient),
   ...createAlertTools(),
 ];
 
@@ -67,7 +67,7 @@ test('exactly the expected 19 prediction-market tools are present, across all fo
     ...createPredictionMarketDataTools(sdkClient),
     ...createPredictionOrderTools(client),
     ...createPredictionPositionTools(sdkClient),
-    ...createPredictionComboTools(client),
+    ...createPredictionComboTools(sdkClient),
   ]
     .map((t) => t.name)
     .sort();

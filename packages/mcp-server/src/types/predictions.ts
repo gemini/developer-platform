@@ -94,10 +94,12 @@ export interface PredictionPosition {
 export interface SettledPosition {
   accountId?: Int64;
   contractMetadata?: ContractMetadata;
-  costBasis?: string;
+  // costBasis/netProfit/realizedPnl: `null` is the API's explicit "cost-basis data
+  // unavailable" signal, passed through as-is — distinct from the field being absent.
+  costBasis?: string | null;
   instrumentId?: Int64;
   instrumentSymbol?: string;
-  netProfit?: string;
+  netProfit?: string | null;
   outcome?: 'yes' | 'no';
   payout?: string;
   // Signed position held at settlement: positive = yes, negative = no.
@@ -106,7 +108,7 @@ export interface SettledPosition {
   // a quoted string — typed as a union to match observed behavior.
   position?: string | number;
   positionQuantity?: string;
-  realizedPnl?: string;
+  realizedPnl?: string | null;
   resolutionSide?: 'yes' | 'no';
   settledAt?: string;
 }
@@ -197,15 +199,20 @@ export interface ListCombosResponse {
   pagination: Pagination;
 }
 
-// The exact shape of a leg nested inside ComboSummary.legs (the create/register
-// response) is not confirmed from the generated spec available in this project
-// — only the top-level ComboSummary fields and the request-side leg shape are.
-// Modeled loosely here as the subset we're confident about (contractId,
-// requiredOutcome — same wire format as ComboLeg above) rather than guessing
-// fields with no evidence. Extend once the actual response shape is confirmed.
+// Now confirmed against the @gemini-markets/sdk generated spec (PREDICT-8819):
+// structurally identical to ComboLeg above, including comboId — the legacy client
+// did a raw passthrough of createCombo's response with no mapping at all, so comboId
+// was already present in the real tool output despite this type previously omitting
+// it (see the regression test in tools/predictions/combos.test.ts asserting comboId
+// survives verbatim, which predates this widening).
 export interface ComboSummaryLeg {
+  comboId: Int64;
+  contract?: ContractMetadata;
   contractId: string;
+  legIndex: number;
   requiredOutcome: 'Yes' | 'No';
+  legOutcome?: 'Yes' | 'No';
+  resolvedAt?: string;
 }
 
 export interface ComboSummary {
