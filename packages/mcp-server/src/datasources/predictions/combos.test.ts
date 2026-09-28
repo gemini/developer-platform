@@ -1,7 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import type { SdkClient } from '../../client/sdk.js';
+import { config } from '../../config.js';
 import { listCombos, getCombo, createCombo } from './combos.js';
+
+// These tests assert the exact input sent to the SDK; keep a developer's own
+// GEMINI_ACCOUNT from leaking in. The account-scope tests below set it explicitly.
+config.account = '';
 
 interface Call {
   fn: 'listCombos' | 'getComboByInstrumentSymbol' | 'createCombo';
@@ -209,4 +214,27 @@ test('createCombo maps a bigint combo.id and instrumentId to exact strings, pres
   assert.strictEqual(result.alreadyExisted, true);
   assert.strictEqual(result.combo.id, '145828833218573125');
   assert.strictEqual(result.combo.instrumentId, '999999999999999999');
+});
+
+// ----------------------------------------------------------------------------
+// Sub-account scope — createCombo is authenticated, so it keeps the legacy client's
+// GEMINI_ACCOUNT scoping. listCombos/getCombo are public and must never send one.
+// ----------------------------------------------------------------------------
+
+test('createCombo adds config.account when GEMINI_ACCOUNT is set; the public calls do not', async () => {
+  const { client, calls } = fakeClient();
+  const legs = [{ contractId: '1', requiredOutcome: 'Yes' as const }];
+  const saved = config.account;
+  config.account = 'sub-account-1';
+  try {
+    await createCombo(client, legs);
+    await listCombos(client);
+    await getCombo(client, 'GEMI-CMB-X');
+  } finally {
+    config.account = saved;
+  }
+
+  assert.deepStrictEqual(calls[0]!.input, { legs, account: 'sub-account-1' });
+  assert.strictEqual('account' in (calls[1]!.input as Record<string, unknown>), false);
+  assert.deepStrictEqual(calls[2]!.input, { instrumentSymbol: 'GEMI-CMB-X' });
 });

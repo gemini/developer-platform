@@ -1,12 +1,12 @@
 import { z } from 'zod';
-import type { GeminiHttpClient } from '../../client/http.js';
+import type { SdkClient } from '../../client/sdk.js';
 import type { ToolDefinition } from '../index.js';
 import { wrapHandler, confirmField } from '../index.js';
 import * as predictions from '../../datasources/predictions/orders.js';
 
 const TimeInForceEnum = z.enum(['good-til-cancel', 'immediate-or-cancel', 'fill-or-kill', 'maker-or-cancel']);
 
-export function createPredictionOrderTools(client: GeminiHttpClient): ToolDefinition[] {
+export function createPredictionOrderTools(sdkClient: SdkClient): ToolDefinition[] {
   return [
     {
       name: 'gemini_place_prediction_order',
@@ -25,7 +25,7 @@ export function createPredictionOrderTools(client: GeminiHttpClient): ToolDefini
         ),
         confirm: confirmField,
       }),
-      handler: wrapHandler((args) => predictions.placeOrder(client, args)),
+      handler: wrapHandler((args) => predictions.placeOrder(sdkClient, args)),
       mutates: 'destructive',
     },
     {
@@ -41,7 +41,7 @@ export function createPredictionOrderTools(client: GeminiHttpClient): ToolDefini
         orderId: z.string().describe('Order ID to cancel'),
         confirm: confirmField,
       }),
-      handler: wrapHandler(({ orderId }) => predictions.cancelOrder(client, orderId)),
+      handler: wrapHandler(({ orderId }) => predictions.cancelOrder(sdkClient, orderId)),
       mutates: 'destructive',
     },
     {
@@ -73,7 +73,7 @@ export function createPredictionOrderTools(client: GeminiHttpClient): ToolDefini
           .describe('Orders to place, 1-20 per batch'),
         confirm: confirmField,
       }),
-      handler: wrapHandler((args) => predictions.placeOrderBatch(client, args.orders)),
+      handler: wrapHandler((args) => predictions.placeOrderBatch(sdkClient, args.orders)),
       mutates: 'destructive',
     },
     {
@@ -97,7 +97,7 @@ export function createPredictionOrderTools(client: GeminiHttpClient): ToolDefini
           }),
         confirm: confirmField,
       }),
-      handler: wrapHandler(({ orderIds }) => predictions.cancelOrderBatch(client, orderIds)),
+      handler: wrapHandler(({ orderIds }) => predictions.cancelOrderBatch(sdkClient, orderIds)),
       mutates: 'destructive',
     },
     {
@@ -108,7 +108,7 @@ export function createPredictionOrderTools(client: GeminiHttpClient): ToolDefini
         limit: z.number().min(1).max(100).optional().describe('Number of results (default 50, max 100)'),
         offset: z.number().min(0).optional().describe('Pagination offset'),
       }),
-      handler: wrapHandler((args) => predictions.getActiveOrders(client, args)),
+      handler: wrapHandler((args) => predictions.getActiveOrders(sdkClient, args)),
     },
     {
       name: 'gemini_get_prediction_order_history',
@@ -119,7 +119,7 @@ export function createPredictionOrderTools(client: GeminiHttpClient): ToolDefini
         limit: z.number().min(1).max(100).optional().describe('Number of results (default 50, max 100)'),
         offset: z.number().min(0).optional().describe('Pagination offset'),
       }),
-      handler: wrapHandler((args) => predictions.getOrderHistory(client, args)),
+      handler: wrapHandler((args) => predictions.getOrderHistory(sdkClient, args)),
     },
   ];
 }

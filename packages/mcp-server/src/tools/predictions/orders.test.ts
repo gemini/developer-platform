@@ -1,21 +1,26 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import JSONBig from 'json-bigint';
-import type { GeminiHttpClient } from '../../client/http.js';
+import type { SdkClient } from '../../client/sdk.js';
 import { createPredictionOrderTools } from './orders.js';
 
-// Requests never leave this test — every batch call in these tests is
-// intercepted by the fake client before it reaches GeminiHttpClient's real
-// networking code.
+// Requests never leave this test — every call is intercepted by this fake SDK client.
+// Responses are shaped the way the SDK returns them: int64 orderIds already decoded to
+// bigint, which the datasource layer must turn back into exact strings.
 function fakeClient(response: unknown = {}) {
+  const method = async () => response;
   return {
-    publicGet: async () => response,
-    authenticatedGet: async () => response,
-    authenticatedPost: async () => response,
-  } as unknown as GeminiHttpClient;
+    predictions: {
+      placeOrder: method,
+      cancelOrder: method,
+      placeOrderBatch: method,
+      cancelOrderBatch: method,
+      getActiveOrders: method,
+      getOrderHistory: method,
+    },
+  } as unknown as SdkClient;
 }
 
-function toolNamed(client: GeminiHttpClient, name: string) {
+function toolNamed(client: SdkClient, name: string) {
   const tool = createPredictionOrderTools(client).find((t) => t.name === name);
   if (!tool) throw new Error(`tool not found: ${name}`);
   return tool;
@@ -28,15 +33,6 @@ function textOf(result: { content: { type: string; text?: string }[] }): string 
   }
   return block.text;
 }
-
-// Same precision-preserving parser the real GeminiHttpClient uses
-// (src/client/http.ts). Used here to turn hand-written raw JSON text — with
-// an 18-digit orderId as a bare JSON number, exactly as the API sends it —
-// into the object a real client call would hand to the datasource layer.
-// Building the fixture via JSON.stringify of a JS object literal would not
-// prove anything: an 18-digit numeric literal in JS source is already
-// truncated by the time any parser sees it.
-const jsonParse = JSONBig({ storeAsString: true });
 
 function order(overrides: Record<string, unknown> = {}) {
   return {
@@ -151,16 +147,67 @@ test('gemini_cancel_prediction_order_batch is destructive and requires confirm: 
   assert.strictEqual(tool.inputSchema.safeParse({ orderIds: ['1'], confirm: true }).success, true);
 });
 
+test('gemini_place_prediction_order and gemini_cancel_prediction_order are destructive and require confirm: true', () => {
+  const place = toolNamed(fakeClient(), 'gemini_place_prediction_order');
+  assert.strictEqual(place.mutates, 'destructive');
+  assert.strictEqual(place.inputSchema.safeParse(order()).success, false);
+  assert.strictEqual(place.inputSchema.safeParse({ ...order(), confirm: false }).success, false);
+  assert.strictEqual(place.inputSchema.safeParse({ ...order(), confirm: true }).success, true);
+
+  const cancel = toolNamed(fakeClient(), 'gemini_cancel_prediction_order');
+  assert.strictEqual(cancel.mutates, 'destructive');
+  assert.strictEqual(cancel.inputSchema.safeParse({ orderId: '1' }).success, false);
+  assert.strictEqual(cancel.inputSchema.safeParse({ orderId: '1', confirm: true }).success, true);
+});
+
+test('the read-only order tools are not marked as mutating', () => {
+  for (const name of ['gemini_get_prediction_active_orders', 'gemini_get_prediction_order_history']) {
+    assert.strictEqual(toolNamed(fakeClient(), name).mutates, undefined, name);
+  }
+});
+
 // ----------------------------------------------------------------------------
-// Precision regression — 18-digit orderId must survive verbatim
+// Precision regression — 18-digit orderId must survive verbatim. The SDK hands back
+// bigint (exact); the tool output must carry it as the exact string, not a rounded
+// number and not a JSON.stringify crash.
 // ----------------------------------------------------------------------------
 
+function parsedOutput(result: { content: { type: string; text?: string }[] }) {
+  return JSON.parse(textOf(result).replace(/^<tool-output[^>]*>\n/, '').replace(/\n<\/tool-output>$/, ''));
+}
+
+test('gemini_place_prediction_order returns an 18-digit orderId as the exact string', async () => {
+  const tool = toolNamed(
+    fakeClient({ orderId: 145828833218573125n, status: 'open', symbol: 'GEMI-A' }),
+    'gemini_place_prediction_order'
+  );
+  const result = await tool.handler(tool.inputSchema.parse({ ...order(), confirm: true }));
+
+  assert.strictEqual(result.isError, undefined);
+  assert.strictEqual(parsedOutput(result).orderId, '145828833218573125');
+});
+
 test('gemini_place_prediction_order_batch preserves 18-digit orderId precision', async () => {
-  const raw =
-    '{"results":[{"order":{"orderId":145828833218573125,"hashOrderId":"h1","status":"open",' +
-    '"symbol":"GEMI-A","side":"buy","outcome":"yes","orderType":"limit","quantity":"10",' +
-    '"filledQuantity":"0","remainingQuantity":"10","price":"0.42","createdAt":"2026-01-01T00:00:00Z"}}]}';
-  const response = jsonParse.parse(raw);
+  const response = {
+    results: [
+      {
+        order: {
+          orderId: 145828833218573125n,
+          hashOrderId: 'h1',
+          status: 'open',
+          symbol: 'GEMI-A',
+          side: 'buy',
+          outcome: 'yes',
+          orderType: 'limit',
+          quantity: '10',
+          filledQuantity: '0',
+          remainingQuantity: '10',
+          price: '0.42',
+          createdAt: '2026-01-01T00:00:00Z',
+        },
+      },
+    ],
+  };
 
   const tool = toolNamed(fakeClient(response), 'gemini_place_prediction_order_batch');
   const result = await tool.handler(tool.inputSchema.parse({ orders: [order()], confirm: true }));
@@ -171,16 +218,26 @@ test('gemini_place_prediction_order_batch preserves 18-digit orderId precision',
 });
 
 test('gemini_cancel_prediction_order_batch preserves 18-digit orderId precision', async () => {
-  const raw = '{"results":[{"orderId":145828833218573125,"result":"cancelled"}]}';
-  const response = jsonParse.parse(raw);
+  const response = { results: [{ orderId: 145828833218573125n, result: 'ok' }] };
 
   const tool = toolNamed(fakeClient(response), 'gemini_cancel_prediction_order_batch');
   const result = await tool.handler(
     tool.inputSchema.parse({ orderIds: ['145828833218573125'], confirm: true })
   );
-  const text = textOf(result);
 
-  assert.ok(text.includes('145828833218573125'), 'orderId must survive as the exact string');
+  assert.strictEqual(parsedOutput(result).results[0].orderId, '145828833218573125');
+});
+
+test('gemini_get_prediction_active_orders returns every orderId as the exact string', async () => {
+  const response = {
+    orders: [{ orderId: 145828833218573125n, symbol: 'GEMI-A' }],
+    pagination: { limit: 50, offset: 0 },
+  };
+
+  const tool = toolNamed(fakeClient(response), 'gemini_get_prediction_active_orders');
+  const result = await tool.handler(tool.inputSchema.parse({}));
+
+  assert.strictEqual(parsedOutput(result).orders[0].orderId, '145828833218573125');
 });
 
 // ----------------------------------------------------------------------------
@@ -188,51 +245,68 @@ test('gemini_cancel_prediction_order_batch preserves 18-digit orderId precision'
 // ----------------------------------------------------------------------------
 
 test('gemini_place_prediction_order_batch passes through a mix of accepted and rejected entries', async () => {
-  const raw =
-    '{"results":[' +
-    '{"order":{"orderId":"1","hashOrderId":"h1","status":"open","symbol":"GEMI-A","side":"buy",' +
-    '"outcome":"yes","orderType":"limit","quantity":"10","filledQuantity":"0",' +
-    '"remainingQuantity":"10","price":"0.42","createdAt":"2026-01-01T00:00:00Z"}},' +
-    '{"error":"InvalidPrice","message":"price must be between 0.01 and 0.99"}' +
-    ']}';
-  const response = jsonParse.parse(raw);
+  const response = {
+    results: [
+      { order: { orderId: 1n, hashOrderId: 'h1', status: 'open', symbol: 'GEMI-A' } },
+      { error: 'InvalidPrice', message: 'price must be between 0.01 and 0.99' },
+    ],
+  };
 
   const tool = toolNamed(fakeClient(response), 'gemini_place_prediction_order_batch');
   const result = await tool.handler(
     tool.inputSchema.parse({
-      orders: [order(), order({ price: '5.00' })],
+      orders: [order(), order({ price: '0.43' })],
       confirm: true,
     })
   );
-  const text = textOf(result);
-  const parsed = JSON.parse(text.replace(/^<tool-output[^>]*>\n/, '').replace(/\n<\/tool-output>$/, ''));
+  const parsed = parsedOutput(result);
 
   assert.strictEqual(parsed.results.length, 2);
   assert.ok('order' in parsed.results[0], 'first result is a successful order');
+  assert.strictEqual(parsed.results[0].order.orderId, '1');
   assert.ok('error' in parsed.results[1], 'second result is a rejection');
   assert.strictEqual(parsed.results[1].error, 'InvalidPrice');
   assert.strictEqual(parsed.results[1].message, 'price must be between 0.01 and 0.99');
 });
 
 test('gemini_cancel_prediction_order_batch passes through a mix of successful and rejected cancels', async () => {
-  const raw =
-    '{"results":[' +
-    '{"orderId":"111","result":"cancelled"},' +
-    '{"orderId":"222","error":"OrderNotFound","message":"no open order with that ID"}' +
-    ']}';
-  const response = jsonParse.parse(raw);
+  const response = {
+    results: [
+      { orderId: 111n, result: 'ok' },
+      { orderId: 222n, error: 'OrderNotFound', message: 'no open order with that ID' },
+    ],
+  };
 
   const tool = toolNamed(fakeClient(response), 'gemini_cancel_prediction_order_batch');
   const result = await tool.handler(
     tool.inputSchema.parse({ orderIds: ['111', '222'], confirm: true })
   );
-  const text = textOf(result);
-  const parsed = JSON.parse(text.replace(/^<tool-output[^>]*>\n/, '').replace(/\n<\/tool-output>$/, ''));
+  const parsed = parsedOutput(result);
 
   assert.strictEqual(parsed.results.length, 2);
   assert.strictEqual(parsed.results[0].orderId, '111');
-  assert.strictEqual(parsed.results[0].result, 'cancelled');
+  assert.strictEqual(parsed.results[0].result, 'ok');
   assert.strictEqual(parsed.results[1].orderId, '222');
   assert.strictEqual(parsed.results[1].error, 'OrderNotFound');
   assert.strictEqual(parsed.results[1].message, 'no open order with that ID');
+});
+
+// ----------------------------------------------------------------------------
+// Errors — an SDK ApiError surfaces with its reason/code detail
+// ----------------------------------------------------------------------------
+
+test('an SDK error surfaces as a tool error with its reason and code', async () => {
+  const failing = {
+    predictions: {
+      cancelOrder: async () => {
+        throw Object.assign(new Error('HTTP 404'), { reason: 'OrderNotFound', code: 'not_found' });
+      },
+    },
+  } as unknown as SdkClient;
+
+  const tool = toolNamed(failing, 'gemini_cancel_prediction_order');
+  const result = await tool.handler(tool.inputSchema.parse({ orderId: '1', confirm: true }));
+
+  assert.strictEqual(result.isError, true);
+  assert.match(textOf(result), /HTTP 404 \(reason=OrderNotFound, code=not_found\)/);
 });

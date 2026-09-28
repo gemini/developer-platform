@@ -1,5 +1,5 @@
 import type { SdkClient } from '../../client/sdk.js';
-import { config } from '../../config.js';
+import { withAccountScope } from '../../client/sdk.js';
 import type {
   EventStatus,
   EventsResponse,
@@ -147,14 +147,10 @@ export async function getVolumeMetrics(
   const input: Record<string, unknown> = { eventTicker };
   if (opts.startTime !== undefined) input['startTime'] = opts.startTime;
   if (opts.endTime !== undefined) input['endTime'] = opts.endTime;
-  // getVolumeMetrics is authenticated (the one exception among these 8 endpoints).
-  // The legacy GeminiHttpClient.authenticatedPost injected config.account into every
-  // authenticated body; the SDK has no first-class account-scope field, but its body
-  // builder forwards any extra input key straight through, so replicate the same
-  // sub-account scoping here rather than silently dropping it.
-  if (config.account) input['account'] = config.account;
+  // getVolumeMetrics is authenticated (the one exception among these 8 endpoints), so it
+  // keeps the legacy client's sub-account scoping — see withAccountScope.
   const response = await client.predictions.getVolumeMetrics(
-    input as SdkInput<typeof client.predictions.getVolumeMetrics>
+    withAccountScope(input) as SdkInput<typeof client.predictions.getVolumeMetrics>
   );
   return response as unknown as VolumeMetrics;
 }
