@@ -74,7 +74,7 @@ export function createServer(sdkClient: SdkClient): Server {
     ...createMarginTools(client),
     ...createStakingTools(client),
     ...createPredictionMarketDataTools(sdkClient),
-    ...createPredictionOrderTools(client),
+    ...createPredictionOrderTools(sdkClient),
     ...createPredictionPositionTools(sdkClient),
     ...createPredictionComboTools(sdkClient),
     ...createAlertTools(),

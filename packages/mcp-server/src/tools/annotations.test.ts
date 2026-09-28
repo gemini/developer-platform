@@ -29,7 +29,7 @@ const allTools: ToolDefinition[] = [
   ...createMarginTools(client),
   ...createStakingTools(client),
   ...createPredictionMarketDataTools(sdkClient),
-  ...createPredictionOrderTools(client),
+  ...createPredictionOrderTools(sdkClient),
   ...createPredictionPositionTools(sdkClient),
   ...createPredictionComboTools(sdkClient),
   ...createAlertTools(),
@@ -65,7 +65,7 @@ const EXPECTED_PREDICTION_TOOLS = [
 test('exactly the expected 19 prediction-market tools are present, across all four split factories', () => {
   const predictionTools = [
     ...createPredictionMarketDataTools(sdkClient),
-    ...createPredictionOrderTools(client),
+    ...createPredictionOrderTools(sdkClient),
     ...createPredictionPositionTools(sdkClient),
     ...createPredictionComboTools(sdkClient),
   ]

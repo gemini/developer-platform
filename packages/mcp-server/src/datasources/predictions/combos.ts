@@ -1,4 +1,5 @@
 import type { SdkClient } from '../../client/sdk.js';
+import { withAccountScope } from '../../client/sdk.js';
 import type {
   ListCombosResponse,
   ComboResponse,
@@ -116,7 +117,7 @@ export async function createCombo(
   client: SdkClient,
   legs: Array<{ contractId: string; requiredOutcome: 'Yes' | 'No' }>
 ): Promise<CreateComboResponse> {
-  const result = await client.predictions.createCombo({ legs });
+  const result = await client.predictions.createCombo(withAccountScope({ legs }));
   return {
     alreadyExisted: result.alreadyExisted,
     combo: mapComboSummary(result.combo),

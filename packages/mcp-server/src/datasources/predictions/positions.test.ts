@@ -1,7 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import type { SdkClient } from '../../client/sdk.js';
+import { config } from '../../config.js';
 import * as predictions from './positions.js';
+
+// These tests assert the exact input sent to the SDK; keep a developer's own
+// GEMINI_ACCOUNT from leaking in. The account-scope tests below set it explicitly.
+config.account = '';
 
 // A fake SDK client that records exactly what input object each datasource function
 // forwarded to it, without touching the network. Unlike the legacy GeminiHttpClient
@@ -242,4 +247,39 @@ test('getSettledPositions converts 18-digit bigint accountId/instrumentId on bot
   assert.strictEqual(result.positions![0]!.instrumentId, '987654321098765432');
   assert.strictEqual(result.cashOuts![0]!.accountId, '111111111111111111');
   assert.strictEqual(result.cashOuts![0]!.instrumentId, '222222222222222222');
+});
+
+// ----------------------------------------------------------------------------
+// Sub-account scope — the legacy client added GEMINI_ACCOUNT to every signed body;
+// dropping it silently returned the primary account's positions instead.
+// ----------------------------------------------------------------------------
+
+test('getPositions and getSettledPositions add config.account when GEMINI_ACCOUNT is set', async () => {
+  const { client, calls } = fakeClient({ positions: [] }, {});
+  const saved = config.account;
+  config.account = 'sub-account-1';
+  try {
+    await predictions.getPositions(client, { limit: 5 });
+    await predictions.getSettledPositions(client, { limit: 5 });
+  } finally {
+    config.account = saved;
+  }
+
+  assert.deepStrictEqual(calls[0]!.input, { limit: 5, account: 'sub-account-1' });
+  assert.deepStrictEqual(calls[1]!.input, { limit: 5, account: 'sub-account-1' });
+});
+
+test('getPositions and getSettledPositions send no account when GEMINI_ACCOUNT is unset', async () => {
+  const { client, calls } = fakeClient({ positions: [] }, {});
+  const saved = config.account;
+  config.account = '';
+  try {
+    await predictions.getPositions(client, { limit: 5 });
+    await predictions.getSettledPositions(client, { limit: 5 });
+  } finally {
+    config.account = saved;
+  }
+
+  assert.deepStrictEqual(calls[0]!.input, { limit: 5 });
+  assert.deepStrictEqual(calls[1]!.input, { limit: 5 });
 });

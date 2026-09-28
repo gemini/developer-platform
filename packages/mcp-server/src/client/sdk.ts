@@ -36,3 +36,13 @@ export async function createSdkClient(
 
   return createClient({ env: config.sdkEnv, auth, ...overrides });
 }
+
+// The legacy GeminiHttpClient.authenticatedPost added config.account (GEMINI_ACCOUNT) to
+// every signed request body, so a master API key reads and trades on the configured
+// sub-account. The SDK has no account-scope option of its own, but it copies every input
+// key that isn't a path/query/header parameter into the signed body, so every
+// authenticated prediction call wraps its input with this to keep that scoping. Public
+// operations must not use it — the SDK refuses to send a body on a public request.
+export function withAccountScope<T extends object>(input: T): T {
+  return config.account ? { ...input, account: config.account } : input;
+}
