@@ -5,8 +5,8 @@ import type {
   PredictionPosition,
   SettledPosition,
   CashedOutPosition,
-  ContractMetadata,
 } from '../../types/predictions.js';
+import { mapContractMetadata } from './mappers.js';
 
 type PredictionsService = SdkClient['predictions'];
 type SdkPositionsResult = Awaited<ReturnType<PredictionsService['getPositions']>>;
@@ -14,7 +14,6 @@ type SdkSettledPositionsResult = Awaited<ReturnType<PredictionsService['getSettl
 type SdkPosition = NonNullable<SdkPositionsResult['positions']>[number];
 type SdkSettledPosition = NonNullable<SdkSettledPositionsResult['positions']>[number];
 type SdkCashedOutPosition = NonNullable<SdkSettledPositionsResult['cashOuts']>[number];
-type SdkContractMetadata = SdkPosition['contractMetadata'];
 
 // Derived directly from the SDK's own method signatures rather than hand-declared, so
 // the accepted `sort`/etc. literal unions can't silently drift from what the SDK (and
@@ -23,20 +22,6 @@ export type GetPositionsOptions = NonNullable<Parameters<PredictionsService['get
 export type GetSettledPositionsOptions = NonNullable<
   Parameters<PredictionsService['getSettledPositions']>[0]
 >;
-
-// The SDK marks contract metadata's identifying fields optional; a real contract
-// response always has them, matching the level of trust the legacy client already
-// placed in this shape (no runtime validation there either).
-function mapContractMetadata(meta: SdkContractMetadata): ContractMetadata | undefined {
-  if (!meta) return undefined;
-  return {
-    contractId: meta.contractId!,
-    contractName: meta.contractName!,
-    eventTicker: meta.eventTicker!,
-    eventName: meta.eventName!,
-    category: meta.category!,
-  };
-}
 
 // The SDK returns instrumentId/accountId as bigint (int64-precision fields) — stringify
 // them so the existing Int64/string contracts hold and so wrapHandler's JSON.stringify

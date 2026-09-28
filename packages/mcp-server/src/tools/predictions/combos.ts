@@ -1,10 +1,10 @@
 import { z } from 'zod';
-import type { GeminiHttpClient } from '../../client/http.js';
+import type { SdkClient } from '../../client/sdk.js';
 import type { ToolDefinition } from '../index.js';
 import { wrapHandler } from '../index.js';
 import * as predictions from '../../datasources/predictions/combos.js';
 
-export function createPredictionComboTools(client: GeminiHttpClient): ToolDefinition[] {
+export function createPredictionComboTools(sdkClient: SdkClient): ToolDefinition[] {
   return [
     {
       name: 'gemini_list_prediction_combos',
@@ -19,7 +19,7 @@ export function createPredictionComboTools(client: GeminiHttpClient): ToolDefini
         limit: z.number().min(1).max(500).optional().describe('Number of results (max 500)'),
         offset: z.number().min(0).optional().describe('Pagination offset'),
       }),
-      handler: wrapHandler((args) => predictions.listCombos(client, args)),
+      handler: wrapHandler((args) => predictions.listCombos(sdkClient, args)),
     },
     {
       name: 'gemini_get_prediction_combo',
@@ -27,7 +27,7 @@ export function createPredictionComboTools(client: GeminiHttpClient): ToolDefini
       inputSchema: z.object({
         instrumentSymbol: z.string().describe('Combo instrument symbol'),
       }),
-      handler: wrapHandler(({ instrumentSymbol }) => predictions.getCombo(client, instrumentSymbol)),
+      handler: wrapHandler(({ instrumentSymbol }) => predictions.getCombo(sdkClient, instrumentSymbol)),
     },
     {
       name: 'gemini_create_prediction_combo',
@@ -55,7 +55,7 @@ export function createPredictionComboTools(client: GeminiHttpClient): ToolDefini
             { message: 'legs must not contain duplicate contractIds' }
           ),
       }),
-      handler: wrapHandler((args) => predictions.createCombo(client, args.legs)),
+      handler: wrapHandler((args) => predictions.createCombo(sdkClient, args.legs)),
       mutates: 'write',
     },
   ];

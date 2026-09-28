@@ -86,6 +86,21 @@ export interface WrapHandlerOptions {
   stringCap?: number;
 }
 
+// @gemini-markets/sdk's ApiError always sets .message to the unhelpful `HTTP {status}`
+// literal by design — the actual detail (what was actually wrong) lives on separate
+// `.reason`/`.code`/`.category` properties that a plain `.message` read never sees.
+// Duck-typed rather than importing the SDK's error classes, so this stays useful for
+// any thrown error shape, not just the SDK's, and this file stays provider-agnostic.
+function extractErrorDetail(err: unknown): string | undefined {
+  if (typeof err !== 'object' || err === null) return undefined;
+  const parts: string[] = [];
+  for (const key of ['reason', 'code', 'category'] as const) {
+    const value = (err as Record<string, unknown>)[key];
+    if (typeof value === 'string' && value.length > 0) parts.push(`${key}=${value}`);
+  }
+  return parts.length > 0 ? parts.join(', ') : undefined;
+}
+
 export function wrapHandler<S extends z.ZodTypeAny>(
   handler: (args: z.infer<S>) => Promise<unknown>,
   opts?: WrapHandlerOptions
@@ -99,8 +114,10 @@ export function wrapHandler<S extends z.ZodTypeAny>(
       };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
+      const detail = extractErrorDetail(err);
+      const fullMessage = detail ? `${message} (${detail})` : message;
       return {
-        content: [{ type: 'text', text: wrap(`Error: ${sanitizeString(message)}`) }],
+        content: [{ type: 'text', text: wrap(`Error: ${sanitizeString(fullMessage)}`) }],
         isError: true,
       };
     }

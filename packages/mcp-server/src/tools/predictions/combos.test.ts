@@ -1,20 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import type { SdkClient } from '../../client/sdk.js';
+import { createPredictionComboTools } from './combos.js';
+import { annotationsFor, requiresConfirmation } from '../index.js';
 
-// config.ts snapshots process.env when the module is first imported, so the
-// credentials have to be in place before the module graph loads — hence the
-// dynamic imports below (same technique as client/http.request.test.ts).
-// node:test runs each test file in its own process, so this cannot leak into
-// other suites.
-process.env.GEMINI_API_KEY = 'test-api-key';
-process.env.GEMINI_API_SECRET = 'test-api-secret';
-process.env.GEMINI_API_BASE_URL = 'https://api.gemini.invalid';
-delete process.env.GEMINI_ACCOUNT;
-
-const { GeminiHttpClient } = await import('../../client/http.js');
-const { createPredictionComboTools } = await import('./combos.js');
-const { annotationsFor, requiresConfirmation } = await import('../index.js');
 type ToolDefinition = ReturnType<typeof createPredictionComboTools>[number];
 
 function toolNamed(tools: ToolDefinition[], name: string): ToolDefinition {
@@ -31,18 +21,24 @@ function textOf(result: CallToolResult): string {
   return block.text;
 }
 
-function stubFetch(body: string, status = 200) {
-  const original = globalThis.fetch;
-  globalThis.fetch = (async () => new Response(body, { status })) as unknown as typeof fetch;
+// Requests never leave this test — every call is intercepted by the fake SDK client
+// before it would reach the real @gemini-markets/sdk transport.
+function fakeClient(
+  createComboResponse: unknown = {
+    alreadyExisted: false,
+    combo: { id: 1n, instrumentRegistered: false, legCount: 0, canonicalLegKey: 'k', legs: [] },
+  }
+) {
   return {
-    restore: () => {
-      globalThis.fetch = original;
+    predictions: {
+      listCombos: async () => ({ combos: [], pagination: { limit: 50, offset: 0 } }),
+      getComboByInstrumentSymbol: async () => ({ contract: {}, legs: [] }),
+      createCombo: async () => createComboResponse,
     },
-  };
+  } as unknown as SdkClient;
 }
 
-const client = new GeminiHttpClient();
-const tools = createPredictionComboTools(client);
+const tools = createPredictionComboTools(fakeClient());
 
 // ----------------------------------------------------------------------------
 // gemini_create_prediction_combo — schema validation
@@ -118,7 +114,8 @@ test("gemini_create_prediction_combo rejects lowercase 'no' too", () => {
 });
 
 // ----------------------------------------------------------------------------
-// mutates annotations
+// mutates annotations — regression guard for the ticket-vs-code discrepancy:
+// createCombo stays 'write'/no-confirm, it is NOT reclassified 'destructive'
 // ----------------------------------------------------------------------------
 
 test("gemini_create_prediction_combo has mutates === 'write' and no confirm field", () => {
@@ -149,35 +146,41 @@ test('gemini_list_prediction_combos and gemini_get_prediction_combo are plain re
 
 // ----------------------------------------------------------------------------
 // Precision fixture — a comboId at 17-18 digits must survive as an exact
-// string through the tool's output, same technique as
-// client/http.request.test.ts's int64-precision test.
+// string through the tool's output. The SDK hands this back as a real bigint
+// (a bigint literal is exact in JS source, unlike a plain numeric literal past
+// MAX_SAFE_INTEGER), and the datasource's mapper must stringify it rather than
+// let it reach wrapHandler's JSON.stringify, which cannot serialize bigint at all.
 // ----------------------------------------------------------------------------
 
 test('a large comboId in combo.legs[0].comboId survives as an exact string through the tool output', async () => {
-  // Raw JSON text, not JSON.stringify of an object literal: an 18-digit
-  // literal in JS source is already truncated before the parser runs.
-  const raw =
-    '{"alreadyExisted":false,"combo":{"canonicalLegKey":"k","id":1,' +
-    '"instrumentRegistered":false,"legCount":2,' +
-    '"legs":[{"comboId":145828833218573125,"contractId":"111","requiredOutcome":"Yes"},' +
-    '{"comboId":145828833218573125,"contractId":"222","requiredOutcome":"No"}]}}';
-  const f = stubFetch(raw);
-  try {
-    const parsed = createCombo.inputSchema.parse({
+  const response = {
+    alreadyExisted: false,
+    combo: {
+      canonicalLegKey: 'k',
+      id: 1n,
+      instrumentRegistered: false,
+      legCount: 2,
       legs: [
-        { contractId: '111', requiredOutcome: 'Yes' },
-        { contractId: '222', requiredOutcome: 'No' },
+        { comboId: 145828833218573125n, legIndex: 0, contractId: '111', requiredOutcome: 'Yes' },
+        { comboId: 145828833218573125n, legIndex: 1, contractId: '222', requiredOutcome: 'No' },
       ],
-    });
-    const result = await createCombo.handler(parsed);
-    const text = textOf(result);
+    },
+  };
+  const toolsWithFixture = createPredictionComboTools(fakeClient(response));
+  const combo = toolNamed(toolsWithFixture, 'gemini_create_prediction_combo');
 
-    assert.ok(!result.isError, `expected success, got: ${text}`);
-    assert.match(text, /"comboId": "145828833218573125"/);
-    assert.doesNotMatch(text, /145828833218573120/, 'comboId must not be silently truncated to a rounded value');
-  } finally {
-    f.restore();
-  }
+  const parsed = combo.inputSchema.parse({
+    legs: [
+      { contractId: '111', requiredOutcome: 'Yes' },
+      { contractId: '222', requiredOutcome: 'No' },
+    ],
+  });
+  const result = await combo.handler(parsed);
+  const text = textOf(result);
+
+  assert.ok(!result.isError, `expected success, got: ${text}`);
+  assert.match(text, /"comboId": "145828833218573125"/);
+  assert.doesNotMatch(text, /145828833218573120/, 'comboId must not be silently truncated to a rounded value');
 });
 
 // ----------------------------------------------------------------------------
@@ -185,26 +188,33 @@ test('a large comboId in combo.legs[0].comboId survives as an exact string throu
 // ----------------------------------------------------------------------------
 
 test('alreadyExisted: true is preserved in the tool output, not dropped or fabricated', async () => {
-  const raw =
-    '{"alreadyExisted":true,"combo":{"canonicalLegKey":"k","id":42,' +
-    '"instrumentRegistered":true,"instrumentSymbol":"GEMI-COMBO-XYZ","legCount":2,' +
-    '"legs":[{"contractId":"111","requiredOutcome":"Yes"},{"contractId":"222","requiredOutcome":"No"}]}}';
-  const f = stubFetch(raw);
-  try {
-    const parsed = createCombo.inputSchema.parse({
+  const response = {
+    alreadyExisted: true,
+    combo: {
+      canonicalLegKey: 'k',
+      id: 42n,
+      instrumentRegistered: true,
+      instrumentSymbol: 'GEMI-COMBO-XYZ',
+      legCount: 2,
       legs: [
-        { contractId: '111', requiredOutcome: 'Yes' },
-        { contractId: '222', requiredOutcome: 'No' },
+        { comboId: 42n, legIndex: 0, contractId: '111', requiredOutcome: 'Yes' },
+        { comboId: 42n, legIndex: 1, contractId: '222', requiredOutcome: 'No' },
       ],
-    });
-    const result = await createCombo.handler(parsed);
-    const text = textOf(result);
+    },
+  };
+  const toolsWithFixture = createPredictionComboTools(fakeClient(response));
+  const combo = toolNamed(toolsWithFixture, 'gemini_create_prediction_combo');
 
-    assert.ok(!result.isError, `expected success, got: ${text}`);
-    assert.match(text, /"alreadyExisted": true/);
-    assert.doesNotMatch(text, /"alreadyExisted": false/);
-  } finally {
-    f.restore();
-  }
+  const parsed = combo.inputSchema.parse({
+    legs: [
+      { contractId: '111', requiredOutcome: 'Yes' },
+      { contractId: '222', requiredOutcome: 'No' },
+    ],
+  });
+  const result = await combo.handler(parsed);
+  const text = textOf(result);
+
+  assert.ok(!result.isError, `expected success, got: ${text}`);
+  assert.match(text, /"alreadyExisted": true/);
+  assert.doesNotMatch(text, /"alreadyExisted": false/);
 });
-
