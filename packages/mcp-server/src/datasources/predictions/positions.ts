@@ -1,5 +1,4 @@
 import type { SdkClient } from '../../client/sdk.js';
-import { withAccountScope } from '../../client/sdk.js';
 import type {
   PositionsResponse,
   SettledPositionsResponse,
@@ -75,7 +74,7 @@ export async function getPositions(
   client: SdkClient,
   opts: GetPositionsOptions = {}
 ): Promise<PositionsResponse> {
-  const result = await client.predictions.getPositions(withAccountScope(opts));
+  const result = await client.predictions.getPositions(opts);
   return { positions: (result.positions ?? []).map(mapPosition) };
 }
 
@@ -83,7 +82,7 @@ export async function getSettledPositions(
   client: SdkClient,
   opts: GetSettledPositionsOptions = {}
 ): Promise<SettledPositionsResponse> {
-  const result = await client.predictions.getSettledPositions(withAccountScope(opts));
+  const result = await client.predictions.getSettledPositions(opts);
   return {
     positions: result.positions?.map(mapSettledPosition),
     cashOuts: result.cashOuts?.map(mapCashedOutPosition),
