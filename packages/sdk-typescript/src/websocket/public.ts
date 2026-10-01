@@ -745,10 +745,11 @@ export class PublicGeminiWebSocket {
 }
 
 function normalizedSymbol(symbol: string): string {
-  if (!isBoundaryString(symbol) || symbol.length === 0) {
+  const normalized = isBoundaryString(symbol) ? symbol.trim().toLowerCase() : "";
+  if (normalized.length === 0) {
     throw new SdkError("symbol is required");
   }
-  return symbol.toLowerCase();
+  return normalized;
 }
 
 function streamSymbol(name: string): string | undefined {

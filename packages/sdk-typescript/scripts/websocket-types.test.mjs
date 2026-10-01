@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { addCompatibilityAliases } from "./websocket-compatibility.mjs";
+import { addCompatibilityAliases, addLegacySettlementTypes } from "./websocket-compatibility.mjs";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const sdkDir = resolve(scriptDir, "..");
@@ -89,4 +89,24 @@ test("RFQ compatibility alias follows generator-derived anonymous enum names", (
 
   const stableSource = source.replaceAll("AnonymousSchema_999", "AnonymousSchema_152");
   assert.equal(addCompatibilityAliases(stableSource), stableSource);
+});
+
+test("settlement compatibility declarations are appended separately and idempotently", () => {
+  const source = `export enum AnonymousSchema_999 {
+  FAILED = "FAILED",
+  FINALIZED = "FINALIZED",
+  DECLINED = "DECLINED",
+  CONFIRMED = "CONFIRMED",
+  ACCEPTED = "ACCEPTED",
+  RESERVED_CLOSED = "CLOSED",
+}`;
+  const rfqAlias = addCompatibilityAliases(source);
+
+  assert.doesNotMatch(rfqAlias, /\bSettlementUpdate\b/);
+
+  const withSettlementTypes = addLegacySettlementTypes(rfqAlias);
+  for (const name of ["SettlementUpdate", "Settlement", "AnonymousSchema_135"]) {
+    assert.match(withSettlementTypes, new RegExp(`export (?:interface|enum) ${name}\\b`));
+  }
+  assert.equal(addLegacySettlementTypes(withSettlementTypes), withSettlementTypes);
 });

@@ -11,6 +11,9 @@ staged_sdk="$staging_root/packages/sdk-go"
 consumer="$staging_root/consumer"
 mkdir -p "$(dirname "$staged_sdk")"
 cp -R "$sdk_root" "$staged_sdk"
+repo_root="$(cd "$sdk_root/../.." && pwd)"
+cp -R "$repo_root/specs" "$staging_root/specs"
+cp -R "$repo_root/conformance" "$staging_root/conformance"
 
 go test -C "$staged_sdk" ./...
 go test -C "$staged_sdk/websocket/gorilla" ./...

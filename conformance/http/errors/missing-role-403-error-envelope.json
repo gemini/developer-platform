@@ -1,0 +1,13 @@
+{
+  "id": "http/errors/missing-role-403-error-envelope",
+  "kind": "errorMapping",
+  "response": {
+    "status": 403,
+    "headers": { "content-type": "application/json" },
+    "body": "{\"error\":\"MissingRole\",\"message\":\"OrderStatus required\"}"
+  },
+  "expect": {
+    "kind": "missing_role",
+    "reason": "MissingRole"
+  }
+}

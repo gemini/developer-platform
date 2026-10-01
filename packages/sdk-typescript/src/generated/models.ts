@@ -908,6 +908,7 @@ export interface components {
         };
         /** @description Contract quantity and price validation is instrument-specific. Clients must validate order quantities and prices against the returned increment and minimum fields rather than assuming a fixed grid. */
         Contract: {
+            totalShares?: string | null;
             id?: string;
             /** @description Human-readable label for the contract's YES-space proposition (e.g., "SOL > $90") */
             label?: string;
@@ -916,7 +917,6 @@ export interface components {
             /** @description Rich text description */
             description?: Record<string, never>;
             prices?: components["schemas"]["ContractPrices"];
-            totalShares?: string | null;
             color?: string | null;
             status?: components["schemas"]["MarketStatus"];
             imageUrl?: string | null;

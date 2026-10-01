@@ -1,0 +1,10 @@
+{
+  "id": "websocket/subscriptions/public-contract-status",
+  "kind": "wsSubscription",
+  "stream": "contractStatus",
+  "symbol": "BTCUSD",
+  "expect": {
+    "method": "SUBSCRIBE",
+    "params": ["contractStatus"]
+  }
+}

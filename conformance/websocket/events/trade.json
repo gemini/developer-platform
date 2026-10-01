@@ -1,0 +1,21 @@
+{
+  "id": "websocket/events/trade",
+  "kind": "wsEvent",
+  "stream": "trades",
+  "symbol": "BTCUSD",
+  "frame": "{\"e\":\"trade\",\"E\":1700000000000,\"s\":\"btcusd\",\"t\":123456789,\"p\":\"1000.00\",\"q\":\"0.25\",\"m\":true}",
+  "expect": {
+    "fields": {
+      "e": { "text": "trade", "compare": "exact" },
+      "E": { "text": "1700000000000", "compare": "exact" },
+      "s": { "text": "BTCUSD", "compare": "caseInsensitive" },
+      "t": { "text": "123456789", "compare": "exact" },
+      "p": { "text": "1000.00", "compare": "exact" },
+      "q": { "text": "0.25", "compare": "exact" },
+      "m": { "text": "true", "compare": "exact" }
+    }
+  },
+  "exceptions": [
+    "ws-inbound-symbol-case"
+  ]
+}

@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - "packages/sdk-typescript/**"
+      - "specs/**"
+      - "conformance/**"
       - ".github/workflows/validate-typescript-sdk.yml"
 
 permissions:

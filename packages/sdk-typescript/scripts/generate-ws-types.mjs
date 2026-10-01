@@ -4,7 +4,7 @@
 //
 // Usage: node scripts/generate-ws-types.mjs [outputDir] [specPath]
 //   outputDir defaults to src/generated/websocket
-//   specPath defaults to fetching from https://developer.gemini.com/specs/asyncapi/websocket.yaml
+//   specPath defaults to the vendored websocket specification
 //
 // Why a script instead of `asyncapi generate models`: the Gemini WS protocol
 // uses case-distinct single-letter keys (e vs E, u vs U). Modelina's default
@@ -19,29 +19,22 @@ import {
 } from "@asyncapi/modelina";
 import { parse } from "yaml";
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, resolve, join } from "node:path";
-import { loadPublishedSpecText } from "./spec-sources.mjs";
-import { addCompatibilityAliases } from "./websocket-compatibility.mjs";
-
-const PUBLISHED_SPEC_URL = "https://developer.gemini.com/specs/asyncapi/websocket.yaml";
+import { loadVendoredSpecText } from "./spec-sources.mjs";
+import { addCompatibilityAliases, addLegacySettlementTypes } from "./websocket-compatibility.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, "..");
-const outDirs = [process.argv[2] ?? join(root, "src", "generated", "websocket")].map(d => resolve(root, d));
 
-async function loadSpec() {
-  const specPath = process.argv[3];
-  if (specPath?.startsWith("http://") || specPath?.startsWith("https://")) {
-    return parse(await loadPublishedSpecText(specPath));
-  }
+async function loadSpec(specPath) {
   if (specPath) {
     return parse(readFileSync(resolve(specPath), "utf8"));
   }
-  console.log(`Fetching spec from ${PUBLISHED_SPEC_URL}`);
-  return parse(await loadPublishedSpecText(PUBLISHED_SPEC_URL));
+  return parse(await loadVendoredSpecText("websocket"));
 }
 
+export async function generateWebSocketTypes({ specPath, outputDir }) {
 // JSON Schema's default is `additionalProperties: true`. Modelina renders an
 // explicit `additionalProperties: true` marker as a literal nested property,
 // even when the object already declares its wire fields. Normalize only those
@@ -169,27 +162,34 @@ function refineRfqLegSymbol(source) {
 
 // Modelina's library output doesn't prefix declarations with `export`; add it
 // so the barrel file exports every type.
-const body = refineRfqLegSymbol(
-  addCompatibilityAliases(refineKnownMethodLiterals(
-    models
-      .map((m) => m.result)
-      .join("\n\n")
-      .replace(/^(interface |enum |type )/gm, "export $1"),
-  )),
-);
+  const body = addLegacySettlementTypes(
+    refineRfqLegSymbol(
+      addCompatibilityAliases(refineKnownMethodLiterals(
+        models
+          .map((m) => m.result)
+          .join("\n\n")
+          .replace(/^(interface |enum |type )/gm, "export $1"),
+      )),
+    ),
+  );
 
-if (/\bany\b/.test(body)) {
-  throw new Error("generate-ws-types: generated output must not expose any.");
-}
-if (/\bMap\s*</.test(body)) {
-  throw new Error("generate-ws-types: generated JSON objects must use Record, not Map.");
-}
-if (/^\s*additionalProperties\??:/m.test(body)) {
-  throw new Error("generate-ws-types: additionalProperties must not be emitted as a wire field.");
-}
+  if (/\bany\b/.test(body)) {
+    throw new Error("generate-ws-types: generated output must not expose any.");
+  }
+  if (/\bMap\s*</.test(body)) {
+    throw new Error("generate-ws-types: generated JSON objects must use Record, not Map.");
+  }
+  if (/^\s*additionalProperties\??:/m.test(body)) {
+    throw new Error("generate-ws-types: additionalProperties must not be emitted as a wire field.");
+  }
 
-for (const outDir of outDirs) {
+  const outDir = resolve(outputDir);
   mkdirSync(outDir, { recursive: true });
-  writeFileSync(join(outDir, "index.ts"), banner + body + "\n");
+  writeFileSync(join(outDir, "index.ts"), banner + body.trimEnd() + "\n");
   console.log(`Wrote ${models.length} model(s) to ${join(outDir, "index.ts")}`);
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const outputDir = resolve(process.argv[2] ?? join(root, "src", "generated", "websocket"));
+  await generateWebSocketTypes({ specPath: process.argv[3], outputDir });
 }

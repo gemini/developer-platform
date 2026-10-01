@@ -1,0 +1,86 @@
+{
+  "version": 1,
+  "suites": [
+    {
+      "id": "http/hmac-requests",
+      "kind": "hmacRequest",
+      "cases": [
+        "private-post-with-body",
+        "private-post-empty-body",
+        "private-post-wide-integer",
+        "websocket-upgrade-nonce"
+      ]
+    },
+    {
+      "id": "http/unsigned-requests",
+      "kind": "unsignedRequest",
+      "cases": [
+        "market-data-ticker",
+        "market-data-order-book-limits",
+        "prediction-markets-list-events-filters"
+      ]
+    },
+    {
+      "id": "http/errors",
+      "kind": "errorMapping",
+      "cases": [
+        "invalid-nonce-400",
+        "missing-role-403-result-envelope",
+        "missing-role-403-error-envelope",
+        "terms-required-400-must-accept",
+        "terms-required-400-accept-terms-required",
+        "insufficient-funds-406",
+        "rate-limited-429-retry-after",
+        "order-not-found-404",
+        "market-closed-400",
+        "server-error-500-unstructured",
+        "not-found-404-empty-body"
+      ]
+    },
+    {
+      "id": "json",
+      "kind": "jsonDecoding",
+      "cases": [
+        "wide-integer-unsafe",
+        "wide-integer-safe",
+        "decimal-string-exact",
+        "decimal-number-exact"
+      ]
+    },
+    {
+      "id": "websocket/subscriptions",
+      "kind": "wsSubscription",
+      "cases": [
+        "public-trades",
+        "public-trades-untrimmed-symbol",
+        "public-book-ticker",
+        "public-depth-diff",
+        "public-depth-diff-interval",
+        "public-partial-depth-20",
+        "public-contract-status",
+        "private-orders-session",
+        "private-balances-interval"
+      ]
+    },
+    {
+      "id": "websocket/events",
+      "kind": "wsEvent",
+      "cases": [
+        "trade",
+        "depth-unsafe-last-update-id",
+        "order-update",
+        "balance-update"
+      ]
+    }
+  ],
+  "exceptions": [
+    "rest-nonce-json-type",
+    "rest-payload-key-order",
+    "ws-subscription-id-scope",
+    "ws-inbound-symbol-case",
+    "int64-static-typing",
+    "http-406-insufficient-funds",
+    "rest-query-signing",
+    "candle-timeframe-spelling"
+  ]
+}

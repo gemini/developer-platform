@@ -4,15 +4,14 @@ import { resolve } from "node:path";
 import openapiTS, { astToString } from "openapi-typescript";
 import ts from "typescript";
 import { parse } from "yaml";
-import { loadPublishedSpecText } from "./spec-sources.mjs";
+import { loadVendoredSpecText, SPEC_IDS } from "./spec-sources.mjs";
 
 const HTTP_METHODS = ["get", "post", "put", "patch", "delete"];
 const RESERVED_HEADERS = new Set(["accept", "authorization", "content-length", "content-type", "cache-control"]);
 
 export async function loadOpenApiDocument(specPathOrUrl) {
-  if (specPathOrUrl.startsWith("http://") || specPathOrUrl.startsWith("https://")) {
-    console.log(`Fetching spec from ${specPathOrUrl}`);
-    return parse(await loadPublishedSpecText(specPathOrUrl));
+  if (SPEC_IDS.includes(specPathOrUrl)) {
+    return parse(await loadVendoredSpecText(specPathOrUrl));
   }
   return parse(await readFile(specPathOrUrl, "utf8"));
 }
@@ -581,6 +580,26 @@ export function renderRestClient(operations, options) {
     `}\n`;
 }
 
+function preserveContractTotalShares(source) {
+  const marker = /^([ \t]*)Contract: \{\r?\n/m.exec(source);
+  if (!marker) return source;
+
+  const bodyStart = marker.index + marker[0].length;
+  const closingMarker = `\n${marker[1]}};`;
+  const bodyEnd = source.indexOf(closingMarker, bodyStart);
+  if (bodyEnd === -1) return source;
+
+  const body = source.slice(bodyStart, bodyEnd);
+  if (/^[ \t]*totalShares\??\s*:/m.test(body)) return source;
+
+  const newline = source.includes("\r\n") ? "\r\n" : "\n";
+  return (
+    source.slice(0, bodyStart) +
+    `${marker[1]}    totalShares?: string | null;${newline}` +
+    source.slice(bodyStart)
+  );
+}
+
 export async function renderModels(document, banner) {
   const BIGINT = ts.factory.createKeywordTypeNode(ts.SyntaxKind.BigIntKeyword);
   const NULL = ts.factory.createLiteralTypeNode(ts.factory.createNull());
@@ -592,7 +611,7 @@ export async function renderModels(document, banner) {
       }
     },
   });
-  return `${banner}${astToString(ast).trimEnd()}\n`;
+  return `${banner}${preserveContractTotalShares(astToString(ast).trimEnd())}\n`;
 }
 
 export async function generateOpenApiRestTypes(options) {

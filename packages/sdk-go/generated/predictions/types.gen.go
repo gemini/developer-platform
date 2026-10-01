@@ -1523,6 +1523,8 @@ type ComboWriteError struct {
 
 // Contract Contract quantity and price validation is instrument-specific. Clients must validate order quantities and prices against the returned increment and minimum fields rather than assuming a fixed grid.
 type Contract struct {
+	// TotalShares Total shares available for the contract.
+	TotalShares *string `json:"totalShares,omitempty"`
 	// AbbreviatedName Short form label (e.g., ">$90")
 	AbbreviatedName *string    `json:"abbreviatedName,omitempty"`
 	Color           *string    `json:"color,omitempty"`
@@ -1582,7 +1584,6 @@ type Contract struct {
 	Strike                *Strike `json:"strike,omitempty"`
 	TermsAndConditionsUrl *string `json:"termsAndConditionsUrl,omitempty"`
 	Ticker                *string `json:"ticker,omitempty"`
-	TotalShares           *string `json:"totalShares,omitempty"`
 }
 
 // ContractMarketState Trading state of the contract

@@ -54,10 +54,10 @@ var sdkWebSocketCoverage = map[string]websocketCoverage{
 }
 
 func TestAsyncAPIWebSocketCoverageManifest(t *testing.T) {
-	specURL := websocketSpecURL
-	raw, err := loadPublishedSpec(specURL)
+	specID := websocketSpecID
+	raw, err := loadVendoredSpec(specID)
 	if err != nil {
-		t.Fatalf("reading websocket spec %s: %v", specURL, err)
+		t.Fatalf("reading websocket spec %s: %v", specID, err)
 	}
 	var root struct {
 		XGeminiCoverage struct {

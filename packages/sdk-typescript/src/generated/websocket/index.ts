@@ -123,6 +123,7 @@ export interface RfqSubmitQuoteParams {
   price: string;
   quantity: string;
   validUntil?: number | bigint;
+  clientId?: string;
 }
 
 export interface RfqWithdrawQuoteRequest {
@@ -335,24 +336,13 @@ export interface NamedAmount {
   t: string;
   v: string;
   c?: string;
+  o?: AnonymousSchema_132;
 }
 
-export interface SettlementUpdate {
-  type: 'settlements';
-  settlements: Settlement[];
-}
-
-export interface Settlement {
-  symbol: string;
-  position: string;
-  payout?: string;
-  outcome: AnonymousSchema_135;
-}
-
-export enum AnonymousSchema_135 {
-  YES = "yes",
-  NO = "no",
-  UNSPECIFIED = "unspecified",
+export enum AnonymousSchema_132 {
+  YES = "YES",
+  NO = "NO",
+  UNSPECIFIED = "UNSPECIFIED",
 }
 
 export interface ContractStatus {
@@ -384,11 +374,11 @@ export interface RfqPublicEvent {
 
 export interface RfqLeg {
   c: string;
-  o: AnonymousSchema_148;
+  o: AnonymousSchema_145;
   s?: string;
 }
 
-export enum AnonymousSchema_148 {
+export enum AnonymousSchema_145 {
   YES = "YES",
   NO = "NO",
 }
@@ -409,7 +399,7 @@ export interface RfqPrivateDelivery {
   i: string;
   E: number | bigint;
   r: string;
-  x: AnonymousSchema_153;
+  x: AnonymousSchema_150;
   S: RfqLifecycleState;
   q?: string;
   p?: string;
@@ -418,7 +408,7 @@ export interface RfqPrivateDelivery {
   vu?: number | bigint;
 }
 
-export enum AnonymousSchema_153 {
+export enum AnonymousSchema_150 {
   RESERVED_CLOSED = "CLOSED",
   ACCEPTED = "ACCEPTED",
   CONFIRMED = "CONFIRMED",
@@ -435,5 +425,23 @@ export enum RfqQuoteStatus {
   LOST = "LOST",
 }
 
-/** @deprecated Use AnonymousSchema_153. */
-export { AnonymousSchema_153 as AnonymousSchema_152 };
+/** @deprecated Use AnonymousSchema_150. */
+export { AnonymousSchema_150 as AnonymousSchema_152 };
+
+export interface SettlementUpdate {
+  type: 'settlements';
+  settlements: Settlement[];
+}
+
+export interface Settlement {
+  symbol: string;
+  position: string;
+  payout?: string;
+  outcome: AnonymousSchema_135;
+}
+
+export enum AnonymousSchema_135 {
+  YES = "yes",
+  NO = "no",
+  UNSPECIFIED = "unspecified",
+}

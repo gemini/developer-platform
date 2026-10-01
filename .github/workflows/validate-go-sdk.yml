@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - "packages/sdk-go/**"
+      - "specs/**"
+      - "conformance/**"
       - ".github/workflows/validate-go-sdk.yml"
       - ".github/workflows/release-go-sdk.yml"
 

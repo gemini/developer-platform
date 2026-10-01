@@ -1,0 +1,78 @@
+version: 1
+
+# Raw-byte format aliases applied before the document is parsed.
+formatAliases:
+  appliesTo: [go]
+  reason: >-
+    openapi-typescript maps the unaliased formats to `number`; widening the
+    published TypeScript types to bigint would break @gemini-markets/sdk
+    consumers. Go rewrites them so wire-wide integers never land on a
+    platform-sized int.
+  rules:
+    - from: long
+      to: int64
+    - from: integer
+      to: int64
+
+# `format: decimal` runtime representation per language.
+decimalFormat:
+  appliesTo: [go, typescript]
+  format: decimal
+  go:
+    numberSchema: types.DecimalNumber
+    stringSchema: types.Decimal
+    importPath: github.com/gemini/developer-platform/packages/sdk-go/types
+    importAlias: types
+  typescript:
+    numberSchema: number
+    stringSchema: string
+    exactArithmetic: src/utils/decimal.ts
+
+# Identifier/timestamp fields whose wire values exceed a platform int.
+# Matched against schema property names AND parameter names; schemas with
+# allOf/anyOf/oneOf keep their declared unions.
+wideIntegers:
+  appliesTo: [go]
+  reason: >-
+    TypeScript preserves exactness at parse time (parseLosslessJson promotes
+    unsafe integers to bigint), so it needs no name list; widening the generated
+    static types would break the published package.
+  matches: [schemaProperty, parameterName]
+  skipComposedSchemas: true
+  properties:
+    - cancelRejects
+    - cancelledOrders
+    - eid
+    - last_updated_ms
+    - order_id
+    - quoteId
+    - since_tid
+    - tid
+    - timestamp_nanos
+    - timestampms
+    - txTime
+
+# Unsigned 64-bit request fields, declared by the specification itself.
+unsignedIntegers:
+  appliesTo: [go, typescript]
+  extension: x-unsigned-int64
+  locations:
+    - schema: CancelOrderRequest
+      property: order_id
+    - schema: OrderStatusRequest
+      property: order_id
+
+# Overrides the published specification cannot express.
+schemaOverrides:
+  appliesTo: [go]
+  reason: >-
+    Go needs an explicit exact-decimal or int64 type where the specification
+    declares a bare JSON number; TypeScript keeps the generated number/string.
+  decimalFields:
+    - schema: Balance
+      properties: [amount, available, availableForWithdrawal, pendingWithdrawal, pendingDeposit]
+  int64Fields:
+    - schema: NewOrderRequest
+      property: nonce
+  int64OneOfVariants:
+    - schema: Nonce

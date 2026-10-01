@@ -1,0 +1,13 @@
+{
+  "id": "http/errors/market-closed-400",
+  "kind": "errorMapping",
+  "response": {
+    "status": 400,
+    "headers": { "content-type": "application/json" },
+    "body": "{\"result\":\"error\",\"reason\":\"MarketClosed\",\"message\":\"Market is closed\"}"
+  },
+  "expect": {
+    "kind": "market_closed",
+    "reason": "MarketClosed"
+  }
+}
