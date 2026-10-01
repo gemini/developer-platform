@@ -1,0 +1,10 @@
+{
+  "id": "websocket/subscriptions/public-depth-diff",
+  "kind": "wsSubscription",
+  "stream": "depthUpdates",
+  "symbol": "BTCUSD",
+  "expect": {
+    "method": "SUBSCRIBE",
+    "params": ["btcusd@depth"]
+  }
+}

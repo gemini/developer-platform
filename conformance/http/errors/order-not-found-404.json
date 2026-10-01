@@ -1,0 +1,13 @@
+{
+  "id": "http/errors/order-not-found-404",
+  "kind": "errorMapping",
+  "response": {
+    "status": 404,
+    "headers": { "content-type": "application/json" },
+    "body": "{\"result\":\"error\",\"reason\":\"OrderNotFound\",\"message\":\"Order not found\"}"
+  },
+  "expect": {
+    "kind": "order_not_found",
+    "reason": "OrderNotFound"
+  }
+}

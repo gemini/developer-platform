@@ -1,0 +1,10 @@
+{
+  "id": "json/decimal-number-exact",
+  "kind": "jsonDecoding",
+  "raw": "{\"v\":0.00000001}",
+  "field": "v",
+  "expect": {
+    "valueKind": "decimal",
+    "text": "0.00000001"
+  }
+}

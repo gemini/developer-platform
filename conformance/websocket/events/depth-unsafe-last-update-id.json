@@ -1,0 +1,16 @@
+{
+  "id": "websocket/events/depth-unsafe-last-update-id",
+  "kind": "wsEvent",
+  "stream": "depthUpdates",
+  "symbol": "BTCUSD",
+  "frame": "{\"e\":\"depthUpdate\",\"E\":1700000000000,\"s\":\"BTCUSD\",\"U\":9007199254740993,\"u\":9007199254740994,\"b\":[],\"a\":[]}",
+  "expect": {
+    "fields": {
+      "e": { "text": "depthUpdate", "compare": "exact" },
+      "E": { "text": "1700000000000", "compare": "exact" },
+      "s": { "text": "BTCUSD", "compare": "caseInsensitive" },
+      "U": { "text": "9007199254740993", "compare": "exact" },
+      "u": { "text": "9007199254740994", "compare": "exact" }
+    }
+  }
+}

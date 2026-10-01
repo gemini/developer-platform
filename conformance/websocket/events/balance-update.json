@@ -1,0 +1,13 @@
+{
+  "id": "websocket/events/balance-update",
+  "kind": "wsEvent",
+  "stream": "balances",
+  "frame": "{\"e\":\"balanceUpdate\",\"E\":1700000000000,\"u\":1700000000001,\"B\":[{\"a\":\"USD\",\"f\":\"100.00\",\"c\":\"100.00\"}]}",
+  "expect": {
+    "fields": {
+      "e": { "text": "balanceUpdate", "compare": "exact" },
+      "E": { "text": "1700000000000", "compare": "exact" },
+      "u": { "text": "1700000000001", "compare": "exact" }
+    }
+  }
+}

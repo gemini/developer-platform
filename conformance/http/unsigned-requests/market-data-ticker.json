@@ -1,0 +1,14 @@
+{
+  "id": "http/unsigned-requests/market-data-ticker",
+  "kind": "unsignedRequest",
+  "operation": "marketData.getTicker",
+  "input": {
+    "symbol": "BTCUSD"
+  },
+  "expect": {
+    "method": "GET",
+    "path": "/v1/pubticker/BTCUSD",
+    "query": {},
+    "authHeaders": []
+  }
+}

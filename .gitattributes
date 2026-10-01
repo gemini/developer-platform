@@ -1,1 +1,3 @@
 *.go text eol=lf
+specs/** -text
+conformance/** text eol=lf

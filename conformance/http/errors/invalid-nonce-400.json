@@ -1,0 +1,13 @@
+{
+  "id": "http/errors/invalid-nonce-400",
+  "kind": "errorMapping",
+  "response": {
+    "status": 400,
+    "headers": { "content-type": "application/json" },
+    "body": "{\"result\":\"error\",\"reason\":\"InvalidNonce\",\"message\":\"Nonce must be greater than the previous nonce\"}"
+  },
+  "expect": {
+    "kind": "invalid_nonce",
+    "reason": "InvalidNonce"
+  }
+}
