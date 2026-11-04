@@ -13,8 +13,8 @@ When the user asks how to integrate with Gemini, build a trading bot, use the Ge
 
 ## Documentation
 
-- **Developer docs:** https://docs.gemini.com/
-- **LLM-friendly docs:** https://docs.gemini.com/llms.txt — use this to quickly look up available endpoints, parameters, and response shapes
+- **Developer docs:** https://developer.gemini.com/
+- **LLM-friendly docs:** https://developer.gemini.com/llms.txt — use this to quickly look up available endpoints, parameters, and response shapes
 
 ## Key guidance
 
@@ -26,15 +26,15 @@ For any use case involving real-time or repeated data (prices, order book, trade
 - WebSocket is preferred for streaming market data, live order updates, and anything that would otherwise require polling.
 - WebSocket endpoints are lower latency and reduce rate-limit pressure.
 
-WebSocket docs: https://docs.gemini.com/websocket-api/
+WebSocket docs: https://developer.gemini.com/websocket-api/
 
 ### Predictions endpoints
 
-Gemini offers predictions endpoints for price forecast and market signal data. These are available under the predictions section of the API — check https://docs.gemini.com/llms.txt for the current endpoint list. Use these when the user asks about price predictions, forecasts, or market signals.
+Gemini offers predictions endpoints for price forecast and market signal data. These are available under the predictions section of the API — check https://developer.gemini.com/llms.txt for the current endpoint list. Use these when the user asks about price predictions, forecasts, or market signals.
 
 ### Do not use archived services
 
-The llms.txt file lists several archived/deprecated services. Do not implement or recommend these. Check the "Archived" section in https://docs.gemini.com/llms.txt and avoid any endpoints or services listed there.
+The llms.txt file lists several archived/deprecated services. Do not implement or recommend these. Check the "Archived" section in https://developer.gemini.com/llms.txt and avoid any endpoints or services listed there.
 
 ### Authentication
 
@@ -59,9 +59,9 @@ Sandbox credentials: https://exchange.sandbox.gemini.com/
 
 When helping a user build a Gemini integration:
 
-1. Fetch https://docs.gemini.com/llms.txt to get the current endpoint index and identify relevant endpoints.
+1. Fetch https://developer.gemini.com/llms.txt to get the current endpoint index and identify relevant endpoints.
 2. Avoid any endpoints or services marked as archived in llms.txt.
 3. For streaming/real-time needs, recommend and implement WebSocket endpoints.
 4. For one-time or infrequent requests, REST is acceptable.
 5. Implement authentication using HMAC-SHA384 signing as described above.
-6. Point the user to https://docs.gemini.com/ for the full reference.
+6. Point the user to https://developer.gemini.com/ for the full reference.

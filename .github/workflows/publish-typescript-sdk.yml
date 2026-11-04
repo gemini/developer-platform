@@ -1,0 +1,432 @@
+name: Tag and Publish TypeScript SDK
+
+on:
+  # Run from the trusted base-branch workflow after merge; never execute PR
+  # code while handling the release credentials.
+  pull_request_target:
+    types:
+      - closed
+    branches:
+      - main
+    paths:
+      - packages/sdk-typescript/package.json
+  # Keep publishing on a tag ref so environment branch policies and npm
+  # provenance both describe the immutable release marker.
+  push:
+    tags:
+      - "typescript-sdk-v*"
+  # GITHUB_TOKEN-created tags do not start a push workflow, so the tag job
+  # dispatches this workflow again with the release tag as its ref.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: >-
+    ${{ github.event_name == 'pull_request_target'
+      && format('release-typescript-sdk-tag-{0}', github.event.pull_request.number)
+      || format('release-typescript-sdk-publish-{0}', github.ref_name) }}
+  cancel-in-progress: false
+
+jobs:
+  tag:
+    if: github.event_name == 'pull_request_target' && github.event.pull_request.merged == true
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      actions: write
+      pull-requests: read
+    steps:
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22.14.0"
+
+      - name: Read merged package metadata
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+        run: |
+          set -euo pipefail
+
+          # A package.json change is not enough to release; the version line
+          # must change, and all metadata comes from the exact merge commit.
+          test "$REPOSITORY" = "gemini/developer-platform"
+          [[ "$PR_NUMBER" =~ ^[0-9]+$ ]]
+          [[ "$MERGE_SHA" =~ ^[0-9a-f]{40}$ ]]
+
+          changed_files="$RUNNER_TEMP/changed-files.json"
+          gh api \
+            --paginate \
+            --slurp \
+            "repos/${REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100" \
+            > "$changed_files"
+
+          jq -e '
+            flatten |
+            any(.[];
+              .filename == "packages/sdk-typescript/package.json" and
+              ((.patch // "") | test("(?m)^-\\s*\"version\"\\s*:")) and
+              ((.patch // "") | test("(?m)^\\+\\s*\"version\"\\s*:"))
+            )
+          ' "$changed_files" > /dev/null
+
+          package_json="$RUNNER_TEMP/package.json"
+          package_lock="$RUNNER_TEMP/package-lock.json"
+          gh api \
+            "repos/${REPOSITORY}/contents/packages/sdk-typescript/package.json?ref=${MERGE_SHA}" \
+            --jq '.content' | tr -d '\n' | base64 --decode > "$package_json"
+          gh api \
+            "repos/${REPOSITORY}/contents/packages/sdk-typescript/package-lock.json?ref=${MERGE_SHA}" \
+            --jq '.content' | tr -d '\n' | base64 --decode > "$package_lock"
+
+          version="$(node - "$package_json" "$package_lock" <<'NODE'
+          const fs = require("node:fs");
+
+          const [packagePath, lockPath] = process.argv.slice(2);
+          const packageJson = JSON.parse(fs.readFileSync(packagePath, "utf8"));
+          const packageLock = JSON.parse(fs.readFileSync(lockPath, "utf8"));
+          const versionPattern = /^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
+
+          if (packageJson.name !== "@gemini-markets/sdk") {
+            throw new Error(`unexpected package name: ${packageJson.name}`);
+          }
+          if (typeof packageJson.version !== "string" || !versionPattern.test(packageJson.version)) {
+            throw new Error(`invalid stable package version: ${packageJson.version}`);
+          }
+          if (packageLock.name !== packageJson.name || packageLock.packages?.[""]?.version !== packageJson.version) {
+            throw new Error("package-lock.json does not match package.json");
+          }
+
+          process.stdout.write(packageJson.version);
+          NODE
+          )"
+          printf 'tag=typescript-sdk-v%s\n' "$version" >> "$GITHUB_OUTPUT"
+
+      - name: Create release tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          API_URL: ${{ github.api_url }}
+          REPOSITORY: ${{ github.repository }}
+          TAG: ${{ steps.release.outputs.tag }}
+          MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+        run: |
+          set -euo pipefail
+
+          node <<'NODE'
+          (async () => {
+          const apiUrl = process.env.API_URL;
+          const repository = process.env.REPOSITORY;
+          const tag = process.env.TAG;
+          const mergeSha = process.env.MERGE_SHA;
+          const token = process.env.GH_TOKEN;
+          const headers = {
+            accept: "application/vnd.github+json",
+            authorization: `Bearer ${token}`,
+            "x-github-api-version": "2022-11-28",
+          };
+
+          if (!/^typescript-sdk-v(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/.test(tag)) {
+            throw new Error(`invalid stable release tag: ${tag}`);
+          }
+          if (!/^[0-9a-f]{40}$/.test(mergeSha)) {
+            throw new Error(`invalid release commit: ${mergeSha}`);
+          }
+
+          const request = async (path, options = {}) => {
+            const response = await fetch(`${apiUrl}${path}`, {
+              ...options,
+              headers: { ...headers, ...(options.headers ?? {}) },
+            });
+            const body = await response.text();
+            let data;
+            try {
+              data = body ? JSON.parse(body) : undefined;
+            } catch {
+              data = body;
+            }
+            if (!response.ok) {
+              throw new Error(`GitHub API ${response.status} for ${path}: ${JSON.stringify(data)}`);
+            }
+            return data;
+          };
+
+          const refPath = `/repos/${repository}/git/ref/tags/${encodeURIComponent(tag)}`;
+          const existingResponse = await fetch(`${apiUrl}${refPath}`, { headers });
+          if (existingResponse.ok) {
+            const existingRef = await existingResponse.json();
+            if (existingRef.object.type !== "tag") {
+              throw new Error(`release tag is not annotated: ${tag}`);
+            }
+            const existingCommit = (await request(`/repos/${repository}/git/tags/${existingRef.object.sha}`)).object.sha;
+            if (existingCommit !== mergeSha) {
+              throw new Error(`release tag already points to ${existingCommit}, expected ${mergeSha}`);
+            }
+            console.log(`release tag already points to ${mergeSha}: ${tag}`);
+          } else {
+            if (existingResponse.status !== 404) {
+              throw new Error(`GitHub API ${existingResponse.status} while checking ${tag}`);
+            }
+
+            const tagObject = await request(`/repos/${repository}/git/tags`, {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                tag,
+                message: `Release TypeScript SDK ${tag}`,
+                object: mergeSha,
+                type: "commit",
+                tagger: {
+                  name: "github-actions[bot]",
+                  email: "41898282+github-actions[bot]@users.noreply.github.com",
+                  date: new Date().toISOString(),
+                },
+              }),
+            });
+            await request(`/repos/${repository}/git/refs`, {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ ref: `refs/tags/${tag}`, sha: tagObject.sha }),
+            });
+            console.log(`created release tag ${tag} for ${mergeSha}`);
+          }
+          })().catch((error) => {
+            console.error(error);
+            process.exitCode = 1;
+          });
+          NODE
+
+      - name: Dispatch tag-based publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+        run: gh workflow run publish-typescript-sdk.yml --repo "$REPOSITORY" --ref "$RELEASE_TAG"
+
+  build:
+    if: >-
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+      github.ref_type == 'tag' &&
+      startsWith(github.ref_name, 'typescript-sdk-v')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: packages/sdk-typescript
+
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22.14.0"
+          cache: npm
+          cache-dependency-path: packages/sdk-typescript/package-lock.json
+
+      - name: Verify release tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_COMMIT: ${{ github.sha }}
+          RELEASE_REF_TYPE: ${{ github.ref_type }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          test "$RELEASE_REF_TYPE" = tag
+
+          tag_ref="repos/${REPOSITORY}/git/ref/tags/${RELEASE_TAG}"
+          test "$(gh api "$tag_ref" --jq '.object.type')" = tag
+          tag_object="$(gh api "$tag_ref" --jq '.object.sha')"
+          tagged_commit="$(gh api "repos/${REPOSITORY}/git/tags/${tag_object}" --jq '.object.sha')"
+          test "$tagged_commit" = "$RELEASE_COMMIT"
+
+          tag_version="${RELEASE_TAG#typescript-sdk-v}"
+          package_version="$(node -p "JSON.parse(require('fs').readFileSync('package.json', 'utf8')).version")"
+          test "$RELEASE_TAG" != "$tag_version"
+          test "$tag_version" = "$package_version"
+
+      - name: Verify release commit is on main
+        run: git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+
+      - run: npm ci --ignore-scripts
+      - name: Install required native tools
+        run: npm rebuild esbuild workerd --foreground-scripts
+      - run: npm audit --audit-level=high
+      - run: npm audit --omit=dev --audit-level=high
+      - run: npm test
+      - run: npm run typecheck
+      - run: npm run verify:package
+      - run: npm run verify:runtimes
+
+      - name: Pack verified SDK
+        run: |
+          mkdir -p "$RUNNER_TEMP/sdk-package"
+          npm pack --pack-destination "$RUNNER_TEMP/sdk-package"
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: typescript-sdk-package
+          path: ${{ runner.temp }}/sdk-package/*.tgz
+          if-no-files-found: error
+          retention-days: 7
+
+  preflight:
+    if: >-
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+      github.ref_type == 'tag' &&
+      startsWith(github.ref_name, 'typescript-sdk-v')
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+
+    steps:
+      # Do not check out the tagged repository here. This job only uses the
+      # trusted workflow and GitHub's read APIs to detect release-control drift.
+      - name: Verify GitHub release controls
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          node <<'NODE'
+          const { execFileSync } = require("node:child_process");
+
+          const repository = process.env.GITHUB_REPOSITORY;
+          if (repository !== "gemini/developer-platform") {
+            throw new Error(`unexpected repository: ${repository}`);
+          }
+
+          const api = (path) => JSON.parse(execFileSync(
+            "gh",
+            ["api", path, "-H", "X-GitHub-Api-Version: 2022-11-28"],
+            { encoding: "utf8" },
+          ));
+          const fail = (message) => {
+            throw new Error(`release preflight failed: ${message}`);
+          };
+
+          const rulesetSummaries = api(
+            "repos/gemini/developer-platform/rulesets?includes_parents=true&targets=tag&per_page=100",
+          );
+          if (!Array.isArray(rulesetSummaries)) fail("ruleset response was not an array");
+
+          const activeTagRulesets = rulesetSummaries.filter((ruleset) => (
+            ruleset.target === "tag" && ruleset.enforcement === "active"
+          ));
+          const rulesetConfigs = activeTagRulesets.map(({ id }) => api(
+            `repos/gemini/developer-platform/rulesets/${id}?includes_parents=true`,
+          ));
+          const matchingRulesets = rulesetConfigs.filter((ruleset) => (
+            ruleset.target === "tag" &&
+            ruleset.enforcement === "active" &&
+            ruleset.conditions?.ref_name?.include?.includes("refs/tags/typescript-sdk-v*")
+          ));
+          if (matchingRulesets.length !== 1) {
+            fail(`expected one active typescript-sdk-v* tag ruleset, found ${matchingRulesets.length}`);
+          }
+
+          const releaseRuleset = matchingRulesets[0];
+          const refName = releaseRuleset.conditions?.ref_name;
+          const sameValues = (actual, expected) => (
+            Array.isArray(actual) &&
+            actual.length === expected.length &&
+            [...actual].sort().every((value, index) => value === expected[index])
+          );
+          if (
+            !sameValues(refName?.include, ["refs/tags/typescript-sdk-v*"]) ||
+            !sameValues(refName?.exclude, [])
+          ) {
+            fail("tag ruleset ref condition is not exactly the SDK release tag condition");
+          }
+
+          const ruleTypes = new Set(releaseRuleset.rules?.map(({ type }) => type));
+          for (const requiredRule of ["creation", "update", "deletion"]) {
+            if (!ruleTypes.has(requiredRule)) fail(`tag ruleset is missing the ${requiredRule} rule`);
+          }
+
+          const environment = api("repos/gemini/developer-platform/environments/npm");
+          const requiredReviewers = environment.protection_rules?.filter(
+            ({ type }) => type === "required_reviewers",
+          ) ?? [];
+          if (
+            requiredReviewers.length !== 1 ||
+            !Array.isArray(requiredReviewers[0].reviewers) ||
+            requiredReviewers[0].reviewers.length === 0
+          ) {
+            fail("npm environment has no required reviewers");
+          }
+          if (requiredReviewers[0].prevent_self_review !== true) {
+            fail("npm environment allows self-approval");
+          }
+
+          console.log("GitHub release-control preflight passed");
+          NODE
+
+  publish:
+    if: >-
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+      github.ref_type == 'tag' &&
+      startsWith(github.ref_name, 'typescript-sdk-v')
+    needs: [build, preflight]
+    runs-on: ubuntu-24.04
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Verify provenance ref
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_COMMIT: ${{ github.sha }}
+          RELEASE_REF: ${{ github.ref }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          test "$RELEASE_REF" = "refs/tags/$RELEASE_TAG"
+          tag_ref="repos/${REPOSITORY}/git/ref/tags/${RELEASE_TAG}"
+          test "$(gh api "$tag_ref" --jq '.object.type')" = tag
+          tag_object="$(gh api "$tag_ref" --jq '.object.sha')"
+          tagged_commit="$(gh api "repos/${REPOSITORY}/git/tags/${tag_object}" --jq '.object.sha')"
+          test "$tagged_commit" = "$RELEASE_COMMIT"
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: typescript-sdk-package
+          path: ${{ runner.temp }}/sdk-package
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22.14.0"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Configure npm for Trusted Publishing
+        run: npm install --global --ignore-scripts npm@11.5.1
+
+      - name: Publish verified artifact
+        run: |
+          package_file="$(find "$RUNNER_TEMP/sdk-package" -type f -name '*.tgz' -print -quit)"
+          test -n "$package_file"
+          expected_version="${GITHUB_REF_NAME#typescript-sdk-v}"
+          node - "$package_file" "$expected_version" <<'NODE'
+          const { execFileSync } = require("node:child_process");
+          const [packageFile, expectedVersion] = process.argv.slice(2);
+          const metadata = JSON.parse(execFileSync("tar", ["-xOf", packageFile, "package/package.json"], { encoding: "utf8" }));
+          if (metadata.name !== "@gemini-markets/sdk" || metadata.version !== expectedVersion) {
+            throw new Error(`unexpected package identity: ${metadata.name}@${metadata.version}`);
+          }
+          NODE
+          npm publish "$package_file" --ignore-scripts --provenance

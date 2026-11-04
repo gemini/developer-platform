@@ -1,0 +1,7 @@
+# Local CLI build output.
+/bin/
+/gemini-markets
+/gemini-markets.exe
+
+# GoReleaser snapshot/release output.
+/dist/

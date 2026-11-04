@@ -1,0 +1,52 @@
+version: 2
+
+project_name: gemini-markets
+
+# Run GoReleaser from this module directory in a full repository checkout. The
+# root go.work resolves the CLI against the sibling SDK modules at this commit.
+before:
+  hooks:
+    - go mod verify
+
+builds:
+  - id: gemini-markets
+    main: ./cmd/gemini-markets
+    binary: gemini-markets
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X github.com/gemini/developer-platform/packages/gemini-markets-cli/internal/cli.Version={{ .Version }}
+    mod_timestamp: '{{ .CommitTimestamp }}'
+
+archives:
+  - id: gemini-markets
+    ids:
+      - gemini-markets
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+
+checksum:
+  name_template: '{{ .ProjectName }}_{{ .Version }}_checksums.txt'
+
+snapshot:
+  version_template: '{{ incpatch .Version }}-next'
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'

@@ -1,0 +1,39 @@
+name: Validate TypeScript SDK
+
+on:
+  pull_request:
+    paths:
+      - "packages/sdk-typescript/**"
+      - ".github/workflows/validate-typescript-sdk.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: packages/sdk-typescript
+
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22.14.0"
+          cache: npm
+          cache-dependency-path: packages/sdk-typescript/package-lock.json
+
+      - run: npm ci --ignore-scripts
+      - name: Install required native tools
+        run: npm rebuild esbuild workerd --foreground-scripts
+      - run: npm audit --audit-level=high
+      - run: npm audit --omit=dev --audit-level=high
+      - run: npm test
+      - run: npm run typecheck
+      - run: npm run verify:package
+      - run: npm run verify:runtimes

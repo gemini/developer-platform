@@ -232,13 +232,13 @@ The authenticated examples require Gemini API credentials.
 
 ## API Documentation
 
-- [Gemini API Documentation](https://docs.gemini.com/rest-api/)
-- [Public Ticker API](https://docs.gemini.com/rest-api/#ticker)
-- [Order Book API](https://docs.gemini.com/rest-api/#current-order-book)
-- [Trade History API](https://docs.gemini.com/rest-api/#trade-history)
-- [Price Feed API](https://docs.gemini.com/rest-api/#price-feed)
-- [WebSocket Market Data](https://docs.gemini.com/websocket-api/#market-data-v2)
-- [Private Endpoints](https://docs.gemini.com/rest-api/#authenticated-api-invocation)
+- [Gemini API Documentation](https://developer.gemini.com/rest-api/)
+- [Public Ticker API](https://developer.gemini.com/rest-api/#ticker)
+- [Order Book API](https://developer.gemini.com/rest-api/#current-order-book)
+- [Trade History API](https://developer.gemini.com/rest-api/#trade-history)
+- [Price Feed API](https://developer.gemini.com/rest-api/#price-feed)
+- [WebSocket Market Data](https://developer.gemini.com/websocket-api/#market-data-v2)
+- [Private Endpoints](https://developer.gemini.com/rest-api/#authenticated-api-invocation)
 
 ## Authentication
 

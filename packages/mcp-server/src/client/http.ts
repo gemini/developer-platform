@@ -23,6 +23,23 @@ const USER_AGENT = `gemini-mcp/${PKG_VERSION} (node/${process.versions.node})`;
 // as `string` so TypeScript catches any divergence.
 const jsonParse = JSONBig({ storeAsString: true });
 
+// Query parameters for both public and authenticated calls. `undefined`
+// values are dropped rather than serialized as the string "undefined";
+// arrays are emitted as repeated keys (`status[]=a&status[]=b`).
+export type QueryParams = Record<string, string | string[] | undefined>;
+
+function applyQuery(url: URL, params?: QueryParams): void {
+  if (!params) return;
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined) continue;
+    if (Array.isArray(value)) {
+      for (const item of value) url.searchParams.append(key, item);
+    } else {
+      url.searchParams.set(key, value);
+    }
+  }
+}
+
 export class GeminiHttpClient {
   private baseUrl: string;
   private apiKey: string;
@@ -34,39 +51,85 @@ export class GeminiHttpClient {
     this.apiSecret = config.apiSecret;
   }
 
-  async publicGet<T>(endpoint: string, params?: Record<string, string | string[]>): Promise<T> {
+  async publicGet<T>(endpoint: string, params?: QueryParams): Promise<T> {
     const url = new URL(`${this.baseUrl}${endpoint}`);
-    if (params) {
-      for (const [k, v] of Object.entries(params)) {
-        if (Array.isArray(v)) {
-          for (const item of v) url.searchParams.append(k, item);
-        } else {
-          url.searchParams.set(k, v);
-        }
-      }
-    }
+    applyQuery(url, params);
     const res = await fetch(url.toString(), {
       headers: { 'User-Agent': USER_AGENT },
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
-    const text = await res.text();
-    if (!res.ok) {
-      throw new Error(`Gemini API error ${res.status}: ${text}`);
-    }
-    return jsonParse.parse(text) as T;
+    return this.parseResponse<T>(res);
   }
 
-  async authenticatedPost<T>(endpoint: string, body: Record<string, unknown> = {}): Promise<T> {
-    const fullBody = config.account ? { ...body, account: config.account } : body;
+  // Signed GET. A handful of private prediction-market endpoints are GETs
+  // (e.g. `/v1/prediction-markets/terms/status`) rather than the POST-with-
+  // payload shape used by most of the Gemini private API. The signing scheme
+  // is identical either way: the payload rides in `X-GEMINI-PAYLOAD` and no
+  // request body is sent, so only the HTTP method differs.
+  async authenticatedGet<T>(endpoint: string, params?: QueryParams): Promise<T> {
+    return this.sendAuthenticated<T>('GET', endpoint, undefined, params);
+  }
+
+  async authenticatedPost<T>(
+    endpoint: string,
+    body: Record<string, unknown> = {},
+    params?: QueryParams
+  ): Promise<T> {
+    return this.sendAuthenticated<T>('POST', endpoint, body, params);
+  }
+
+  private async sendAuthenticated<T>(
+    method: 'GET' | 'POST',
+    endpoint: string,
+    body: Record<string, unknown> | undefined,
+    params?: QueryParams
+  ): Promise<T> {
+    if (!this.apiKey || !this.apiSecret) {
+      throw new Error(
+        `Authentication required for ${endpoint}: GEMINI_API_KEY and GEMINI_API_SECRET ` +
+          'must be set in the MCP server environment. This tool is unavailable in ' +
+          'public-only mode. See README for setup instructions.'
+      );
+    }
+    const baseBody = body ?? {};
+    const fullBody = config.account ? { ...baseBody, account: config.account } : baseBody;
+    // The signed payload covers `endpoint` — the bare path, WITHOUT any query
+    // string. Some private endpoints (e.g. `positions/settled`) take their
+    // filters as query parameters on a signed POST; including those in the
+    // signature produces a 400 from the API. Both the Go and TypeScript SDKs
+    // sign the path only, reserving query signing for the two funding-payment
+    // report endpoints that explicitly require it.
+    const { 'Content-Type': _signedContentType, 'Content-Length': _signedContentLength, ...signedAuthHeaders } =
+      buildSignedHeaders(endpoint, fullBody, this.apiKey, this.apiSecret);
+    // POST endpoints need `fullBody` as an actual JSON request body, not just
+    // signed into X-GEMINI-PAYLOAD: some newer prediction-market handlers
+    // (e.g. combos) do a real `json.Decode(r.Body)` server-side and reject an
+    // empty body with a 400, unlike the legacy private-API endpoints that
+    // read exclusively from the header. GET never sends a body — the payload
+    // rides in the header only, per authenticatedGet's doc comment above.
+    // buildSignedHeaders' `Content-Type: text/plain` / `Content-Length: 0`
+    // are correct for the no-body case but stale once a real body is
+    // attached — an explicit mismatched Content-Length is NOT rejected by
+    // `fetch`, it just silently keeps the body from reaching the server, so
+    // both are dropped here and left for `fetch` to compute from `body`.
+    const requestBody = method === 'POST' ? JSON.stringify(fullBody) : undefined;
     const headers = {
-      ...buildSignedHeaders(endpoint, fullBody, this.apiKey, this.apiSecret),
+      ...signedAuthHeaders,
+      ...(requestBody !== undefined ? { 'Content-Type': 'application/json' } : {}),
       'User-Agent': USER_AGENT,
     };
-    const res = await fetch(`${this.baseUrl}${endpoint}`, {
-      method: 'POST',
+    const url = new URL(`${this.baseUrl}${endpoint}`);
+    applyQuery(url, params);
+    const res = await fetch(url.toString(), {
+      method,
       headers,
+      body: requestBody,
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
+    return this.parseResponse<T>(res);
+  }
+
+  private async parseResponse<T>(res: Response): Promise<T> {
     const text = await res.text();
     if (!res.ok) {
       throw new Error(`Gemini API error ${res.status}: ${text}`);

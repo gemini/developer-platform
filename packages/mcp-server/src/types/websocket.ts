@@ -1,0 +1,263 @@
+/**
+ * WebSocket channel types for Gemini API
+ */
+export type WSChannel =
+  | 'trade'
+  | 'depth'
+  | 'bookTicker'
+  | 'ticker'
+  | 'contractStatus';
+
+/**
+ * WebSocket subscription request
+ */
+export interface WSSubscribeRequest {
+  id: string;
+  method: 'subscribe' | 'unsubscribe';
+  params: string[];
+}
+
+/**
+ * WebSocket subscription response
+ */
+export interface WSSubscribeResponse {
+  id: string;
+  result: string[] | null;
+  error?: {
+    code: number;
+    message: string;
+  };
+}
+
+/**
+ * Trade message from WebSocket
+ */
+export interface WSTradeMessage {
+  s: string;      // symbol (e.g., "BTCUSD")
+  p: string;      // price
+  q: string;      // quantity
+  m: boolean;     // is maker
+  E: number;      // timestamp (nanoseconds)
+  t: number;      // trade ID
+}
+
+/**
+ * Order book depth message
+ */
+export interface WSDepthMessage {
+  s: string;      // symbol
+  b: [string, string][]; // bids [[price, quantity], ...]
+  a: [string, string][]; // asks [[price, quantity], ...]
+  E: number;      // timestamp
+}
+
+/**
+ * Book ticker message (best bid/ask)
+ */
+export interface WSBookTickerMessage {
+  s: string;      // symbol
+  b: string;      // best bid price
+  B: string;      // best bid quantity
+  a: string;      // best ask price
+  A: string;      // best ask quantity
+  E: number;      // timestamp
+}
+
+/**
+ * 24h ticker message
+ */
+export interface WSTickerMessage {
+  s: string;      // symbol
+  o: string;      // open price
+  h: string;      // high price
+  l: string;      // low price
+  c: string;      // close price
+  v: string;      // volume
+  q: string;      // quote volume
+  E: number;      // timestamp
+}
+
+/**
+ * Contract status message (prediction-market contract lifecycle event —
+ * strike set, market opened/settled, etc). Unlike the other public streams
+ * this has no per-symbol wire subscription: Gemini pushes every contract's
+ * status changes on one shared global "contractStatus" channel, and callers
+ * filter by `s` client-side (same convention as sdk-go/sdk-typescript).
+ */
+export interface WSContractStatusMessage {
+  e: 'contractStatus'; // event type
+  E: number;      // timestamp (milliseconds — note bookTicker's E is nanoseconds)
+  s: string;      // symbol
+  k: string;      // event ticker
+  c: string;      // contract ticker
+  i: string;      // contract ID (large integer; kept as string — see client/websocket.ts)
+  p?: string;     // strike price (optional; omitted for Up/Down contracts until populated)
+  o: string;      // previous status
+  n: string;      // new status
+}
+
+/**
+ * Authenticated order lifecycle event (fills, cancels, rejects) from the
+ * `orders@account` / `orders@session` private stream. Like contractStatus,
+ * this has no per-symbol wire subscription — one account can have orders
+ * across many symbols, and Gemini pushes them all on one shared channel.
+ * The discriminator is documented as "orderUpdate" only, but sdk-go's own
+ * dispatcher explicitly also accepts "order" ("The private order stream can
+ * include a top-level trade ID (t)... otherwise an order update can be
+ * silently delivered as a trade") — trust the SDK's real-world observation
+ * over the spec here; isOrderUpdateMessage accepts both.
+ */
+export interface WSOrderUpdateMessage {
+  e: 'order' | 'orderUpdate';
+  // Nanoseconds in real production traffic today, same convention as
+  // trade/bookTicker/depth/ticker — confirmed directly against real
+  // production data during manual testing (a raw E of ~1.79e18 landed on the
+  // correct, present-day eventTimeMs after conversion). A review flagged
+  // this as milliseconds instead, citing an sdk-go unit test fixture
+  // (`E:1710000000000`) — that fixture is unreliable (the same Go test file
+  // reuses that exact value for trade/balanceUpdate/positionReport frames
+  // too, including trade's `T`, which is independently and unambiguously
+  // nanoseconds), but rather than relitigate it, WebSocketManager.toEventTimeMs()
+  // now detects the unit by magnitude instead of assuming nanoseconds
+  // unconditionally, so a millisecond-scale value (like that cited fixture)
+  // is used as-is instead of being wrongly divided. See the wire-level tests
+  // in websocket/manager.test.ts covering both magnitudes explicitly.
+  E: number;
+  s: string;       // symbol
+  i: string;       // order ID (large integer; kept as string, same treatment as contractStatus's i)
+  c?: string;      // client order ID
+  S?: 'BUY' | 'SELL';
+  o?: 'LIMIT' | 'MARKET' | 'STOP_LIMIT' | 'STOP_MARKET';
+  X: string;       // status: NEW/OPEN/FILLED/PARTIALLY_FILLED/CANCELED/REJECTED/MODIFIED
+  O?: 'YES' | 'NO'; // outcome — prediction-market contracts only
+  p?: string;       // price
+  P?: string;       // stop price
+  q?: string;       // quantity
+  z?: string;       // remaining quantity
+  Z?: string;       // executed quantity
+  L?: string;       // last execution price
+  t?: string;       // trade ID (fills only; large integer kept as string, same as i)
+  n?: string;       // fee amount (fills only)
+  m?: boolean;      // maker flag (fills only)
+  r?: string;       // rejection/cancellation reason
+  T: number;        // trade/event time (nanoseconds)
+}
+
+/**
+ * Union of all possible WebSocket messages
+ */
+export type WSMessage =
+  | WSTradeMessage
+  | WSDepthMessage
+  | WSBookTickerMessage
+  | WSTickerMessage
+  | WSContractStatusMessage
+  | WSOrderUpdateMessage
+  | WSSubscribeResponse;
+
+/**
+ * Stored price data in cache
+ */
+export interface CachedPriceData {
+  symbol: string;
+  price: string;
+  timestamp: number;
+  source: 'trade' | 'ticker';
+}
+
+/**
+ * Stored order book data
+ */
+export interface CachedOrderBook {
+  symbol: string;
+  bids: [string, string][];
+  asks: [string, string][];
+  timestamp: number;
+}
+
+/**
+ * Stored trade data
+ */
+export interface CachedTrade {
+  symbol: string;
+  price: string;
+  quantity: string;
+  isMaker: boolean;
+  timestamp: number;
+  tradeId: number;
+}
+
+/**
+ * Stored book ticker data
+ */
+export interface CachedBookTicker {
+  symbol: string;
+  bestBid: string;
+  bestBidQty: string;
+  bestAsk: string;
+  bestAskQty: string;
+  timestamp: number;
+}
+
+/**
+ * Stored contract status data (latest known status per contract symbol)
+ */
+export interface CachedContractStatus {
+  symbol: string;
+  eventTicker: string;
+  contractTicker: string;
+  contractId: string;
+  previousStatus: string;
+  newStatus: string;
+  strikePrice?: string;
+  eventTimeMs: number;
+  timestamp: number;
+}
+
+/**
+ * Stored order lifecycle data (latest known state per order ID). Not
+ * symbol-scoped like the other Cached* types — one account has orders
+ * across many symbols, so the natural key is the order ID.
+ */
+export interface CachedOrderUpdate {
+  orderId: string;
+  clientOrderId?: string;
+  symbol: string;
+  side?: 'BUY' | 'SELL';
+  orderType?: string;
+  status: string;
+  outcome?: 'YES' | 'NO';
+  price?: string;
+  stopPrice?: string;
+  quantity?: string;
+  remainingQty?: string;
+  executedQty?: string;
+  lastExecutedPrice?: string;
+  tradeId?: string;
+  feeAmount?: string;
+  isMaker?: boolean;
+  rejectReason?: string;
+  eventTimeMs: number;
+  timestamp: number;
+}
+
+/**
+ * WebSocket connection status
+ */
+export type WSConnectionStatus =
+  | 'disconnected'
+  | 'connecting'
+  | 'connected'
+  | 'reconnecting'
+  | 'error';
+
+/**
+ * WebSocket manager state
+ */
+export interface WSManagerState {
+  status: WSConnectionStatus;
+  subscriptions: string[];
+  lastConnected?: number;
+  lastError?: string;
+  reconnectAttempts: number;
+}

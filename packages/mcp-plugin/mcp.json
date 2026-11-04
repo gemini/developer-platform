@@ -1,0 +1,9 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+  "mcpServers": {
+    "gemini": {
+      "type": "streamable-http",
+      "url": "https://api.gemini.com/mcp"
+    }
+  }
+}

@@ -7,6 +7,9 @@ A suite of developer tools for integrating with the [Gemini](https://www.gemini.
 | Package | Description |
 |---------|-------------|
 | [`packages/mcp-server`](packages/mcp-server/) | MCP server exposing Gemini API as tools for AI assistants |
+| [Go SDK](packages/sdk-go/README.md) | Official Go SDK for the Gemini REST and WebSocket APIs |
+| [Go SDK Gorilla WebSocket adapter](packages/sdk-go/websocket/gorilla/) | Optional Gorilla WebSocket adapter for the Go SDK |
+| [TypeScript SDK](packages/sdk-typescript/README.md) ([npm package](https://www.npmjs.com/package/@gemini-markets/sdk)) | Official TypeScript SDK for REST and WebSocket APIs, with server and browser entry points |
 | [`samples/`](samples/) | REST and WebSocket examples in TypeScript, Python, and Go |
 | [`skills/`](skills/) | Claude Code skills (e.g., terminal candlestick charts) |
 
@@ -54,7 +57,8 @@ cd samples/go && go mod download
 
 ## Configuration
 
-All components read credentials from environment variables:
+Samples, the MCP server, and the Go demo read credentials from environment
+variables. See each package README for SDK-specific configuration:
 
 | Variable | Description |
 |----------|-------------|
@@ -129,8 +133,8 @@ Configure your Claude client to use the server (example for Claude Desktop):
 
 ## API Documentation
 
-- [Gemini REST API](https://docs.gemini.com/rest-api/)
-- [Gemini WebSocket API](https://docs.gemini.com/websocket-api/)
+- [Gemini REST API](https://developer.gemini.com/rest-api/)
+- [Gemini WebSocket API](https://developer.gemini.com/websocket-api/)
 
 ## License
 

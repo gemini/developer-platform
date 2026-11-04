@@ -27,6 +27,6 @@ test('getAccounts passes through unrelated failures unchanged', async () => {
 
 test('getAccounts returns the account list for a master key', async () => {
   const accounts = [{ shortName: 'primary' }];
-  const client = clientWith(async () => accounts);
+  const client = clientWith((async () => accounts) as GeminiHttpClient['authenticatedPost']);
   assert.deepEqual(await getAccounts(client), accounts);
 });
