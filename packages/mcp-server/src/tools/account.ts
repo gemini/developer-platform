@@ -26,7 +26,8 @@ export function createAccountTools(client: GeminiHttpClient): ToolDefinition[] {
     },
     {
       name: 'gemini_get_accounts',
-      description: 'List all accounts',
+      description:
+        'List all accounts. Requires a master API key with account-list permission; scoped keys cannot use this — use gemini_get_account for the key\'s own account.',
       inputSchema: z.object({}),
       handler: wrapHandler(async () => (await account.getAccounts(client)).map(redactAccountDetail)),
     },

@@ -14,7 +14,19 @@ export async function createAccount(
 }
 
 export async function getAccounts(client: GeminiHttpClient): Promise<AccountDetail[]> {
-  return client.authenticatedPost<AccountDetail[]>('/v1/account/list');
+  try {
+    return await client.authenticatedPost<AccountDetail[]>('/v1/account/list');
+  } catch (err) {
+    // /v1/account/list is a master-key endpoint; scoped keys always get
+    // InvalidApiKey. Surface that cause instead of a bare API error.
+    if (err instanceof Error && err.message.includes('"reason":"InvalidApiKey"')) {
+      throw new Error(
+        '/v1/account/list requires a master API key with account-list permission; ' +
+          'this key is scoped and cannot list accounts. Use gemini_get_account for the key\'s own account.'
+      );
+    }
+    throw err;
+  }
 }
 
 export async function getRoles(client: GeminiHttpClient): Promise<Record<string, unknown>> {
