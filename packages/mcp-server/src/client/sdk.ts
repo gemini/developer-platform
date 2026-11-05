@@ -1,5 +1,14 @@
 import { createClient, HmacAuth } from '@gemini-markets/sdk/server';
 import { config } from '../config.js';
+import { nextNonce } from '../auth/signer.js';
+
+// Custom REST targets share the legacy client's millisecond nonce sequence.
+// Keep HmacAuth's independent epoch-second WebSocket auth contract intact.
+class CustomTargetHmacAuth extends HmacAuth {
+  override nextNonce(): string {
+    return String(nextNonce());
+  }
+}
 
 // @gemini-markets/sdk/server doesn't export the GeminiMarkets class itself (only
 // createClient's return type uses it) — derive the type from createClient so the rest of
@@ -19,22 +28,31 @@ export type SdkClient = Awaited<ReturnType<typeof createClient>>;
 export async function createSdkClient(
   overrides?: Partial<Parameters<typeof createClient>[0]>
 ): Promise<SdkClient> {
+  const baseUrl = config.baseUrl.replace(/\/+$/, '');
+  const customTarget =
+    baseUrl !== 'https://api.gemini.com' && baseUrl !== 'https://api.sandbox.gemini.com';
+  const Auth = customTarget ? CustomTargetHmacAuth : HmacAuth;
   const auth =
     config.apiKey && config.apiSecret
-      ? // nonceMode defaults to "monotonic", which sends the nonce in milliseconds.
-        // Gemini's real REST API expects epoch-second nonces — the legacy signer this
-        // SDK replaces already sends Math.floor(Date.now() / 1000), and the SDK's own
-        // WebSocket auth hardcodes the same second-scale nonce for the same reason.
-        // Confirmed against production: the millisecond default fails every
-        // authenticated REST call with InvalidNonce (HTTP 400).
-        new HmacAuth({
+      ? new Auth({
           apiKey: config.apiKey,
           apiSecret: config.apiSecret,
+          // Standard Gemini REST endpoints retain their epoch-second nonce policy.
           nonceMode: 'time-based',
         })
       : undefined;
 
-  return createClient({ env: config.sdkEnv, auth, ...overrides });
+  const options = { env: config.sdkEnv, auth, ...overrides };
+  if (customTarget) {
+    // The SDK exposes routing through fetch, not a client-level baseUrl option.
+    // Compose with injected fetch so tests and runtime use the same routing path.
+    const fetchImpl = options.fetch ?? globalThis.fetch;
+    options.fetch = (url, init) => {
+      const { pathname, search } = new URL(url);
+      return fetchImpl(`${baseUrl}${pathname}${search}`, init);
+    };
+  }
+  return createClient(options);
 }
 
 // The legacy GeminiHttpClient.authenticatedPost added config.account (GEMINI_ACCOUNT) to
