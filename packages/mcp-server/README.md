@@ -84,8 +84,11 @@ The `-s user` flag registers the server globally across all your projects. Omit 
 - `GEMINI_API_KEY` - Your API key (required for trading/account operations)
 - `GEMINI_API_SECRET` - Your API secret (required for trading/account operations)
 - `GEMINI_ACCOUNT` - Account name for Master API keys (e.g., "primary")
-- `GEMINI_API_BASE_URL` - API base URL (default: `https://api.gemini.com`, sandbox: `https://api.sandbox.gemini.com`)
-- `GEMINI_WS_URL` - WebSocket URL (default: `wss://ws.gemini.com`, sandbox: `wss://ws.sandbox.gemini.com`)
+- `GEMINI_API_BASE_URL` - REST API base URL, including all prediction-market SDK requests (default: `https://api.gemini.com`, sandbox: `https://api.sandbox.gemini.com`). Custom targets such as `https://api.qa100.aurora7.net` use that exact destination, not the public production or sandbox host.
+- `GEMINI_SDK_ENV` - SDK environment (`production` or `sandbox`). Defaults to `sandbox` when the REST base URL hostname contains `sandbox`, otherwise `production`. For the two standard REST base URLs, an explicit value overrides SDK environment selection. For custom REST targets, it does not replace `GEMINI_API_BASE_URL`.
+- `GEMINI_WS_URL` - Legacy WebSocket client URL (default: `wss://ws.gemini.com`, sandbox: `wss://ws.sandbox.gemini.com`). SDK-backed WebSocket streams still use the SDK environment; custom REST routing does not redirect them.
+
+Use credentials issued for the selected REST destination. Custom REST targets share the legacy client's strictly increasing millisecond nonce sequence; SDK calls to standard Gemini REST environments retain epoch-second nonces. WebSocket authentication remains independent.
 
 ## Quick Start
 

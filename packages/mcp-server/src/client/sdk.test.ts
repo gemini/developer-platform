@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createHmac } from 'node:crypto';
+import type { SdkClient } from './sdk.js';
 
 // config.ts snapshots process.env when the module is first imported, so the
 // credentials/env selector have to be in place before the module graph loads — same
@@ -13,9 +15,36 @@ process.env.SDK_TEST_FAKE_SECRET = 'test-api-secret';
 process.env.GEMINI_API_KEY = process.env.SDK_TEST_FAKE_KEY;
 process.env.GEMINI_API_SECRET = process.env.SDK_TEST_FAKE_SECRET;
 delete process.env.GEMINI_SDK_ENV;
+process.env.GEMINI_API_BASE_URL = 'https://api.gemini.com';
+delete process.env.GEMINI_ACCOUNT;
 
 const { createSdkClient } = await import('./sdk.js');
 const { config } = await import('../config.js');
+// This client also imports config; static loading would snapshot it before env setup.
+const { GeminiHttpClient } = await import('./http.js');
+
+type SdkFetch = NonNullable<NonNullable<Parameters<typeof createSdkClient>[0]>['fetch']>;
+type CapturedRequest = { url: string; init: Parameters<SdkFetch>[1] };
+
+function captureFetch(calls: CapturedRequest[]): SdkFetch {
+  return async (url, init) => {
+    calls.push({ url, init });
+    return new Response(url.endsWith('/order') ? '{"orderId":1}' : '{}', {
+      status: url.endsWith('/order') ? 201 : 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  };
+}
+
+function signedPayload(call: CapturedRequest): Record<string, unknown> {
+  const encoded = call.init.headers['X-GEMINI-PAYLOAD'];
+  assert.ok(encoded, 'expected a signed payload');
+  assert.strictEqual(
+    call.init.headers['X-GEMINI-SIGNATURE'],
+    createHmac('sha384', process.env.SDK_TEST_FAKE_SECRET!).update(encoded).digest('hex')
+  );
+  return JSON.parse(Buffer.from(encoded, 'base64').toString('utf8')) as Record<string, unknown>;
+}
 
 test('createSdkClient wires the configured HmacAuth into an actual authenticated request', async () => {
   assert.strictEqual(config.sdkEnv, 'production');
@@ -52,34 +81,125 @@ test('createSdkClient wires the configured HmacAuth into an actual authenticated
   }
 });
 
-test('createSdkClient selects sandbox when GEMINI_SDK_ENV=sandbox', async () => {
-  config.sdkEnv = 'sandbox';
-  const requestedUrls: string[] = [];
+test('standard REST targets retain SDK environment selection and epoch-second nonces', async (t) => {
+  const saved = { baseUrl: config.baseUrl, sdkEnv: config.sdkEnv };
+  const now = 2_000_000_000_123;
+  t.mock.method(Date, 'now', () => now);
   try {
-    // Inject a fake fetch instead of hitting the network, so the assertion is about
-    // which host createSdkClient actually targets — a hardcoded env in createClient
-    // would still make client.predictions truthy, so that alone doesn't prove anything.
-    const client = await createSdkClient({
-      fetch: async (url) => {
-        requestedUrls.push(url);
-        return new Response('[]', {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        });
-      },
-    });
-    try {
-      await client.predictions.getCategories();
-      assert.strictEqual(requestedUrls.length, 1);
-      assert.ok(
-        requestedUrls[0]!.startsWith('https://api.sandbox.gemini.com'),
-        `expected a sandbox URL, got ${requestedUrls[0]}`
-      );
-    } finally {
-      client.close();
+    for (const baseUrl of ['https://api.gemini.com', 'https://api.sandbox.gemini.com/']) {
+      for (const sdkEnv of ['production', 'sandbox'] as const) {
+        config.baseUrl = baseUrl;
+        config.sdkEnv = sdkEnv;
+        const calls: CapturedRequest[] = [];
+        const client = await createSdkClient({ fetch: captureFetch(calls) });
+        try {
+          await client.predictions.getCategories();
+          await client.predictions.getPositions();
+          const origin = sdkEnv === 'sandbox'
+            ? 'https://api.sandbox.gemini.com'
+            : 'https://api.gemini.com';
+          assert.deepStrictEqual(calls.map(({ url }) => url), [
+            `${origin}/v1/prediction-markets/categories`,
+            `${origin}/v1/prediction-markets/positions`,
+          ]);
+          assert.strictEqual(calls[0]!.init.headers['X-GEMINI-APIKEY'], undefined);
+          assert.strictEqual(String(signedPayload(calls[1]!)['nonce']), String(Math.floor(now / 1000)));
+        } finally {
+          client.close();
+        }
+      }
     }
   } finally {
-    config.sdkEnv = 'production';
+    Object.assign(config, saved);
+  }
+});
+
+test('custom REST routing composes with injected fetch for public reads, signed queries and orders', async () => {
+  const saved = { baseUrl: config.baseUrl, sdkEnv: config.sdkEnv };
+  try {
+    for (const baseUrl of ['https://api.qa100.aurora7.net', 'http://sandbox.example.invalid:8080/']) {
+      config.baseUrl = baseUrl;
+      config.sdkEnv = 'sandbox';
+      const calls: CapturedRequest[] = [];
+      const client = await createSdkClient({ fetch: captureFetch(calls) });
+      const controller = new AbortController();
+      const order = {
+        symbol: 'GEMI-TEST',
+        side: 'buy',
+        outcome: 'yes',
+        quantity: '1',
+        price: '0.50',
+        orderType: 'limit',
+        makerOrCancel: false,
+      } as const;
+      try {
+        await client.predictions.getCategories();
+        await client.predictions.getPositions(
+          { eventTicker: 'GEMI-TEST', limit: 7 },
+          { signal: controller.signal, headers: { 'X-Test-Routing': 'preserved' } }
+        );
+        // This is an SDK request intercepted by fake fetch, never a real order.
+        await client.predictions.placeOrder(order);
+
+        const target = baseUrl.replace(/\/+$/, '');
+        assert.strictEqual(calls.length, 3);
+        assert.strictEqual(calls[0]!.url, `${target}/v1/prediction-markets/categories`);
+        assert.strictEqual(calls[0]!.init.headers['X-GEMINI-APIKEY'], undefined);
+        const read = calls[1]!;
+        const url = new URL(read.url);
+        assert.strictEqual(`${url.origin}${url.pathname}`, `${target}/v1/prediction-markets/positions`);
+        assert.deepStrictEqual([...url.searchParams.entries()].sort(), [
+          ['eventTicker', 'GEMI-TEST'], ['limit', '7'],
+        ]);
+        assert.strictEqual(read.init.method, 'POST');
+        assert.strictEqual(read.init.headers['X-Test-Routing'], 'preserved');
+        assert.ok(read.init.signal instanceof AbortSignal);
+        assert.strictEqual(read.init.signal.aborted, false);
+        assert.strictEqual(read.init.redirect, 'manual');
+        assert.strictEqual(signedPayload(read)['request'], '/v1/prediction-markets/positions');
+        const placed = calls[2]!;
+        assert.strictEqual(placed.url, `${target}/v1/prediction-markets/order`);
+        assert.strictEqual(placed.init.method, 'POST');
+        assert.deepStrictEqual(JSON.parse(placed.init.body!), order);
+        assert.strictEqual(placed.init.headers['X-GEMINI-APIKEY'], process.env.SDK_TEST_FAKE_KEY);
+        assert.strictEqual(placed.init.redirect, 'manual');
+        const payload = signedPayload(placed);
+        assert.strictEqual(payload['request'], '/v1/prediction-markets/order');
+        for (const [key, value] of Object.entries(order)) assert.strictEqual(payload[key], value);
+      } finally {
+        client.close();
+      }
+    }
+  } finally {
+    Object.assign(config, saved);
+  }
+});
+
+test('custom SDK and legacy REST requests share increasing nonces in the same millisecond', async (t) => {
+  const saved = { baseUrl: config.baseUrl, sdkEnv: config.sdkEnv };
+  const now = 2_000_000_000_123;
+  t.mock.method(Date, 'now', () => now);
+  config.baseUrl = 'https://api.qa100.aurora7.net';
+  const calls: CapturedRequest[] = [];
+  const fakeFetch = captureFetch(calls);
+  t.mock.method(globalThis, 'fetch', fakeFetch);
+  const clients: SdkClient[] = [];
+  try {
+    const legacy = new GeminiHttpClient();
+    // One uses the runtime fetch fallback, the other the explicit test override.
+    clients.push(await createSdkClient(), await createSdkClient({ fetch: fakeFetch }));
+    await legacy.authenticatedGet('/v1/account');
+    await clients[0]!.predictions.getPositions();
+    await legacy.authenticatedGet('/v1/account');
+    await clients[1]!.predictions.getPositions();
+    const nonces = calls.map((call) => Number(signedPayload(call)['nonce']));
+    assert.strictEqual(nonces.length, 4);
+    assert.ok(nonces[0]! >= now, 'custom REST nonces must be epoch milliseconds');
+    assert.deepStrictEqual(nonces, nonces.map((_, index) => nonces[0]! + index));
+    assert.ok(calls.every(({ url }) => url.startsWith(`${config.baseUrl}/v1/`)));
+  } finally {
+    for (const client of clients) client.close();
+    Object.assign(config, saved);
   }
 });
 
@@ -89,9 +209,14 @@ test('createSdkClient omits auth in public-only mode, matching legacy fail-close
   config.apiKey = '';
   config.apiSecret = '';
   try {
-    const client = await createSdkClient();
+    const calls: CapturedRequest[] = [];
+    const client = await createSdkClient({ fetch: captureFetch(calls) });
     try {
-      assert.ok(client.predictions);
+      await client.predictions.getCategories();
+      assert.strictEqual(calls.length, 1);
+      assert.strictEqual(calls[0]!.init.headers['X-GEMINI-APIKEY'], undefined);
+      await assert.rejects(client.predictions.getPositions(), /AuthStrategy/);
+      assert.strictEqual(calls.length, 1, 'unauthenticated private REST must not reach fetch');
       // No credentials configured — the private WS surface must fail closed, same as
       // the legacy GeminiHttpClient does today for authenticated REST calls. This
       // throws synchronously before any connection is attempted, so it's safe to call
