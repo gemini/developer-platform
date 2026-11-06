@@ -1,4 +1,4 @@
-import type { GeminiHttpClient } from '../client/http.js';
+import { GeminiApiError, type GeminiHttpClient } from '../client/http.js';
 import type { Order, MyTrade, TradeVolume, NotionalVolume } from '../types/orders.js';
 import { getTicker } from './market.js';
 
@@ -19,8 +19,11 @@ export async function newOrder(
   try {
     return await client.authenticatedPost<Order>('/v1/order/new', body);
   } catch (err: unknown) {
+    // Only retry with the limit-order fallback after Gemini definitively
+    // rejected the first request. A transport failure leaves submission
+    // outcome unknown and must never trigger a second order mutation.
     const isInvalidOrderType =
-      err instanceof Error && err.message.includes('InvalidOrderType');
+      err instanceof GeminiApiError && err.body.includes('InvalidOrderType');
     const isMarketOrder =
       typeof type === 'string' && type.toLowerCase().includes('market');
 
@@ -54,8 +57,20 @@ export async function cancelAllActiveOrders(client: GeminiHttpClient): Promise<R
   return client.authenticatedPost<Record<string, unknown>>('/v1/order/cancel/all');
 }
 
-export async function getOrderStatus(client: GeminiHttpClient, orderId: string): Promise<Order> {
-  return client.authenticatedPost<Order>('/v1/order/status', { order_id: orderId });
+export type OrderStatusSelector =
+  | { orderId: string; clientOrderId?: never }
+  | { orderId?: never; clientOrderId: string };
+
+export async function getOrderStatus(
+  client: GeminiHttpClient,
+  selector: OrderStatusSelector
+): Promise<Order> {
+  const body =
+    selector.orderId !== undefined
+      ? { order_id: selector.orderId }
+      : { client_order_id: selector.clientOrderId };
+
+  return client.authenticatedPost<Order>('/v1/order/status', body);
 }
 
 export async function getActiveOrders(client: GeminiHttpClient): Promise<Order[]> {

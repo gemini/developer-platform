@@ -313,3 +313,68 @@ test('int64 precision survives the shared response parser', async () => {
     f.restore();
   }
 });
+
+test('a non-2xx response is classified as a Gemini API error', async () => {
+  const f = stubFetch('{"reason":"InvalidOrderType"}', 400);
+  try {
+    const { GeminiApiError } = await import('./http.js');
+    const client = new GeminiHttpClient();
+
+    await assert.rejects(
+      () =>
+        client.authenticatedPost('/v1/order/new', {
+          symbol: 'btcusd',
+          amount: '0.01',
+          price: '1',
+          side: 'buy',
+          type: 'exchange market',
+        }),
+      (err: unknown) => {
+        assert.ok(err instanceof GeminiApiError);
+        assert.strictEqual(err.status, 400);
+        assert.match(err.body, /InvalidOrderType/);
+        return true;
+      }
+    );
+
+    assert.strictEqual(f.calls.length, 1);
+  } finally {
+    f.restore();
+  }
+});
+
+test('a fetch failure is classified as a transport error without replaying the request', async () => {
+  const original = globalThis.fetch;
+  let calls = 0;
+
+  globalThis.fetch = (async () => {
+    calls += 1;
+    throw new TypeError('socket closed');
+  }) as typeof fetch;
+
+  try {
+    const { GeminiTransportError } = await import('./http.js');
+    const client = new GeminiHttpClient();
+
+    await assert.rejects(
+      () =>
+        client.authenticatedPost('/v1/order/new', {
+          symbol: 'btcusd',
+          amount: '0.01',
+          price: '1',
+          side: 'buy',
+          type: 'exchange limit',
+          client_order_id: 'recovery-42',
+        }),
+      (err: unknown) => {
+        assert.ok(err instanceof GeminiTransportError);
+        assert.match(err.message, /transport/i);
+        return true;
+      }
+    );
+
+    assert.strictEqual(calls, 1, 'a failed mutation must not be replayed');
+  } finally {
+    globalThis.fetch = original;
+  }
+});

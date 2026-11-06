@@ -51,9 +51,25 @@ export function createOrderTools(client: GeminiHttpClient): ToolDefinition[] {
     },
     {
       name: 'gemini_get_order_status',
-      description: 'Get the status of an order',
-      inputSchema: z.object({ orderId: z.string().describe('Order ID') }),
-      handler: wrapHandler(({ orderId }: { orderId: string }) => orders.getOrderStatus(client, orderId)),
+      description:
+        'Get the status of an order by exchange order ID or client-specified order ID. Use clientOrderId to reconcile an order when submission may have succeeded but its response was not received.',
+      inputSchema: z
+        .object({
+          orderId: z.string().optional().describe('Exchange-assigned order ID'),
+          clientOrderId: z.string().optional().describe('Client-specified order ID'),
+        })
+        .refine(
+          ({ orderId, clientOrderId }) =>
+            (orderId !== undefined) !== (clientOrderId !== undefined),
+          { message: 'Provide exactly one of orderId or clientOrderId' }
+        ),
+      handler: wrapHandler(
+        ({ orderId, clientOrderId }: { orderId?: string; clientOrderId?: string }) =>
+          orders.getOrderStatus(
+            client,
+            orderId !== undefined ? { orderId } : { clientOrderId: clientOrderId! }
+          )
+      ),
     },
     {
       name: 'gemini_get_active_orders',
