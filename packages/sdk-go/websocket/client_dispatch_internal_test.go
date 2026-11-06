@@ -16,10 +16,13 @@ func TestDispatchFrame_OrderUpdateWithTradeIDRemainsOrderEvent(t *testing.T) {
 	client.subTables.Store(tables)
 	client.subsMu.Unlock()
 
-	client.dispatchFrame(make(chan struct{}), []byte(`{"e":"orderUpdate","s":"BTCUSD","t":777,"i":12345,"S":"BUY","X":"NEW"}`), 0)
+	client.dispatchFrame(make(chan struct{}), []byte(`{"e":"orderUpdate","E":1720000000000,"s":"BTCUSD","t":777,"i":12345,"S":"BUY","X":"NEW"}`), 0)
 	select {
 	case event := <-orderSub.ch:
-		if event.EventType != "orderUpdate" || event.TradeID != 777 || event.OrderID != 12345 {
+		if event.EventType != "orderUpdate" ||
+			event.EventTime != 1720000000000 ||
+			event.TradeID != 777 ||
+			event.OrderID != 12345 {
 			t.Fatalf("unexpected order event: %+v", event)
 		}
 	case <-time.After(time.Second):
