@@ -54,6 +54,22 @@ test('wrapHandler adds the nonce-mode hint to a nonce rejection, whichever clien
   }
 });
 
+test('wrapHandler adds the incremental-key hint to a time-based key rejected as not increasing', async () => {
+  // The inverse mismatch must reach the operator through the wrapper too, not only through the signer.
+  const saved = config.nonceMode;
+  config.nonceMode = 'time-based';
+  try {
+    const handler = wrapHandler(async () => {
+      throw new Error("InvalidNonce: Nonce '1794333647' has not increased since your last call to the Gemini API.");
+    });
+    const text = textOf(await handler({} as z.infer<z.ZodAny>));
+    assert.match(text, /has not increased/);
+    assert.match(text, /This key rejects time-based nonces, so it is an incremental key/);
+  } finally {
+    config.nonceMode = saved;
+  }
+});
+
 test('wrapHandler leaves non-nonce errors unchanged', async () => {
   const handler = wrapHandler(async () => {
     throw new Error('Gemini API error 401: InvalidApiKey');

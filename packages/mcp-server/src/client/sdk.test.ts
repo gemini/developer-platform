@@ -286,3 +286,36 @@ test('createSdkClient omits auth in public-only mode, matching legacy fail-close
     config.apiSecret = savedSecret;
   }
 });
+
+test('an SDK InvalidNonce rejection reaches the operator with the nonce-mode hint', async () => {
+  // End to end with a real SDK error: the server body is fed to the SDK, which builds its own
+  // ApiError, and that error goes through the tool wrapper. The hint must not depend on the
+  // server sentence, which the SDK does not keep.
+  const saved = { nonceMode: config.nonceMode };
+  config.nonceMode = 'incremental';
+  const client = await createSdkClient({
+    fetch: async () =>
+      new Response(
+        '{"reason":"InvalidNonce","message":"Nonce \'1\' is not within 30 seconds of server time \'2\'"}',
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
+      ),
+  });
+  try {
+    let rejection: unknown;
+    try {
+      await client.predictions.getPositions();
+    } catch (err) {
+      rejection = err;
+    }
+    // Confirms the SDK keeps the rejection code, not the server sentence, on the error it throws.
+    assert.strictEqual((rejection as { reason?: string }).reason, 'InvalidNonce');
+    const { wrapHandler } = await import('../tools/index.js');
+    const result = await wrapHandler(async () => {
+      throw rejection;
+    })({});
+    assert.match(JSON.stringify(result), /GEMINI_API_NONCE_MODE=time-based/);
+  } finally {
+    client.close();
+    Object.assign(config, saved);
+  }
+});

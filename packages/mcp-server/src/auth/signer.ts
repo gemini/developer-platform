@@ -53,24 +53,35 @@ export function buildSignedHeaders(
 
 // Server messages from api-commons' ApiNonceCheck. Time-based keys only produce the window
 // error and incremental keys only produce the not-increased error, so each message identifies
-// which contract the key actually uses.
+// which contract the key actually uses. Legacy REST errors carry these sentences. SDK errors do
+// not: the SDK keeps the rejection code (reason=InvalidNonce) and a generic "HTTP <status>"
+// message, so NONCE_REJECTED is the only signal left for them.
 const OUT_OF_WINDOW = /not within \d+ seconds of server time/;
 const NOT_INCREMENTED = /has not increased since your last call/;
+const NONCE_REJECTED = /\bInvalidNonce\b/;
+
+const TIME_BASED_HINT =
+  'This key rejects millisecond nonces, so it is a time-based key. Set GEMINI_API_NONCE_MODE=time-based in the MCP server environment and restart the server.';
+const INCREMENTAL_HINT =
+  'This key rejects time-based nonces, so it is an incremental key. Remove GEMINI_API_NONCE_MODE or set it to incremental, then restart the server.';
+const SHARED_KEY_HINT =
+  'Incremental nonces are tracked per process. If another MCP client or SDK process is using this key at the same time, it can cause this rejection. Use a time-based key for shared use, or run one client per key.';
+const CLOCK_HINT =
+  'Time-based nonces must be within 30 seconds of server time. Check that this host\'s clock is in sync.';
+const GENERIC_HINT =
+  'The server rejected this key\'s nonce. Check GEMINI_API_NONCE_MODE against the key\'s "Uses a time based nonce" setting: a time-based key needs GEMINI_API_NONCE_MODE=time-based, and an incremental key should leave it unset. Time-based nonces also need this host\'s clock within 30 seconds of server time.';
 
 /**
- * Operator hint for a nonce rejection, or undefined if the message is not a nonce error or
- * the configured mode cannot explain it (e.g. clock skew under time-based mode).
+ * Operator hint for a nonce rejection, or undefined if the text is not a nonce error. `text`
+ * is the full error text as shown to the operator, including any SDK `reason=` detail, so the
+ * same function covers legacy REST and SDK errors.
  */
-export function nonceModeHint(message: string, configured: NonceMode): string | undefined {
-  if (configured === 'incremental' && OUT_OF_WINDOW.test(message)) {
-    return 'This key rejects millisecond nonces, so it is a time-based key. Set GEMINI_API_NONCE_MODE=time-based in the MCP server environment and restart the server.';
-  }
-  if (configured === 'time-based' && NOT_INCREMENTED.test(message)) {
-    return 'This key rejects time-based nonces, so it is an incremental key. Remove GEMINI_API_NONCE_MODE or set it to incremental, then restart the server.';
-  }
-  if (configured === 'incremental' && NOT_INCREMENTED.test(message)) {
-    return 'Incremental nonces are tracked per process. If another MCP client or SDK process is using this key at the same time, it can cause this rejection. Use a time-based key for shared use, or run one client per key.';
-  }
+export function nonceModeHint(text: string, configured: NonceMode): string | undefined {
+  if (configured === 'incremental' && OUT_OF_WINDOW.test(text)) return TIME_BASED_HINT;
+  if (configured === 'time-based' && NOT_INCREMENTED.test(text)) return INCREMENTAL_HINT;
+  if (configured === 'incremental' && NOT_INCREMENTED.test(text)) return SHARED_KEY_HINT;
+  if (configured === 'time-based' && OUT_OF_WINDOW.test(text)) return CLOCK_HINT;
+  if (NONCE_REJECTED.test(text)) return GENERIC_HINT;
   return undefined;
 }
 

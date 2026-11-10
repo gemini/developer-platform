@@ -159,11 +159,22 @@ test('nonceModeHint warns about shared incremental keys on a not-increased rejec
   assert.match(nonceModeHint(message, 'incremental') ?? '', /per process/);
 });
 
-test('nonceModeHint stays silent for non-nonce errors and for clock skew under time-based mode', () => {
+test('nonceModeHint stays silent for non-nonce errors', () => {
   assert.strictEqual(nonceModeHint('Gemini API error 401: InvalidApiKey', 'incremental'), undefined);
-  assert.strictEqual(
-    nonceModeHint("Nonce '1' is not within 30 seconds of server time '2'", 'time-based'),
-    undefined,
-    'an out-of-window error under time-based mode is clock skew, not a mode mismatch'
-  );
+  assert.strictEqual(nonceModeHint('HTTP 500 (category=server)', 'time-based'), undefined);
+});
+
+test('nonceModeHint reports clock skew, not a mode mismatch, for an out-of-window error under time-based mode', () => {
+  // Incremental keys never produce the window error, so under time-based mode it means this host's clock.
+  const hint = nonceModeHint("Nonce '1' is not within 30 seconds of server time '2'", 'time-based') ?? '';
+  assert.match(hint, /clock is in sync/);
+  assert.doesNotMatch(hint, /GEMINI_API_NONCE_MODE=time-based/);
+});
+
+test('nonceModeHint matches an SDK error, whose message is only the status and whose rejection code is in reason=', () => {
+  // The SDK drops the server sentence and keeps only the rejection code, so the hint must still
+  // point the operator at the mode setting, for both configured modes.
+  const sdkText = 'HTTP 400 (reason=InvalidNonce, category=auth)';
+  assert.match(nonceModeHint(sdkText, 'incremental') ?? '', /GEMINI_API_NONCE_MODE=time-based/);
+  assert.match(nonceModeHint(sdkText, 'time-based') ?? '', /an incremental key should leave it unset/);
 });

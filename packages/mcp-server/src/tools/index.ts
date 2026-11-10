@@ -118,7 +118,9 @@ export function wrapHandler<S extends z.ZodTypeAny>(
       const message = err instanceof Error ? err.message : String(err);
       const detail = extractErrorDetail(err);
       const withDetail = detail ? `${message} (${detail})` : message;
-      const hint = nonceModeHint(message, config.nonceMode);
+      // Match the full text: an SDK ApiError's message is only "HTTP <status>", and its rejection
+      // code lives in the detail suffix.
+      const hint = nonceModeHint(withDetail, config.nonceMode);
       const fullMessage = hint ? `${withDetail}\n${hint}` : withDetail;
       return {
         content: [{ type: 'text', text: wrap(`Error: ${sanitizeString(fullMessage)}`) }],

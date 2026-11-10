@@ -60,7 +60,8 @@ The `-s user` flag registers the server globally across all your projects. Omit 
         "GEMINI_API_KEY": "your_api_key_here",
         "GEMINI_API_SECRET": "your_api_secret_here",
         "GEMINI_ACCOUNT": "primary",
-        "GEMINI_WS_URL": "wss://ws.gemini.com"
+        "GEMINI_WS_URL": "wss://ws.gemini.com",
+        "GEMINI_API_NONCE_MODE": "time-based"
       }
     }
   }
@@ -79,12 +80,15 @@ The `-s user` flag registers the server globally across all your projects. Omit 
         "GEMINI_API_KEY": "your_api_key_here",
         "GEMINI_API_SECRET": "your_api_secret_here",
         "GEMINI_ACCOUNT": "primary",
-        "GEMINI_WS_URL": "wss://ws.gemini.com"
+        "GEMINI_WS_URL": "wss://ws.gemini.com",
+        "GEMINI_API_NONCE_MODE": "time-based"
       }
     }
   }
 }
 ```
+
+The examples set `GEMINI_API_NONCE_MODE` to `time-based`, which is required for keys created with "Uses a time based nonce" (including Agentic onboarding keys). For a key created without that setting, change the value to `incremental` or remove the line.
 
 **Environment Variables:**
 - `GEMINI_API_KEY` - Your API key (required for trading/account operations)
