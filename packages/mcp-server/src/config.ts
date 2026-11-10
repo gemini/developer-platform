@@ -1,3 +1,5 @@
+import type { NonceMode } from './auth/signer.js';
+
 // Selects the @gemini-markets/sdk client's environment. Defaults to whatever baseUrl
 // below already selects for the legacy client, so setting GEMINI_API_BASE_URL alone
 // (the documented way to point this package at sandbox) routes prediction-market SDK
@@ -34,6 +36,20 @@ export function resolveSdkEnv(
   );
 }
 
+// Selects the nonce contract for the configured API key. It is a fact about the key, set by
+// whoever created it ("Uses a time based nonce"), so it is never inferred from the base URL.
+// Unset or empty defaults to 'incremental', which preserves the behaviour shipped in PR #75.
+// Any other value fails startup rather than silently sending the wrong nonce unit.
+export function resolveNonceMode(nonceModeOverride: string | undefined): NonceMode {
+  if (nonceModeOverride === undefined || nonceModeOverride === '') return 'incremental';
+  if (nonceModeOverride === 'incremental' || nonceModeOverride === 'time-based') {
+    return nonceModeOverride;
+  }
+  throw new Error(
+    `Invalid GEMINI_API_NONCE_MODE "${nonceModeOverride}": must be "incremental" or "time-based" (or unset, which defaults to incremental).`
+  );
+}
+
 const baseUrl = process.env.GEMINI_API_BASE_URL ?? 'https://api.gemini.com';
 
 export const config = {
@@ -43,4 +59,5 @@ export const config = {
   wsUrl: process.env.GEMINI_WS_URL ?? 'wss://ws.gemini.com',
   account: process.env.GEMINI_ACCOUNT ?? '',
   sdkEnv: resolveSdkEnv(baseUrl, process.env.GEMINI_SDK_ENV),
+  nonceMode: resolveNonceMode(process.env.GEMINI_API_NONCE_MODE),
 };

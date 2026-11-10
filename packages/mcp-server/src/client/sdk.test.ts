@@ -17,6 +17,7 @@ process.env.GEMINI_API_SECRET = process.env.SDK_TEST_FAKE_SECRET;
 delete process.env.GEMINI_SDK_ENV;
 process.env.GEMINI_API_BASE_URL = 'https://api.gemini.com';
 delete process.env.GEMINI_ACCOUNT;
+delete process.env.GEMINI_API_NONCE_MODE;
 
 const { createSdkClient } = await import('./sdk.js');
 const { config } = await import('../config.js');
@@ -81,11 +82,12 @@ test('createSdkClient wires the configured HmacAuth into an actual authenticated
   }
 });
 
-test('standard REST targets retain SDK environment selection and epoch-second nonces', async (t) => {
-  const saved = { baseUrl: config.baseUrl, sdkEnv: config.sdkEnv };
+test('standard REST targets retain SDK environment selection and, for time-based keys, epoch-second nonces', async (t) => {
+  const saved = { baseUrl: config.baseUrl, sdkEnv: config.sdkEnv, nonceMode: config.nonceMode };
   const now = 2_000_000_000_123;
   t.mock.method(Date, 'now', () => now);
   try {
+    config.nonceMode = 'time-based';
     for (const baseUrl of ['https://api.gemini.com', 'https://api.sandbox.gemini.com/']) {
       for (const sdkEnv of ['production', 'sandbox'] as const) {
         config.baseUrl = baseUrl;
@@ -176,10 +178,11 @@ test('custom REST routing composes with injected fetch for public reads, signed 
 });
 
 test('custom SDK and legacy REST requests share increasing nonces in the same millisecond', async (t) => {
-  const saved = { baseUrl: config.baseUrl, sdkEnv: config.sdkEnv };
+  const saved = { baseUrl: config.baseUrl, sdkEnv: config.sdkEnv, nonceMode: config.nonceMode };
   const now = 2_000_000_000_123;
   t.mock.method(Date, 'now', () => now);
   config.baseUrl = 'https://api.qa100.aurora7.net';
+  config.nonceMode = 'incremental';
   const calls: CapturedRequest[] = [];
   const fakeFetch = captureFetch(calls);
   t.mock.method(globalThis, 'fetch', fakeFetch);
@@ -197,6 +200,59 @@ test('custom SDK and legacy REST requests share increasing nonces in the same mi
     assert.ok(nonces[0]! >= now, 'custom REST nonces must be epoch milliseconds');
     assert.deepStrictEqual(nonces, nonces.map((_, index) => nonces[0]! + index));
     assert.ok(calls.every(({ url }) => url.startsWith(`${config.baseUrl}/v1/`)));
+  } finally {
+    for (const client of clients) client.close();
+    Object.assign(config, saved);
+  }
+});
+
+test('incremental keys use one millisecond sequence for SDK and legacy REST on standard hosts too', async (t) => {
+  // The mode follows the key, not the host. Before this change standard hosts always sent seconds
+  // to the SDK, so an incremental production key would have been rejected by a mode-blind SDK path.
+  const saved = { baseUrl: config.baseUrl, sdkEnv: config.sdkEnv, nonceMode: config.nonceMode };
+  const now = 2_000_000_000_456;
+  t.mock.method(Date, 'now', () => now);
+  config.baseUrl = 'https://api.gemini.com';
+  config.sdkEnv = 'production';
+  config.nonceMode = 'incremental';
+  const calls: CapturedRequest[] = [];
+  const fakeFetch = captureFetch(calls);
+  t.mock.method(globalThis, 'fetch', fakeFetch);
+  const clients: SdkClient[] = [];
+  try {
+    const legacy = new GeminiHttpClient();
+    clients.push(await createSdkClient({ fetch: fakeFetch }));
+    await legacy.authenticatedGet('/v1/account');
+    await clients[0]!.predictions.getPositions();
+    await legacy.authenticatedGet('/v1/account');
+    const nonces = calls.map((call) => Number(signedPayload(call)['nonce']));
+    assert.strictEqual(nonces.length, 3);
+    assert.ok(nonces[0]! >= now, 'incremental nonces must be epoch milliseconds on standard hosts');
+    assert.deepStrictEqual(nonces, nonces.map((_, index) => nonces[0]! + index));
+  } finally {
+    for (const client of clients) client.close();
+    Object.assign(config, saved);
+  }
+});
+
+test('time-based keys send epoch-second nonces from both legacy REST and the SDK on custom hosts', async (t) => {
+  const saved = { baseUrl: config.baseUrl, sdkEnv: config.sdkEnv, nonceMode: config.nonceMode };
+  const now = 2_000_000_000_789;
+  t.mock.method(Date, 'now', () => now);
+  config.baseUrl = 'https://api.qa100.aurora7.net';
+  config.nonceMode = 'time-based';
+  const calls: CapturedRequest[] = [];
+  const fakeFetch = captureFetch(calls);
+  t.mock.method(globalThis, 'fetch', fakeFetch);
+  const clients: SdkClient[] = [];
+  try {
+    const legacy = new GeminiHttpClient();
+    clients.push(await createSdkClient({ fetch: fakeFetch }));
+    await legacy.authenticatedGet('/v1/account');
+    await clients[0]!.predictions.getPositions();
+    const nonces = calls.map((call) => Number(signedPayload(call)['nonce']));
+    assert.strictEqual(nonces.length, 2);
+    for (const nonce of nonces) assert.strictEqual(nonce, Math.floor(now / 1000));
   } finally {
     for (const client of clients) client.close();
     Object.assign(config, saved);

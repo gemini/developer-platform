@@ -1,5 +1,7 @@
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import { config } from '../config.js';
+import { nonceModeHint } from '../auth/signer.js';
 
 // How a tool changes state. Drives both the MCP annotations and the
 // confirmation gate in server.ts:
@@ -115,7 +117,9 @@ export function wrapHandler<S extends z.ZodTypeAny>(
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       const detail = extractErrorDetail(err);
-      const fullMessage = detail ? `${message} (${detail})` : message;
+      const withDetail = detail ? `${message} (${detail})` : message;
+      const hint = nonceModeHint(message, config.nonceMode);
+      const fullMessage = hint ? `${withDetail}\n${hint}` : withDetail;
       return {
         content: [{ type: 'text', text: wrap(`Error: ${sanitizeString(fullMessage)}`) }],
         isError: true,

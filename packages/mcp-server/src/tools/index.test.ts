@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { z } from 'zod';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { annotationsFor, requiresConfirmation, sanitizeForLLM, wrapHandler } from './index.js';
+import { config } from '../config.js';
 import type { ToolDefinition, ToolMutation } from './index.js';
 
 const MARKER_OPEN = '<tool-output server="gemini-mcp">';
@@ -36,6 +37,29 @@ test('wrapHandler wraps errors in <tool-output> markers and sets isError', async
   assert.ok(text.endsWith(MARKER_CLOSE));
   assert.match(text, /Error: boom/);
   assert.strictEqual((result as { isError?: boolean }).isError, true);
+});
+
+test('wrapHandler adds the nonce-mode hint to a nonce rejection, whichever client raised it', async () => {
+  const saved = config.nonceMode;
+  config.nonceMode = 'incremental';
+  try {
+    const handler = wrapHandler(async () => {
+      throw new Error("InvalidNonce: Nonce '1794333647192' is not within 30 seconds of server time '1794333647'");
+    });
+    const text = textOf(await handler({} as z.infer<z.ZodAny>));
+    assert.match(text, /not within 30 seconds/);
+    assert.match(text, /GEMINI_API_NONCE_MODE=time-based/);
+  } finally {
+    config.nonceMode = saved;
+  }
+});
+
+test('wrapHandler leaves non-nonce errors unchanged', async () => {
+  const handler = wrapHandler(async () => {
+    throw new Error('Gemini API error 401: InvalidApiKey');
+  });
+  const text = textOf(await handler({} as z.infer<z.ZodAny>));
+  assert.doesNotMatch(text, /GEMINI_API_NONCE_MODE/);
 });
 
 test('sanitizeForLLM strips ANSI escape sequences from strings', () => {

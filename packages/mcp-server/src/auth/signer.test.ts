@@ -1,7 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHmac } from 'crypto';
-import { buildSignedHeaders, buildWsAuthHeaders, nextNonce } from './signer.js';
+import {
+  buildSignedHeaders,
+  buildWsAuthHeaders,
+  nextNonce,
+  nonceForMode,
+  nonceModeHint,
+} from './signer.js';
 
 // Sourced from an environment variable, not a local string literal — a
 // literal handed to createHmac() (even through one local const) trips the
@@ -98,4 +104,66 @@ test('buildWsAuthHeaders nonce is epoch seconds, not milliseconds', () => {
   const nonce = Number(headers['X-GEMINI-NONCE']);
 
   assert.ok(nonce >= before && nonce <= after);
+});
+
+// ----------------------------------------------------------------------------
+// Nonce modes. Incremental = epoch ms, strictly increasing per process (PR #75 / QA100 keys).
+// Time-based = epoch seconds within ±30s of server time (Agentic/production keys).
+// ----------------------------------------------------------------------------
+
+test('incremental is the default REST nonce mode and sends epoch milliseconds', () => {
+  const nonce = payloadNonce(buildSignedHeaders('/v1/account', {}, 'key', fakeApiSecret));
+  assert.ok(nonce > 1_000_000_000_000, `expected millisecond nonce, got ${nonce}`);
+});
+
+test('time-based nonce is epoch seconds, derived from the clock with no state', () => {
+  assert.strictEqual(nonceForMode('time-based', 1_800_000_000_999), 1_800_000_000);
+  assert.strictEqual(nonceForMode('time-based', 1_800_000_000_999), nonceForMode('time-based', 1_800_000_000_001));
+});
+
+test('time-based signed payload carries a seconds nonce and a valid HMAC', () => {
+  const nowMs = Date.now();
+  const headers = buildSignedHeaders('/v1/account', {}, 'key', fakeApiSecret, 'time-based');
+  const nonce = payloadNonce(headers);
+  assert.ok(nonce < 1_000_000_000_000, `time-based nonce must be seconds, got ${nonce}`);
+  assert.ok(Math.abs(nonce - nowMs / 1000) <= 30, `nonce ${nonce} is outside the ±30s server window`);
+  const expectedSignature = createHmac('sha384', fakeApiSecret).update(headers['X-GEMINI-PAYLOAD']!).digest('hex');
+  assert.strictEqual(headers['X-GEMINI-SIGNATURE'], expectedSignature);
+});
+
+test('time-based requests in the same second may reuse a nonce, which the server accepts', () => {
+  const now = 1_800_000_000_500;
+  const first = nonceForMode('time-based', now);
+  const second = nonceForMode('time-based', now);
+  assert.strictEqual(first, second);
+});
+
+test('time-based requests do not advance the incremental millisecond sequence', () => {
+  const start = nextNonce();
+  nonceForMode('time-based', start + 5_000);
+  assert.strictEqual(nextNonce(start), start + 1);
+});
+
+test('nonceModeHint explains an out-of-window rejection on an incremental key as a time-based key', () => {
+  const message = "InvalidNonce: Nonce '1794333647192' is not within 30 seconds of server time '1794333647'";
+  assert.match(nonceModeHint(message, 'incremental') ?? '', /GEMINI_API_NONCE_MODE=time-based/);
+});
+
+test('nonceModeHint explains a not-increased rejection on a time-based key as an incremental key', () => {
+  const message = "InvalidNonce: Nonce '1794333647' has not increased since your last call to the Gemini API.";
+  assert.match(nonceModeHint(message, 'time-based') ?? '', /incremental key/);
+});
+
+test('nonceModeHint warns about shared incremental keys on a not-increased rejection', () => {
+  const message = 'has not increased since your last call to the Gemini API.';
+  assert.match(nonceModeHint(message, 'incremental') ?? '', /per process/);
+});
+
+test('nonceModeHint stays silent for non-nonce errors and for clock skew under time-based mode', () => {
+  assert.strictEqual(nonceModeHint('Gemini API error 401: InvalidApiKey', 'incremental'), undefined);
+  assert.strictEqual(
+    nonceModeHint("Nonce '1' is not within 30 seconds of server time '2'", 'time-based'),
+    undefined,
+    'an out-of-window error under time-based mode is clock skew, not a mode mismatch'
+  );
 });

@@ -2,9 +2,10 @@ import { createClient, HmacAuth } from '@gemini-markets/sdk/server';
 import { config } from '../config.js';
 import { nextNonce } from '../auth/signer.js';
 
-// Custom REST targets share the legacy client's millisecond nonce sequence.
-// Keep HmacAuth's independent epoch-second WebSocket auth contract intact.
-class CustomTargetHmacAuth extends HmacAuth {
+// Incremental keys share the legacy client's millisecond sequence. The SDK's own monotonic
+// counter is separate and would issue nonces that interleave with legacy REST and get rejected.
+// Only REST nonces use nextNonce(): HmacAuth.forWebSocket() keeps its epoch-second contract.
+class SharedIncrementalHmacAuth extends HmacAuth {
   override nextNonce(): string {
     return String(nextNonce());
   }
@@ -31,15 +32,22 @@ export async function createSdkClient(
   const baseUrl = config.baseUrl.replace(/\/+$/, '');
   const customTarget =
     baseUrl !== 'https://api.gemini.com' && baseUrl !== 'https://api.sandbox.gemini.com';
-  const Auth = customTarget ? CustomTargetHmacAuth : HmacAuth;
+  // The nonce contract follows the key (config.nonceMode), not the host, so SDK and legacy REST
+  // always agree on units for the same key on every base URL.
   const auth =
     config.apiKey && config.apiSecret
-      ? new Auth({
-          apiKey: config.apiKey,
-          apiSecret: config.apiSecret,
-          // Standard Gemini REST endpoints retain their epoch-second nonce policy.
-          nonceMode: 'time-based',
-        })
+      ? config.nonceMode === 'time-based'
+        ? new HmacAuth({
+            apiKey: config.apiKey,
+            apiSecret: config.apiSecret,
+            nonceMode: 'time-based',
+          })
+        : new SharedIncrementalHmacAuth({
+            apiKey: config.apiKey,
+            apiSecret: config.apiSecret,
+            // Unused: nextNonce() is overridden to use the shared sequence.
+            nonceMode: 'monotonic',
+          })
       : undefined;
 
   const options = { env: config.sdkEnv, auth, ...overrides };

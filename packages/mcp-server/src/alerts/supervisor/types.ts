@@ -66,6 +66,9 @@ export const ENV_WHITELIST = [
   // service — the installed daemon would then derive sdkEnv from baseUrl alone and
   // fetch prediction-market settlements from a different environment than intended.
   'GEMINI_SDK_ENV',
+  // Without this, a time-based key's daemon silently falls back to the incremental default and
+  // every settlement fetch fails with InvalidNonce once the unit mismatch surfaces.
+  'GEMINI_API_NONCE_MODE',
   'PATH',
 ] as const;
 
