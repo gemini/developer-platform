@@ -22,7 +22,7 @@ When the user asks to see a candlestick chart, candle chart, price chart, or OHL
 
 3. Run the chart using npx:
    ```bash
-   npx -y @neabyte/candlestick-cli -f /tmp/gemini_candles.csv -t "{SYMBOL} {timeframe}" 2>&1 | tail -n +8
+   npx -y @neabyte/candlestick-cli@1.1.2 -f /tmp/gemini_candles.csv -t "{SYMBOL} {timeframe}" 2>&1 | tail -n +8
    ```
 
 4. Display the chart output to the user. **IMPORTANT: Output the raw terminal output of the candlestick-cli command verbatim inside a code block. Do NOT summarize, interpret, or describe the chart. The user needs to see the actual rendered ASCII chart, not a description of it.**
