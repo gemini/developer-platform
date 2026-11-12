@@ -10,6 +10,7 @@ process.env.GEMINI_API_KEY = 'test-api-key';
 process.env.GEMINI_API_SECRET = 'test-api-secret';
 process.env.GEMINI_API_BASE_URL = 'https://api.gemini.invalid';
 delete process.env.GEMINI_ACCOUNT;
+delete process.env.GEMINI_API_NONCE_MODE;
 
 const { GeminiHttpClient } = await import('./http.js');
 const { config } = await import('../config.js');
@@ -310,6 +311,56 @@ test('int64 precision survives the shared response parser', async () => {
 
     assert.strictEqual(res.results[0]!.order.orderId, '145828833218573125');
   } finally {
+    f.restore();
+  }
+});
+
+// ----------------------------------------------------------------------------
+// Nonce mode — the legacy REST path must send the unit the key expects
+// ----------------------------------------------------------------------------
+
+test('legacy REST sends an epoch-millisecond nonce under the default incremental mode', async () => {
+  const f = stubFetch('{}');
+  try {
+    const client = new GeminiHttpClient();
+    await client.authenticatedPost('/v1/balances');
+    const nonce = signedPayload(f.calls[0]!.headers)['nonce'] as number;
+    assert.ok(nonce > 1_000_000_000_000, `expected millisecond nonce, got ${nonce}`);
+  } finally {
+    f.restore();
+  }
+});
+
+test('legacy REST sends an epoch-second nonce, with a valid signature, for a time-based key', async () => {
+  const saved = config.nonceMode;
+  config.nonceMode = 'time-based';
+  const f = stubFetch('{}');
+  try {
+    const client = new GeminiHttpClient();
+    await client.authenticatedPost('/v1/balances');
+    const call = f.calls[0]!;
+    const nonce = signedPayload(call.headers)['nonce'] as number;
+    assert.ok(nonce < 1_000_000_000_000, `time-based nonce must be seconds, got ${nonce}`);
+    assert.ok(Math.abs(nonce - Date.now() / 1000) <= 30, `nonce ${nonce} is outside the ±30s window`);
+    assertValidSignature(call.headers, 'test-api-secret');
+  } finally {
+    config.nonceMode = saved;
+    f.restore();
+  }
+});
+
+test('a client captures the nonce mode at construction, matching how the other config fields are read', async () => {
+  const saved = config.nonceMode;
+  config.nonceMode = 'time-based';
+  const timeBased = new GeminiHttpClient();
+  config.nonceMode = 'incremental';
+  const f = stubFetch('{}');
+  try {
+    await timeBased.authenticatedPost('/v1/balances');
+    const nonce = signedPayload(f.calls[0]!.headers)['nonce'] as number;
+    assert.ok(nonce < 1_000_000_000_000, 'the client built under time-based must keep sending seconds');
+  } finally {
+    config.nonceMode = saved;
     f.restore();
   }
 });

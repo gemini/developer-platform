@@ -1,7 +1,7 @@
 import { createRequire } from 'module';
 import JSONBig from 'json-bigint';
 import { config } from '../config.js';
-import { buildSignedHeaders } from '../auth/signer.js';
+import { buildSignedHeaders, type NonceMode } from '../auth/signer.js';
 
 const REQUEST_TIMEOUT_MS = 30_000;
 
@@ -44,11 +44,13 @@ export class GeminiHttpClient {
   private baseUrl: string;
   private apiKey: string;
   private apiSecret: string;
+  private nonceMode: NonceMode;
 
   constructor() {
     this.baseUrl = config.baseUrl;
     this.apiKey = config.apiKey;
     this.apiSecret = config.apiSecret;
+    this.nonceMode = config.nonceMode;
   }
 
   async publicGet<T>(endpoint: string, params?: QueryParams): Promise<T> {
@@ -100,7 +102,7 @@ export class GeminiHttpClient {
     // sign the path only, reserving query signing for the two funding-payment
     // report endpoints that explicitly require it.
     const { 'Content-Type': _signedContentType, 'Content-Length': _signedContentLength, ...signedAuthHeaders } =
-      buildSignedHeaders(endpoint, fullBody, this.apiKey, this.apiSecret);
+      buildSignedHeaders(endpoint, fullBody, this.apiKey, this.apiSecret, this.nonceMode);
     // POST endpoints need `fullBody` as an actual JSON request body, not just
     // signed into X-GEMINI-PAYLOAD: some newer prediction-market handlers
     // (e.g. combos) do a real `json.Decode(r.Body)` server-side and reject an

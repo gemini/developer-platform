@@ -40,6 +40,12 @@ For a Master API key, also pass `GEMINI_ACCOUNT`:
 claude mcp add gemini -s user -e GEMINI_API_KEY=master-xxxx -e GEMINI_API_SECRET=your_secret -e GEMINI_ACCOUNT=primary -- node /absolute/path/to/mcp-server/dist/index.js
 ```
 
+For an API key created with "Uses a time based nonce" (including keys from Agentic onboarding), also pass `GEMINI_API_NONCE_MODE=time-based`:
+
+```bash
+claude mcp add gemini -s user -e GEMINI_API_KEY=your_key -e GEMINI_API_SECRET=your_secret -e GEMINI_API_NONCE_MODE=time-based -- node /absolute/path/to/mcp-server/dist/index.js
+```
+
 The `-s user` flag registers the server globally across all your projects. Omit it to register only for the current project.
 
 **Claude Desktop** — add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
@@ -54,7 +60,8 @@ The `-s user` flag registers the server globally across all your projects. Omit 
         "GEMINI_API_KEY": "your_api_key_here",
         "GEMINI_API_SECRET": "your_api_secret_here",
         "GEMINI_ACCOUNT": "primary",
-        "GEMINI_WS_URL": "wss://ws.gemini.com"
+        "GEMINI_WS_URL": "wss://ws.gemini.com",
+        "GEMINI_API_NONCE_MODE": "time-based"
       }
     }
   }
@@ -73,12 +80,15 @@ The `-s user` flag registers the server globally across all your projects. Omit 
         "GEMINI_API_KEY": "your_api_key_here",
         "GEMINI_API_SECRET": "your_api_secret_here",
         "GEMINI_ACCOUNT": "primary",
-        "GEMINI_WS_URL": "wss://ws.gemini.com"
+        "GEMINI_WS_URL": "wss://ws.gemini.com",
+        "GEMINI_API_NONCE_MODE": "time-based"
       }
     }
   }
 }
 ```
+
+The examples set `GEMINI_API_NONCE_MODE` to `time-based`, which is required for keys created with "Uses a time based nonce" (including Agentic onboarding keys). For a key created without that setting, change the value to `incremental` or remove the line.
 
 **Environment Variables:**
 - `GEMINI_API_KEY` - Your API key (required for trading/account operations)
@@ -87,8 +97,11 @@ The `-s user` flag registers the server globally across all your projects. Omit 
 - `GEMINI_API_BASE_URL` - REST API base URL, including all prediction-market SDK requests (default: `https://api.gemini.com`, sandbox: `https://api.sandbox.gemini.com`). Custom targets such as `https://api.qa100.aurora7.net` use that exact destination, not the public production or sandbox host.
 - `GEMINI_SDK_ENV` - SDK environment (`production` or `sandbox`). Defaults to `sandbox` when the REST base URL hostname contains `sandbox`, otherwise `production`. For the two standard REST base URLs, an explicit value overrides SDK environment selection. For custom REST targets, it does not replace `GEMINI_API_BASE_URL`.
 - `GEMINI_WS_URL` - Legacy WebSocket client URL (default: `wss://ws.gemini.com`, sandbox: `wss://ws.sandbox.gemini.com`). SDK-backed WebSocket streams still use the SDK environment; custom REST routing does not redirect them.
+- `GEMINI_API_NONCE_MODE` - Nonce contract of the API key (`incremental` or `time-based`; default `incremental`). It must match the key's "Uses a time based nonce" setting. Keys created through Agentic onboarding are time-based and need `GEMINI_API_NONCE_MODE=time-based`. Any other value fails startup. The mode is never inferred from the base URL.
+  - `incremental`: nonces are strictly increasing epoch milliseconds, shared by all REST calls in this process. Incremental nonces are tracked per process, so do not share one incremental key between concurrently running MCP clients. Use a time-based key for shared use.
+  - `time-based`: nonces are epoch seconds and must be within 30 seconds of server time. Keep the host clock in sync.
 
-Use credentials issued for the selected REST destination. Custom REST targets share the legacy client's strictly increasing millisecond nonce sequence; SDK calls to standard Gemini REST environments retain epoch-second nonces. WebSocket authentication remains independent.
+Use credentials issued for the selected REST destination. The nonce mode applies to every authenticated REST call, both legacy and SDK-backed, on every base URL. WebSocket authentication always uses epoch seconds and is independent of this setting.
 
 ## Quick Start
 

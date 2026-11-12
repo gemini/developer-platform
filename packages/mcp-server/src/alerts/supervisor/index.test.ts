@@ -62,5 +62,6 @@ test('ENV_WHITELIST is the canonical list and does not include arbitrary HOME', 
   assert.ok(ENV_WHITELIST.includes('GEMINI_API_KEY'));
   assert.ok(ENV_WHITELIST.includes('GEMINI_API_SECRET'));
   assert.ok(ENV_WHITELIST.includes('GEMINI_SDK_ENV'));
+  assert.ok(ENV_WHITELIST.includes('GEMINI_API_NONCE_MODE'));
   assert.ok(!(ENV_WHITELIST as readonly string[]).includes('HOME'));
 });
