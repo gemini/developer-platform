@@ -1,10 +1,10 @@
-"""End-to-end example: MPC custody withdrawal with an API-signer authorization.
+"""End-to-end example: custody withdrawal with an API-signer authorization.
 
 IMPORTANT — this API is not self-serve. Before you can use it you must contact
 Gemini support (support@gemini.com), who will:
 
 1. Enable the custody API for your account group.
-2. Set up your MPC custody account with an approved account security policy
+2. Set up your custody account with an approved account security policy
    that includes a positive API signer threshold.
 3. Register your API signer keypairs on the account (each signer public key is
    a COSE_Key-encoded P-256 key; you generate the keypairs yourself and hand
@@ -24,9 +24,9 @@ Flow:
   4. POST /v2/withdraw/:network/:ticker  -> voucher activates, withdrawal runs
 
 Requires: GEMINI_API_KEY / GEMINI_API_SECRET in the environment (an API key on
-the MPC custody account with withdrawal permission), and at least one signer
+the custody account with withdrawal permission), and at least one signer
 private key (PEM, P-256/ES256) whose public key was registered by support.
-The signer keys are read from MPC_SIGNER_KEY_<n> PEM files.
+The signer keys are read from API_SIGNER_KEY_<n> PEM files.
 
 Run:
   python3 custody_withdrawal.py ethereum ETH 0.0005 0xYourWhitelistedAddress
@@ -173,9 +173,9 @@ def main():
     if not api_key or not api_secret:
         raise SystemExit("set GEMINI_API_KEY and GEMINI_API_SECRET")
 
-    signer_paths = sorted(Path(p) for p in os.environ if p.startswith("MPC_SIGNER_KEY_"))
+    signer_paths = sorted(Path(p) for p in os.environ if p.startswith("API_SIGNER_KEY_"))
     if not signer_paths:
-        raise SystemExit("set MPC_SIGNER_KEY_1 (PEM file) for each approved signer")
+        raise SystemExit("set API_SIGNER_KEY_1 (PEM file) for each approved signer")
 
     # 1. Mint the challenge
     challenge_request = {
@@ -210,7 +210,7 @@ def main():
     # 3. Sign with every approved signer (server enforces the quorum)
     assertions = [
         build_assertion(Path(os.environ[p]).read_bytes(), message)
-        for p in sorted(os.environ, key=lambda s: (len(s), s)) if p.startswith("MPC_SIGNER_KEY_")
+        for p in sorted(os.environ, key=lambda s: (len(s), s)) if p.startswith("API_SIGNER_KEY_")
     ]
     print(f"assertions built: {len(assertions)}")
 
@@ -218,7 +218,7 @@ def main():
     withdrawal_request = {
         "amount": args.amount,
         "address": args.address,
-        "mpcAuthorization": {
+        "authorization": {
             "withdrawalId": challenge["voucherId"],
             "assertions": assertions,
         },
@@ -240,7 +240,7 @@ def main():
 # SHA-256 challenge, and validates the response against a locally trusted
 # intent. Run this before signing, always.
 
-#: Protocol constants fixed by the MPC API signing contract.
+#: Protocol constants fixed by the API signing contract.
 MESSAGE_PREFIX = "GEMINI-API-SIGNATURE-V1:"
 CONTEXT_TYPE = "ApiAuthorizationContext"
 PROTOCOL_VERSION = "1"

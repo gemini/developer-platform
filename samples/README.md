@@ -32,7 +32,7 @@ Multi-language examples demonstrating how to use the Gemini cryptocurrency excha
 │   ├── balances.py           # Get account balances (private, REST)
 │   ├── pm_prices.py          # Stream prediction market prices (private, WebSocket)
 │   ├── pm_order.py           # Place prediction market order (private, WebSocket)
-│   ├── custody_withdrawal.py # MPC custody withdrawal (private, REST, support-enrolled)
+│   ├── custody_withdrawal.py # Custody withdrawal (private, REST, support-enrolled)
 │   └── test_parse.py         # Test parsing of API responses (utility)
 └── go/                       # Go examples
     ├── get_ticker.go         # Get ticker data (public, REST)
@@ -123,16 +123,16 @@ go run go/ws_contract_status.go
    go run go/pm_order.go
    ```
 
-### MPC Custody Withdrawals (Support-Enrolled Accounts Only)
+### Custody Withdrawals (Support-Enrolled Accounts Only)
 
-> **Prerequisite:** the MPC custody API is not self-serve. You must contact
+> **Prerequisite:** the custody API is not self-serve. You must contact
 > [Gemini support](mailto:support@gemini.com), who will enable the custody API
-> for your account group, configure your MPC custody account's approved
+> for your account group, configure your custody account's approved
 > security policy with an API signer threshold, and register your API signer
 > keypairs on the account. Withdrawals fail closed until all three are in
 > place.
 
-`custody_withdrawal.py` demonstrates the full MPC custody withdrawal flow in a
+`custody_withdrawal.py` demonstrates the full custody withdrawal flow in a
 single self-contained file (the challenge verifier is embedded in the same
 file):
 
@@ -152,7 +152,7 @@ file):
 pip install -r python/requirements.txt
 
 export GEMINI_API_KEY=... GEMINI_API_SECRET=...
-export MPC_SIGNER_KEY_1=./signer-1.pem   # one variable per approved signer
+export API_SIGNER_KEY_1=./signer-1.pem   # one variable per approved signer
 
 python3 python/custody_withdrawal.py ethereum ETH 0.0005 0xYourWhitelistedAddress \
   --account-id 123456 --required-signatures 1
@@ -222,7 +222,7 @@ The authenticated examples require Gemini API credentials.
 | `placeOrder` / `place_order` | Place an order | REST |
 | `pmPrices` / `pm_prices` | Stream prediction market prices | WebSocket |
 | `pmOrder` / `pm_order` | Place prediction market order | WebSocket |
-| `custody_withdrawal` | MPC custody withdrawal (support-enrolled accounts) | REST |
+| `custody_withdrawal` | Custody withdrawal (support-enrolled accounts) | REST |
 
 1. **Get API Credentials:**
    - Sign up at [Gemini](https://www.gemini.com/)
