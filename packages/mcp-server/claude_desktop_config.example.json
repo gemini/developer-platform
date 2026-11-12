@@ -8,7 +8,8 @@
       "env": {
         "GEMINI_API_KEY": "account-xxxxxxxxxxxxxx",
         "GEMINI_API_SECRET": "xxxxxxxxxxxxxx",
-        "GEMINI_WS_URL": "wss://ws.gemini.com"
+        "GEMINI_WS_URL": "wss://ws.gemini.com",
+        "GEMINI_API_NONCE_MODE": "time-based"
       }
     }
   }

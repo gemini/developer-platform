@@ -243,7 +243,14 @@ The supervisor bakes a whitelisted set of env vars into the unit at install time
 - `GEMINI_ACCOUNT`
 - `GEMINI_API_BASE_URL`
 - `GEMINI_WS_URL`
+- `GEMINI_SDK_ENV`
+- `GEMINI_API_NONCE_MODE`
 - `PATH`
+
+`GEMINI_API_NONCE_MODE` must match the API key's "Uses a time based nonce"
+setting (`time-based` for time-based keys such as Agentic onboarding keys;
+unset or `incremental` otherwise). The daemon signs requests the same way the
+MCP server does, so a time-based key needs it baked into the unit too.
 
 Other env vars from the install-time shell are intentionally not inherited.
 After rotating `GEMINI_API_KEY`, run `gemini_alert_daemon_reload_config` to
