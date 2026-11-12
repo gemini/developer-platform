@@ -32,6 +32,7 @@ Multi-language examples demonstrating how to use the Gemini cryptocurrency excha
 │   ├── balances.py           # Get account balances (private, REST)
 │   ├── pm_prices.py          # Stream prediction market prices (private, WebSocket)
 │   ├── pm_order.py           # Place prediction market order (private, WebSocket)
+│   ├── custody_withdrawal.py # Custody withdrawal (private, REST, support-enrolled)
 │   └── test_parse.py         # Test parsing of API responses (utility)
 └── go/                       # Go examples
     ├── get_ticker.go         # Get ticker data (public, REST)
@@ -122,6 +123,41 @@ go run go/ws_contract_status.go
    go run go/pm_order.go
    ```
 
+### Custody Withdrawals (Support-Enrolled Accounts Only)
+
+> **Prerequisite:** the custody API is not self-serve. You must contact
+> [Gemini support](mailto:support@gemini.com), who will enable the custody API
+> for your account group, configure your custody account's approved
+> security policy with an API signer threshold, and register your API signer
+> keypairs on the account. Withdrawals fail closed until all three are in
+> place.
+
+`custody_withdrawal.py` demonstrates the full custody withdrawal flow in a
+single self-contained file (the challenge verifier is embedded in the same
+file):
+
+1. **Mint a challenge** — `POST /v1/custody/challenge` returns a signed intent
+   for the withdrawal plus everything needed to verify it.
+2. **Verify the challenge** — the script independently reconstructs the
+   canonical signing context locally and proves the challenge commits to
+   exactly the transfer you intended (account, asset, amount, address, memo,
+   quorum, expiry). It never trusts a digest supplied by the server; always
+   run this before signing.
+3. **Sign** — each approved API signer (a COSE_Key-encoded P-256 public key
+   registered by support) signs the challenge message with ES256.
+4. **Submit** — `POST /v2/withdraw/:network/:ticker` with the assertion
+   batch; the voucher activates and the withdrawal executes.
+
+```bash
+pip install -r python/requirements.txt
+
+export GEMINI_API_KEY=... GEMINI_API_SECRET=...
+export API_SIGNER_KEY_1=./signer-1.pem   # one variable per approved signer
+
+python3 python/custody_withdrawal.py ethereum ETH 0.0005 0xYourWhitelistedAddress \
+  --account-id 123456 --required-signatures 1
+```
+
 ## Getting Started
 
 ### Configuration
@@ -186,6 +222,7 @@ The authenticated examples require Gemini API credentials.
 | `placeOrder` / `place_order` | Place an order | REST |
 | `pmPrices` / `pm_prices` | Stream prediction market prices | WebSocket |
 | `pmOrder` / `pm_order` | Place prediction market order | WebSocket |
+| `custody_withdrawal` | Custody withdrawal (support-enrolled accounts) | REST |
 
 1. **Get API Credentials:**
    - Sign up at [Gemini](https://www.gemini.com/)
